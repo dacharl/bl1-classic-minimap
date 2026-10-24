@@ -19,6 +19,16 @@ Initial Windows/Python 3.11 baseline: the mod killed 2,059 of 2,767 mutants (74.
 
 Ruff `F`/`E9` checks run over both mods and all Python tools. Additional checks validate workflow syntax with actionlint, Python syntax, matching version fields, dependency consistency, SDK archive structure/content/cache exclusion, the absence of tracked game/build binaries, the ban on unsafe `.Invoke` calls, and thresholds for every shipped mod Python file. These checks run before the slower mutation job.
 
+## Parallel workers
+
+Validated locally on Windows/Python 3.13.17 with eight automatic workers: all 11 unit cases pass, combined coverage clears every existing floor, and all 2,806 mutants complete with the same scores as the initial baseline and zero timeouts, worker errors or cleanup tracebacks. Python 3.11 also passes the unit suite with a two-worker override. Hosted execution remains pending.
+
+Both `tools/run_tests.py` and `tools/run_mutations.py` default to `--workers auto` locally and in CI. They use the CPUs available to the process (`os.process_cpu_count()` on Python 3.13+, otherwise `os.cpu_count()`), falling back to one worker when the count is unavailable. Unit workers are capped at the number of test cases; mutation workers respect Windows' 61-process pool limit. Pass `--workers N` to override the count, including `--workers 1` for serial runs.
+
+The unit runner starts each test case in a separate Python process, including the movie, mod, archive, quality-gate and runner regression tests. `--coverage` erases stale coverage, writes separate child data files and combines them before the existing per-file gates run. Coverage runs should not share an output directory concurrently. Optional positional unittest IDs select a subset of tests.
+
+Mutation workers retain isolated source copies and run `test_ci.py` serially inside each worker, avoiding nested CPU pools. Their Windows cleanup has one finalizer that leaves the temporary working directory before removing it, including on Python 3.13. Mutation scope, score denominators and coverage floors are unchanged.
+
 ## Local commands
 
 From the repository root, create a virtual environment and install the pinned tools:
@@ -29,12 +39,11 @@ python -I -m venv .venv
 .venv/Scripts/python.exe -I -m pip check
 .venv/Scripts/python.exe -I -m ruff check sdk_mods tools
 .venv/Scripts/python.exe -I tools/quality_checks.py repository
-.venv/Scripts/python.exe -I tools/test_quality.py
-.venv/Scripts/python.exe -B -I -m coverage run tools/test_ci.py
+.venv/Scripts/python.exe -B -I tools/run_tests.py --coverage
 .venv/Scripts/python.exe -I -m coverage report
 .venv/Scripts/python.exe -I -m coverage json
 .venv/Scripts/python.exe -I tools/quality_checks.py coverage
-.venv/Scripts/python.exe -B -I tools/run_mutations.py --workers 4
+.venv/Scripts/python.exe -B -I tools/run_mutations.py
 .venv/Scripts/python.exe -I tools/quality_checks.py mutation
 ```
 

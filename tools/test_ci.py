@@ -20,14 +20,19 @@ from ci_fixture import build_fixture  # noqa: E402
 
 
 class SourceChecks(unittest.TestCase):
-    def test_movie_and_mod_without_game_assets(self):
+    def check_movie(self, check):
         with tempfile.TemporaryDirectory() as directory:
             movie = Path(directory) / 'synthetic.gfx'
             movie.write_bytes(build_fixture())
             # Both suites retain their assertions; only the input movie is synthetic.
             with contextlib.redirect_stdout(io.StringIO()):
-                test_minimap_as.main(str(movie))
-                test_minimap_mod.main(str(movie))
+                check(str(movie))
+
+    def test_movie_without_game_assets(self):
+        self.check_movie(test_minimap_as.main)
+
+    def test_mod_without_game_assets(self):
+        self.check_movie(test_minimap_mod.main)
 
     def test_sdkmod_archive_layout_and_cache_exclusion(self):
         with tempfile.TemporaryDirectory() as directory:

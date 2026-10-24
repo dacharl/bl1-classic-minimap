@@ -11,6 +11,12 @@
 
 ## Implementation
 
+### Automatic workers (2026-10-24)
+
+Evidence: unit checks previously ran serially inside `test_ci.py`; mutation CI explicitly selected four workers and the local default capped CPU detection at four. The local Python 3.13 installation reports eight available CPUs. A subprocess regression reproduced Python 3.13's temporary-directory weakref cleanup running before the multiprocessing finalizer left the worker directory.
+
+Use a shared CPU-based worker selector with `auto` as the default and positive integer overrides. Run independent unittest cases in separate processes and combine separate coverage files. Split the existing movie/mod wrapper into independent cases without removing assertions. Keep the mutation test command serial within each isolated worker to avoid nested pools. Give worker cleanup one finalizer. Verify actual overlapping test processes, child-failure exit status, CPU fallback/overrides, clean worker shutdown, unchanged coverage and both real-movie suites; run all mutants with automatic workers. CI and documented commands must use the same defaults.
+
 1. Keep test-first changes at the established built-movie and mod-hook boundaries. Add an asset-free fixture plus SDK archive tests. Check quality-gate failure cases independently.
 2. Run lint and repository checks, then source-only tests with per-file coverage floors on Ubuntu/Python 3.11, Windows/Python 3.11, and Ubuntu/Python 3.13.
 3. Run all mod/packager mutants on Ubuntu/Python 3.11, after ordinary checks pass. Use isolated source copies for workers, disable bytecode caches, require a passing baseline and save survivor diffs. Enforce per-file mutation floors from pyproject.toml.

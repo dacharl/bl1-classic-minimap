@@ -42,9 +42,9 @@ Code comments cite docs by bare name and section, e.g. "PHASE3 3f", "PLAN_V08 3"
 
 ## The working loop
 
-0. **Create a new worktree for each new coding task before editing.** Start from `main` (or the base the user specifies) on a task branch named `codex/<task>`. Inspect `git status` and `git worktree list` first; preserve existing changes and other tasks' worktrees. A typical setup from the primary checkout is:
+0. **Create a new worktree for each new coding task before editing.** Start from `main` (or the base the user specifies) on a task branch with a descriptive prefix such as `feat/<task>`, `fix/<task>` or `test/<task>`. Branch names and worktree paths must not contain agent or tool attribution. Inspect `git status` and `git worktree list` first; preserve existing changes and other tasks' worktrees. A typical setup from the primary checkout is:
    ```bash
-   git worktree add -b codex/<task> .worktrees/<task> main
+   git worktree add -b feat/<task> .worktrees/<task> main
    ```
    - Use the new worktree's absolute path for all subsequent edits and commands. Continue an existing task in its own worktree rather than creating another one for each turn.
    - Local build outputs, Python environments and extracted game files are ignored and are not copied into new worktrees. Regenerate what is needed or use explicitly identified local inputs from the primary checkout; never stage them.
@@ -112,10 +112,11 @@ Before committing, review the staged diff and file list, run `git diff --cached 
 
 ### No agent attribution
 
-This repository uses **zero agent co-author attribution**. It applies to every commit and every pull request, whichever agent or tool made the change:
+This repository uses **zero agent attribution**. It applies to every commit, pull request, branch name and worktree path, whichever agent or tool made the change:
 - No `Co-Authored-By:` trailers naming an AI agent or model, and no other agent trailers (`Generated-By:`, `Assisted-By:` and the like).
 - No "Generated with …" or tool-advertising lines, links or emoji in commit messages, PR titles or PR descriptions.
 - No agent names in the author or committer fields. Commit with the user's configured git identity only.
+- No agent, model or tool names in branch prefixes or worktree directory names; use names that describe the task.
 - If a tool, template or system default adds attribution, remove it before committing or opening the PR. This file overrides such defaults.
 
 Write commit messages and PR descriptions in plain language: what changed and why. Mention test results and any in-game verification still pending. Commit or push only when the user asks.

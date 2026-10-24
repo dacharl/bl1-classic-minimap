@@ -356,9 +356,19 @@ Added per-file line/branch thresholds, full Cosmic Ray mutation checks for the m
 
 ## 3r. Worktree-first development and main commit (2026-10-24)
 
-At the user's request, AGENTS now starts new coding tasks in a new worktree on a codex/<task> branch, preserves other tasks' checkouts, reuses the task's own worktree for continuations, and accounts for ignored local game/build inputs. Explicit instructions to work directly on main override the default; the user requested that exception for this commit. Added ignore rules for local worktree and assistant-state directories, leaving the existing enhanced-minimap-box worktree untouched.
+At the user's request, AGENTS now starts new coding tasks in a new worktree on a task branch, preserves other tasks' checkouts, reuses the task's own worktree for continuations, and accounts for ignored local game/build inputs. Explicit instructions to work directly on main override the default; the user requested that exception for this commit. Added ignore rules for local worktree and assistant-state directories, leaving the existing enhanced-minimap-box worktree untouched. A subsequent user correction extends the no-attribution rule to branch names and worktree paths; AGENTS uses descriptive task prefixes such as feat/, fix/ and test/.
 
 The commit includes the pending release workflow, CI and quality-gate setup from §3p–3q. The user has since configured origin as https://github.com/dacharl/bl1-classic-minimap.git. No runtime or installed files changed; installed hashes and pending in-game checks remain those in §3n. Validation remains the passing suites, lint/workflow checks, coverage floors and 2,806-mutant baseline recorded in §3q; staged content/whitespace and commit identity/message are checked before pushing. Hosted CI verification follows the push.
+
+## 3s. Automatic parallel test workers (2026-10-24)
+
+The user requested automatic worker counts for unit and mutation tests. Worked in `.worktrees/auto-parallel-tests` on `test/auto-parallel-workers` from main; renamed the task branch at the user's request to remove agent attribution, preserving all uncommitted work. Previously the unit checks ran serially and mutation CI forced four workers (also the local automatic cap). Added a shared available-CPU selector, default `--workers auto`, numeric overrides, a unit runner with independent Python processes and merged branch coverage, and independent movie/mod test cases. Mutation workers still run the original source suite serially inside isolated copies, avoiding nested pools. Updated CI and local commands; floors and mutant scope are unchanged.
+
+Test-first scenarios failed before implementation for automatic selection, parallel case execution, mutation CLI selection and the Python 3.13 worker cleanup traceback. Cleanup now has one multiprocessing finalizer, which leaves the temporary directory before removing it. Additional regressions check CPU fallback/override and propagation of a failing child test. Validation: 11 unit cases pass with eight automatic workers on Python 3.13; combined coverage matches the recorded per-file baseline and clears every floor. Both original real-movie suites pass using the primary checkout's explicitly identified `dist/phase2/HUD_minimap.gfx`. Lint, repository and actionlint checks pass. Full automatic-worker mutation results are recorded below when complete.
+
+Full mutation validation on Windows/Python 3.13.17 used eight automatically selected workers: mod 2,059/2,767 killed (74.41%; floor 70%), packager 32/39 (82.05%; floor 80%). All 2,806 mutants completed with zero timeouts, worker errors or cleanup tracebacks; scores match the earlier Python 3.11 baseline. The 11 unit cases also pass on Python 3.11 with an explicit two-worker override; a one-worker quality-gate subset verifies serial execution.
+
+No game runtime code, version, installed file or hash changed. Installed hashes and pending v0.8.1 in-game checks remain those in §3n. Hosted CI remains unverified. The user subsequently requested committing the task branch and merging it into local main; no push or installation was requested.
 
 ## 4. In-game test
 

@@ -6,18 +6,21 @@ This page tracks where the project stands: what works, what's installed, how to 
 
 ## Where it stands
 
+- **Automatic test workers (2026-10-24):** task branch `test/auto-parallel-workers` adds CPU-based defaults for unit and mutation tests, independent unit processes with merged coverage, and clean mutation-worker shutdown on Python 3.13. CI and local commands use the same defaults; see CI.md and PHASE3 §3s. No runtime or installed files change.
+
 - **Works in game (confirmed through run 12):** zone art, landmarks, player centring, radar enemy dots, the objective turn-in tint, the Enhanced-style dock with the HUD tilt, ECHO/mission text moved aside, no-flicker rebuilds, DLC3 maps, Enhanced zoom and icon size, the north marker, and hiding during the tunnel, menus and death.
 - **Installed, not yet played:** v0.8.1. It fixes run 12's double marker at the window border (edge diamond handoff) and the mission-giver calls, so "!" and turn-in icons should now appear (PHASE3 §3n).
 - **Earlier event:** run 11 crashed at startup because drive C: was full, not because of the mod (PHASE3 §3m).
 - **Repository setup (2026-10-24):** Git initialized for a source-only initial commit; AGENTS now requires test-first behavior changes, Conventional Commits and no agent attribution. Build outputs and extracted game packages are ignored (PHASE3 §3o).
 - **Release workflow (2026-10-24):** local branch renamed to `main`; manual GitHub Actions workflow packages the Python source as `.sdkmod` and publishes a version-tagged release. Hosted execution is pending; see README and PHASE3 §3p.
 - **Source-only CI (2026-10-24):** lint, per-file line/branch coverage, all mod/packager mutants, workflow lint and repository/archive checks. Both existing suites pass against an asset-free fixture; hosted runs remain pending. See [CI.md](CI.md), PLAN_CI and PHASE3 §3q.
-- **Worktree workflow (2026-10-24):** AGENTS requires a fresh worktree and `codex/<task>` branch for new coding tasks, with explicit user overrides for direct work on `main`. CI/release setup is being committed directly to `main` at the user's request (PHASE3 §3r).
+- **Worktree workflow (2026-10-24):** AGENTS requires a fresh worktree and a descriptive task branch for new coding tasks, with explicit user overrides for direct work on `main`. Branch names and worktree paths follow the no-attribution rule. CI/release setup was committed directly to `main` at the user's request (PHASE3 §3r).
 
 ## Milestones
 
 | Version | What it delivered | In game |
 |---|---|---|
+| CI tooling | Automatic parallel unit/mutation workers with numeric overrides and combined unit coverage | Source-only; no installation |
 | Phases 0–2 | SDK confirmed on classic (probe); `upkpatch.py` movie swap; `swfbuild.py` minimap movie | Probe runs 1–2 |
 | v0.1–v0.2 | First mod; `SingleArgInvokeS` instead of `Invoke`; separate `GfxHUD_Minimap.upk` + template redirect | Runs 1–5: nothing shown, then GC crashes (§3b–3f) |
 | v0.3–v0.4 | `KEEP_ALIVE` helper; objective refresh; transient helper gated on the zone anchor (Step A) | Run 6–7: working map (§3g–3h) |
@@ -60,6 +63,8 @@ Docs are cited across the code and docs by bare name (e.g. "PHASE3 §3l", "PLAN_
 Saved option gotcha: your `sdk_mods\settings\classic_minimap.json` has **Top margin = 90** from older versions. The new default of 20 only applies to fresh settings, so set it to about 20 in MODS to clear the mission text.
 
 **Uninstall:** delete `sdk_mods\classic_minimap.sdkmod` and `GfxHUD_Minimap.upk`.
+
+The automatic-worker tooling changes are source-only; installed versions and hashes above are unchanged.
 
 ## Build and test
 
@@ -111,6 +116,8 @@ CoordScale.X = 1, CoordScale.Y = (ClipW/ClipH)/(TextureSizeX/TextureSizeY)   # C
 That's one zone so far. **The decomp (ENHANCED_NATIVE.md §3) shows that the true matrix also multiplies both extents by `DrawScale` and includes pitch/roll.** v0.6.0 builds that full matrix (`anchor_transform`) and reproduces the logged Arid helper Transform within 6.5e-8 relative error.
 
 ## Open items
+
+- Hosted CI verification of automatic workers remains pending; local validation is recorded in PHASE3 §3s.
 
 - **v0.8.1 in-game check:**
   - "!" at givers with an available mission and the turn-in icon at finished-mission givers (F7 `giver_icons` should be non-empty near Zed or a bounty board).

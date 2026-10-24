@@ -63,10 +63,8 @@ jobs:
           cache: pip
           cache-dependency-path: requirements-ci.txt
       - run: python -I -m pip install -r requirements-ci.txt
-      - name: Test quality gates
-        run: python -I tools/test_quality.py
-      - name: Run asset-free movie, mod and packaging tests with branch coverage
-        run: python -B -I -m coverage run tools/test_ci.py
+      - name: Run unit tests with automatic workers and combined branch coverage
+        run: python -B -I tools/run_tests.py --coverage
       - run: python -I -m coverage report
       - run: python -I -m coverage json
       - run: python -I -m coverage xml
@@ -98,7 +96,7 @@ jobs:
           cache-dependency-path: requirements-ci.txt
       - run: python -I -m pip install -r requirements-ci.txt
       - name: Run every mod and packager mutant in isolated source copies
-        run: python -B -I tools/run_mutations.py --workers 4
+        run: python -B -I tools/run_mutations.py
       - name: Enforce mutation thresholds
         run: python -I tools/quality_checks.py mutation
       - name: Save mutation outcomes and surviving diffs

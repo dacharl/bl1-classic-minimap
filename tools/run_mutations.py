@@ -1,6 +1,6 @@
 """Run every Cosmic Ray mutant in isolated source copies, with no game assets.
 
-Usage: python -I tools/run_mutations.py [--workers 4]
+Usage: python -I tools/run_mutations.py [--workers auto|N]
 All outcomes, including timeouts and tool failures, remain in the denominator.
 """
 import argparse
@@ -22,6 +22,9 @@ from cosmic_ray.mutating import mutate_and_test
 from cosmic_ray.work_db import WorkDB, use_db
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / 'tools'))
+from parallel_workers import worker_count  # noqa: E402
+
 WORKSPACE = None
 
 
@@ -29,14 +32,19 @@ def cleanup_worker(root):
     # Windows cannot remove a directory while it is the process's working directory.
     os.chdir(root)
     if WORKSPACE is not None:
-        WORKSPACE.cleanup()
+        target = Path(WORKSPACE).resolve()
+        if target.parent != Path(tempfile.gettempdir()).resolve() or not target.name.startswith('minimap-mutations-'):
+            raise ValueError(f'Unexpected worker directory: {target}')
+        shutil.rmtree(target)
 
 
 def prepare_worker(root):
     global WORKSPACE
-    WORKSPACE = tempfile.TemporaryDirectory(prefix='minimap-mutations-')
+    # One finalizer owns cleanup. TemporaryDirectory's weakref finalizer can run
+    # before multiprocessing finalizers on Python 3.13, while cwd is still here.
+    WORKSPACE = tempfile.mkdtemp(prefix='minimap-mutations-')
     Finalize(None, cleanup_worker, args=(root,), exitpriority=10)
-    target = Path(WORKSPACE.name)
+    target = Path(WORKSPACE)
     for folder in ('tools', 'sdk_mods'):
         shutil.copytree(Path(root) / folder, target / folder,
                         ignore=shutil.ignore_patterns('__pycache__', 'pk', '*.pyc', '*.pyo'))
@@ -48,12 +56,18 @@ def run_item(item, command, timeout):
     return item, result
 
 
-def main():
+def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--workers', type=int, default=min(4, os.cpu_count() or 1))
-    args = parser.parse_args()
-    if args.workers < 1:
-        parser.error('--workers must be positive')
+    parser.add_argument('--workers', type=worker_count, default='auto',
+                        help='auto (available CPUs) or a positive integer')
+    args = parser.parse_args(argv)
+    if sys.platform == 'win32' and args.workers > 61:
+        args.workers = 61  # ProcessPoolExecutor's Windows handle limit.
+    return args
+
+
+def main():
+    args = parse_args()
     os.chdir(ROOT)
     output = ROOT / 'dist/ci'
     output.mkdir(parents=True, exist_ok=True)
