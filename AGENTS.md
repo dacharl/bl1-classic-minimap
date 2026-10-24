@@ -42,6 +42,14 @@ Code comments cite docs by bare name and section, e.g. "PHASE3 3f", "PLAN_V08 3"
 
 ## The working loop
 
+0. **Create a new worktree for each new coding task before editing.** Start from `main` (or the base the user specifies) on a task branch named `codex/<task>`. Inspect `git status` and `git worktree list` first; preserve existing changes and other tasks' worktrees. A typical setup from the primary checkout is:
+   ```bash
+   git worktree add -b codex/<task> .worktrees/<task> main
+   ```
+   - Use the new worktree's absolute path for all subsequent edits and commands. Continue an existing task in its own worktree rather than creating another one for each turn.
+   - Local build outputs, Python environments and extracted game files are ignored and are not copied into new worktrees. Regenerate what is needed or use explicitly identified local inputs from the primary checkout; never stage them.
+   - Keep worktrees until their work is committed or otherwise preserved. Remove only the current task's clean worktree when it is no longer needed; never force-remove another task's checkout.
+   - An explicit user request to work or commit directly on `main` overrides this default.
 1. **Reproduce first.** When the user reports an in-game problem, read the evidence yourself:
    - `<Borderlands>\Binaries\Plugins\unrealsdk.log`;
    - mod data in `<Borderlands>\sdk_mods\settings\` (`classic_minimap.json`, `classic_minimap_anchors.jsonl`);
@@ -58,6 +66,7 @@ Code comments cite docs by bare name and section, e.g. "PHASE3 3f", "PLAN_V08 3"
    python -I tools/test_minimap_as.py dist/phase2/HUD_minimap.gfx
    python -I tools/test_minimap_mod.py dist/phase2/HUD_minimap.gfx
    ```
+   - Also run the source-only CI checks relevant to the change (see [docs/CI.md](docs/CI.md)). Coverage and mutation floors are in `pyproject.toml`; do not lower them or omit files to make a regression pass. Hosted fixture tests supplement the real-movie suites above.
 4. **Build** with the commands in PROGRESS:
    - The movie build needs the classic HUD, the status-menu movie, and the Enhanced HUD movie, all extracted from the user's own installs.
    - Repack the package with `--new-guid`.

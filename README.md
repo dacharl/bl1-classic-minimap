@@ -78,3 +78,15 @@ The package and mod are built from your own game files: the classic HUD and stat
 - **Do not redistribute** the built `GfxHUD_Minimap.upk`: it contains game assets.
 - **Project progress, build commands, offline test suites and design notes:** [docs/PROGRESS.md](docs/PROGRESS.md).
 - **Contributing as or with an agent:** read [AGENTS.md](AGENTS.md).
+
+## Creating a GitHub release
+
+The [Release SDK mod workflow](.github/workflows/release.yml) runs on demand. Once it is on the GitHub repository's default branch (`main`), open **Actions → Release SDK mod → Run workflow** and select the branch or tag to package.
+
+It checks that `__version__` and `pyproject.toml` agree, builds and verifies `classic_minimap.sdkmod`, then publishes a release tagged `v<version>` at the selected commit with that file attached. Bump both version fields before the next release: an existing tag causes the workflow to fail rather than replace a release. It uses the repository's built-in token; no personal access token is needed.
+
+The release contains the Python mod source only. Build `GfxHUD_Minimap.upk` locally from your own game files using the commands in PROGRESS. The game-dependent offline suites must also be run locally before releasing; the hosted workflow checks source syntax and archive integrity without game assets.
+
+## Continuous integration
+
+Pushes and merges to `main`, pull requests targeting `main`, and merge-queue events run lint, workflow/repository checks, source-only movie/mod/archive tests with per-file line and branch coverage floors, and mutation thresholds for the shipped Python mod and packager. See [docs/CI.md](docs/CI.md) for thresholds, scope, reports and local commands. Real game-movie and in-game verification remain local release checks.

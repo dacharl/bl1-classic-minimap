@@ -70,7 +70,6 @@ def main():
             label = b.split(b'\0')[0].decode('latin-1')
         elif code in (26, 70) and lo <= frame <= hi:
             depth, cid, m, name, move = place(code, b)
-            kind = mv.defs.get(cid, (None,))[0] if cid else None
             ms = ('%.3f %.3f %.3f %.3f  %.1f %.1f' % m) if m else '-'
             print('f%-4d %-14s d%-4d %s %-6s %-12s %s' % (frame, label, depth, 'move ' if move else 'place',
                                                         cid if cid else '', name or '', ms))

@@ -8,7 +8,6 @@ TAG = 0x9E2A83C1
 def lzo1x_decompress(src, out_len):
     dst = bytearray()
     ip = 0
-    n = len(src)
     def get():
         nonlocal ip
         b = src[ip]; ip += 1; return b

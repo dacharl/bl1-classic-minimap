@@ -1,0 +1,112 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  merge_group:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint and repository checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: requirements-ci.txt
+      - run: python -I -m pip install -r requirements-ci.txt
+      - run: python -I -m pip check
+      - run: python -I -m ruff check sdk_mods tools
+      - run: python -I tools/quality_checks.py repository
+      - name: Lint GitHub Actions workflows
+        run: >-
+          docker run --rm -v "$GITHUB_WORKSPACE:/repo" --workdir /repo
+          rhysd/actionlint:1.7.12 -color
+
+  test:
+    name: Tests (${{ matrix.os }}, Python ${{ matrix.python }})
+    needs: lint
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            python: '3.11'
+          - os: windows-latest
+            python: '3.11'
+          - os: ubuntu-latest
+            python: '3.13'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: requirements-ci.txt
+      - run: python -I -m pip install -r requirements-ci.txt
+      - name: Test quality gates
+        run: python -I tools/test_quality.py
+      - name: Run asset-free movie, mod and packaging tests with branch coverage
+        run: python -B -I -m coverage run tools/test_ci.py
+      - run: python -I -m coverage report
+      - run: python -I -m coverage json
+      - run: python -I -m coverage xml
+      - name: Enforce per-file line and branch thresholds
+        run: python -I tools/quality_checks.py coverage
+      - name: Save coverage reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-${{ matrix.os }}-${{ matrix.python }}
+          path: |
+            dist/ci/coverage.json
+            dist/ci/coverage.xml
+          retention-days: 14
+
+  mutation:
+    name: Mutation coverage
+    needs: [lint, test]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: requirements-ci.txt
+      - run: python -I -m pip install -r requirements-ci.txt
+      - name: Run every mod and packager mutant in isolated source copies
+        run: python -B -I tools/run_mutations.py --workers 4
+      - name: Enforce mutation thresholds
+        run: python -I tools/quality_checks.py mutation
+      - name: Save mutation outcomes and surviving diffs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: mutation-reports
+          path: |
+            dist/ci/mutations.json
+            dist/ci/mutation-survivors.json
+          retention-days: 14

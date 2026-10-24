@@ -1,0 +1,43 @@
+[tool.ruff]
+target-version = "py311"
+extend-exclude = ["dist", ".claude", "tools/pk"]
+
+[tool.ruff.lint]
+# Correctness first; avoid a repository-wide style rewrite of binary tooling.
+select = ["F", "E9"]
+
+[tool.coverage.run]
+branch = true
+include = ["sdk_mods/classic_minimap/*", "tools/as2asm.py", "tools/swfbuild.py", "tools/build_sdkmod.py"]
+data_file = "dist/ci/.coverage"
+
+[tool.coverage.report]
+show_missing = true
+precision = 2
+
+[tool.coverage.json]
+output = "dist/ci/coverage.json"
+
+[tool.coverage.xml]
+output = "dist/ci/coverage.xml"
+
+# Per-file floors prevent well-covered files from hiding regressions elsewhere.
+[tool.quality.coverage."sdk_mods/classic_minimap/__init__.py"]
+line = 89
+branch = 81
+
+[tool.quality.coverage."tools/as2asm.py"]
+line = 81
+branch = 76
+
+[tool.quality.coverage."tools/swfbuild.py"]
+line = 97
+branch = 78
+
+[tool.quality.coverage."tools/build_sdkmod.py"]
+line = 94
+branch = 83
+
+[tool.quality.mutation]
+"sdk_mods/classic_minimap/__init__.py" = 70
+"tools/build_sdkmod.py" = 80

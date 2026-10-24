@@ -73,7 +73,7 @@ def dis_actions(b, out, indent='    '):
             else:
                 q += 1 + 2  # register count + flags
                 for _ in range(nparams):
-                    reg = body[q]; q += 1
+                    _reg = body[q]; q += 1  # parameter register (not printed)
                     s, q = cstr(body, q); params.append(s)
             codesize = struct.unpack_from('<H', body, q)[0]
             out.append('%sfunction %s(%s) {' % (indent, fn, ', '.join(params)))

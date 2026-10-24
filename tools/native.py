@@ -3,7 +3,7 @@
   dis      <exe> <va> [maxins]  linear disassembly with string/call annotation
   strref   <exe> <text>         find code that references a string (LEA/PUSH imm)
 """
-import sys, re, struct, mmap
+import sys, re, struct
 import pefile, capstone
 
 class Img:

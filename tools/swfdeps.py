@@ -91,7 +91,7 @@ def read_lines(b, p, ver, bitmaps):
             p += 2 + (4 if ver >= 3 else 3)
         else:
             p += 2
-            f1 = b[p]; f2 = b[p + 1]; p += 2
+            f1 = b[p]; _f2 = b[p + 1]; p += 2
             if (f1 >> 4) & 3 == 2:  # miter join
                 p += 2
             if f1 & 0x08:            # has fill

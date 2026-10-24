@@ -629,7 +629,7 @@ def enhanced_art(enhanced):
 def landmark_frames(raw):
     """The landmark sprite plus Enhanced's frames 12/13 (turnin, newmission) as frames 11/12. Frame 10
     (questionmark) placed at depth 2 and removed depth 1, so 11 removes 2 and 12 removes 1."""
-    code, ln = struct.unpack_from('<H', raw, 0)[0] >> 6, struct.unpack_from('<H', raw, 0)[0] & 0x3F
+    ln = struct.unpack_from('<H', raw, 0)[0] & 0x3F
     p = 2
     if ln == 0x3F:
         ln = struct.unpack_from('<I', raw, 2)[0]; p = 6

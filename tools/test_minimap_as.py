@@ -7,7 +7,7 @@ decoded from the movie's bytes), not Scaleform itself.
 """
 import math
 import os
-import struct
+from pathlib import Path
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -372,7 +372,7 @@ class VM:
 
 
 def main(path):
-    d = open(path, 'rb').read()
+    d = Path(path).read_bytes()
     root = new_root()
     vm = VM(root)
     actions = [as2asm.decode(body) for code, body, _ in top_level(d) if code == 12]

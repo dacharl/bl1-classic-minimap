@@ -18,10 +18,16 @@
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
 .venv/
 venv/
 
 # Local credentials and editor/OS state.
+/.worktrees/
+/.claude/
 .env
 .env.*
 !.env.example

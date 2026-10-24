@@ -342,6 +342,24 @@ The user requested a review of AGENTS.md and the initial commit. Git was already
 
 This is a source/documentation baseline; no runtime behavior or installed files changed. No version bump or installation is required. Validation: both `python -I tools/test_minimap_as.py dist/phase2/HUD_minimap.gfx` (13 functions, attach and fallback paths) and `python -I tools/test_minimap_mod.py dist/phase2/HUD_minimap.gfx` passed. Installed hashes remain those in §3n; the v0.8.1 in-game checks are still pending.
 
+## 3p. On-demand SDK mod releases (2026-10-24)
+
+Renamed the local branch from master to main at the user's request. Added `.github/workflows/release.yml`, triggered only by workflow_dispatch. It validates matching mod versions and Python syntax, rejects existing tags, runs the existing SDK mod packager, verifies the archive against the source, and creates a GitHub release at the selected commit with only classic_minimap.sdkmod attached. Release notes explain the separately required local HUD build. Publication uses the built-in GitHub token with contents:write; concurrent releases are serialized. No remote is configured, so hosted execution is pending.
+
+No runtime behavior, version or installed files changed; installed hashes remain those in §3n and its in-game checks remain pending. The game-dependent offline suites run locally because hosted runners have no game assets. Validation: built the SDK mod into dist/release-check, executed the workflow's embedded Python version/syntax and archive checks locally, and ran both minimap suites successfully. The archive verifier uses the packager's cache exclusions. Git whitespace checks pass. GitHub release creation and runner execution remain unverified until the workflow is pushed and dispatched; no release was published locally.
+
+## 3q. Source-only CI (2026-10-24)
+
+Added CI for main pushes/merges, PRs, merge queues and manual runs (PLAN_CI). Independent empty movie inputs and five native-contract stubs exercise the real builder and both existing suites without game assets or skipped assertions. Added SDK archive tests and failure-case tests for quality gates. Ruff F/E9 findings were limited to unused imports/variables; removed those and closed movie input reads in the tests. No mod runtime behavior, version or installed files changed; installed hashes and pending in-game checks remain those in §3n.
+
+Added per-file line/branch thresholds, full Cosmic Ray mutation checks for the mod/packager in isolated source copies, actionlint, Python syntax/version checks, tracked-binary and unsafe Invoke rejection, threshold checks for new mod files, and pinned CI dependencies. Reports uploaded by CI are limited to named JSON/XML quality files. Validation: asset-free suites and gate tests pass, Ruff passes, actionlint 1.7.12 checksum verified and both workflows pass, coverage exceeds all configured floors, and both original suites pass against dist/phase2/HUD_minimap.gfx. Mutation baseline: mod 2,059/2,767 killed (74.41%; floor 70%), packager 32/39 (82.05%; floor 80%), no mutant timeouts/errors. Surviving mutants remain counted. Windows worker shutdown exposed a current-directory cleanup issue after results were recorded; changed the finalizer to leave the temporary directory first, verified source-copy/cleanup in a separate process, and removed the four empty directories from the baseline run. Hosted runner/merge protection configuration remains pending; no remote, commit, push or release was created by this change.
+
+## 3r. Worktree-first development and main commit (2026-10-24)
+
+At the user's request, AGENTS now starts new coding tasks in a new worktree on a codex/<task> branch, preserves other tasks' checkouts, reuses the task's own worktree for continuations, and accounts for ignored local game/build inputs. Explicit instructions to work directly on main override the default; the user requested that exception for this commit. Added ignore rules for local worktree and assistant-state directories, leaving the existing enhanced-minimap-box worktree untouched.
+
+The commit includes the pending release workflow, CI and quality-gate setup from §3p–3q. The user has since configured origin as https://github.com/dacharl/bl1-classic-minimap.git. No runtime or installed files changed; installed hashes and pending in-game checks remain those in §3n. Validation remains the passing suites, lint/workflow checks, coverage floors and 2,806-mutant baseline recorded in §3q; staged content/whitespace and commit identity/message are checked before pushing. Hosted CI verification follows the push.
+
 ## 4. In-game test
 
 1. Launch, open **MODS**, enable **Classic Minimap**, and disable **Minimap Probe**.

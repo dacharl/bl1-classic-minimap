@@ -10,6 +10,9 @@ This page tracks where the project stands: what works, what's installed, how to 
 - **Installed, not yet played:** v0.8.1. It fixes run 12's double marker at the window border (edge diamond handoff) and the mission-giver calls, so "!" and turn-in icons should now appear (PHASE3 §3n).
 - **Earlier event:** run 11 crashed at startup because drive C: was full, not because of the mod (PHASE3 §3m).
 - **Repository setup (2026-10-24):** Git initialized for a source-only initial commit; AGENTS now requires test-first behavior changes, Conventional Commits and no agent attribution. Build outputs and extracted game packages are ignored (PHASE3 §3o).
+- **Release workflow (2026-10-24):** local branch renamed to `main`; manual GitHub Actions workflow packages the Python source as `.sdkmod` and publishes a version-tagged release. Hosted execution is pending; see README and PHASE3 §3p.
+- **Source-only CI (2026-10-24):** lint, per-file line/branch coverage, all mod/packager mutants, workflow lint and repository/archive checks. Both existing suites pass against an asset-free fixture; hosted runs remain pending. See [CI.md](CI.md), PLAN_CI and PHASE3 §3q.
+- **Worktree workflow (2026-10-24):** AGENTS requires a fresh worktree and `codex/<task>` branch for new coding tasks, with explicit user overrides for direct work on `main`. CI/release setup is being committed directly to `main` at the user's request (PHASE3 §3r).
 
 ## Milestones
 
@@ -35,6 +38,7 @@ Docs are cited across the code and docs by bare name (e.g. "PHASE3 §3l", "PLAN_
 | [PRIOR_RESEARCH.md](research/PRIOR_RESEARCH.md) | How the `steam-deck-scripts` research (decrypted-exe Ghidra analysis, Canvas POC) maps onto this |
 | [evidence/](research/evidence/) | Script/Flash disassembly and native exec tables cited by REPORT |
 | **plans/** | |
+| [CI.md](CI.md) / [PLAN_CI.md](plans/PLAN_CI.md) | CI gates, scope, local commands and source-only fixture research |
 | [PLAN_DIRECT.md](plans/PLAN_DIRECT.md) | Step A (transient helper; v0.4.0–0.5.1) and Step B (transform in Python; implemented in v0.6.0, PHASE3 §3k) |
 | [PLAN_V07.md](plans/PLAN_V07.md) | Run 9 findings → v0.7: source-clip corner markers, no-flicker rebuild, Enhanced dock with skew, ECHO/quest shift |
 | [PLAN_V08.md](plans/PLAN_V08.md) | v0.8: Enhanced zoom (108% relative to the window), edge indicators, mission givers via classic's IMissionDirector script |

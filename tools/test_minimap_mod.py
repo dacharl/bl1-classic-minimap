@@ -13,6 +13,7 @@ import math
 import os
 import sys
 import types
+from pathlib import Path
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -390,7 +391,7 @@ class Helper:
 
 
 def main(gfx_path):
-    gfx = open(gfx_path, 'rb').read()
+    gfx = Path(gfx_path).read_bytes()
     clock = [1000.0]
     world = types.SimpleNamespace()
     pc = types.SimpleNamespace()
@@ -582,7 +583,6 @@ def main(gfx_path):
         assert m.get('_visible') is False, label + ' must hide the minimap'
         close(p1c.get('echo').get('_x'), 791.5); close(p1c.get('check5').get('_y'), 92.4 + 4 * 19.7)
         close(p1c.get('check5').get('_xscale'), 100.04)   # hidden map: the column is back where authored
-        player_x = movie.root.get('mmPlayer').get('_x')
         off(); step()
         assert m.get('_visible') is True, label + ' cleared: minimap back'
         close(p1c.get('echo').get('_x'), e16['echo'][0])

@@ -14,9 +14,9 @@ def load_func_meta(pk, idx, enhanced):
     p += 4      # next
     sup, stext, children, cpp, line, tpos = struct.unpack_from('<6i', d, p); p += 24
     if enhanced:
-        memsize, disksize = struct.unpack_from('<2i', d, p); p += 8
+        _memsize, disksize = struct.unpack_from('<2i', d, p); p += 8
     else:
-        memsize = disksize = struct.unpack_from('<i', d, p)[0]; p += 4
+        disksize = struct.unpack_from('<i', d, p)[0]; p += 4
     code = d[p:p + disksize]; p += disksize
     inative, prec = struct.unpack_from('<HB', d, p); p += 3
     flags = struct.unpack_from('<I', d, p)[0]; p += 4
