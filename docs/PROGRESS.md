@@ -55,6 +55,7 @@ Docs are cited across the code and docs by bare name (e.g. "PHASE3 §3l", "PLAN_
 | [PHASE1.md](log/PHASE1.md) | `upkpatch.py` (movie swap, export and bulk-offset relocation). **§3's in-game "pass" was invalid** (see below) |
 | [PHASE2.md](log/PHASE2.md) | `swfbuild.py`: the minimap movie (status-menu map tree copied in, root AS functions) |
 | [PHASE3.md](log/PHASE3.md) | The SDK mod and every in-game run (§3b–3p: bugs, causes, fixes, run 11's disk-full crash, repository setup, v0.9 box) |
+| [FRICTION.md](log/FRICTION.md) | What slowed work down (wrong assumptions, environment, agent shell/tool quirks, process) and ranked improvement suggestions |
 
 ## Installed right now (classic game folder)
 

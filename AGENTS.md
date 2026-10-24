@@ -20,6 +20,7 @@ This project is an Enhanced-edition-style minimap for **Borderlands GOTY classic
 3. **Don't re-derive what the docs already record.**
    - Each hard-won fact cost a crash or an in-game round.
    - Check them before changing how the mod calls GFx, creates engine objects, hooks ticks, or packages the movie.
+4. **Skim [docs/log/FRICTION.md](docs/log/FRICTION.md)** before tooling-heavy work (REA/Ghidra, package or Flash edits, shell scripting, worktrees). It lists the traps that cost earlier sessions time.
 
 ## Repository layout
 
@@ -29,8 +30,8 @@ README.md            for players: install, options, troubleshooting
 docs/
   PROGRESS.md        where the project stands: milestones, installed versions, build/test, open items
   research/          REPORT, ENHANCED_NATIVE (Ghidra decomp), PRIOR_RESEARCH, evidence/
-  plans/             PLAN_DIRECT, PLAN_V07, PLAN_V08 (one plan per feature release)
-  log/               PHASE0-3: dated build/test log; PHASE3 records every in-game run
+  plans/             PLAN_DIRECT, PLAN_V07..V09 (one plan per feature release)
+  log/               PHASE0-3: dated build/test log (PHASE3 records every in-game run); FRICTION: lessons
 sdk_mods/
   classic_minimap/   the mod (__init__.py, pyproject.toml)
   minimap_probe/     early diagnostic probe (obsolete; keep disabled)
@@ -79,6 +80,8 @@ Code comments cite docs by bare name and section, e.g. "PHASE3 3f", "PLAN_V08 3"
    - Add a `docs/log/PHASE3.md` entry for the change or in-game run: what happened, the cause, the fix, the tests, the installed hashes, and what is unverified.
    - Update PROGRESS: "Where it stands", the milestone row for the version, the "Installed right now" table and the open items.
    - New feature work gets a `docs/plans/PLAN_Vxx.md` with research evidence first, then the plan.
+   - Check PHASE3's last section letter right before adding an entry; other writers append too.
+   - Anything that cost an extra in-game round, a broken tool run or rework gets a row in `docs/log/FRICTION.md`: what happened, cause, workaround, fix.
 
 ## Rules that prevent known crashes
 
@@ -131,5 +134,11 @@ Write commit messages and PR descriptions in plain language: what changed and wh
 
 ## Environment notes
 
-- **OS and shells:** Windows 10, with both Git Bash and PowerShell available. Use forward slashes in JSON arguments passed through Git Bash. Use the Edit tool rather than `sed` for patterns containing backticks or quotes.
+- **OS and shells:** Windows 10, with both Git Bash and PowerShell available. Use forward slashes in JSON arguments passed through Git Bash. Avoid the Bash wrapper's quirks (FRICTION.md):
+  - Write scripts with the Write tool, never through heredocs: `\\` collapses, which put a NUL byte into source once.
+  - Use the Edit tool rather than `sed` for patterns containing backticks, quotes or backslashes.
+  - Spell out paths instead of shell variables; worktree sessions also refuse `python -c` and variable-built commands.
+  - If Bash fails with exit 127 writing its cwd file, use PowerShell.
+  - Set `PYTHONIOENCODING=utf-8` (or avoid printing non-ASCII) when running Python from PowerShell.
+- **Worktrees:** `dist/` and `tools/pk/` are ignored, so a new worktree starts without build inputs. Copy `dist/phase1/GfxHUD.orig.upk`, `dist/phase2/{HUD_classic,status_menu,HUD_enhanced}.gfx` and `tools/pk/*.u` from the main checkout (or re-extract them with the PROGRESS commands).
 - **Git:** this repository was initialized at the user's request. Commit or push only when the user asks; do not add a remote or publish game-derived files without explicit authorization.
