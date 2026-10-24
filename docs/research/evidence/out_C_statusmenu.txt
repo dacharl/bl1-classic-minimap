@@ -1,0 +1,1454 @@
+
+event function StatusMenuExGFxMovie.Start(Bool StartPaused; Bool ReturnValue; Bool bStarted; Object WPRI)
+  0000: defaultparm(false)
+  0005: bStarted = GearboxFramework.GearboxGFxMovie.Start(StartPaused)
+  0018: if !(bStarted) goto 0361
+  0021: WPCOwner = WillowPlayerController(PlayerOwner)
+  0031: WPCOwner.GetPlayerUIPreferences(PlayerName, Primary, Secondary, Tertiary)
+  0059: WPRI = WillowPlayerReplicationInfo(WPCOwner.PlayerReplicationInfo)
+  !! decode error list index out of range at byte 147 00 00 1b 7a 4a 00 00 00 00 00 00 43 ef 2e 00 00 00 00 00 00 16 14 2d 01 4c 14 00 00 28 1b 91 46 00 00 00 00 00 00 21 9e 3b 00 00 00 00 00 00 16
+
+ function StatusMenuExGFxMovie.extHide(Object WHUD)
+  0000: WHUD = WillowHUD(PlayerOwner.myHUD)
+  001a: if !(NotEqual_ObjectObject(WHUD, None)) goto 003d
+  0025: WHUD.CloseStatusMenu(None)
+  003a: goto 0044
+  003d: GFxUI.GFxMovie.Close(<emptyparm>)
+  0044: return nothing
+
+ function StatusMenuExGFxMovie.GetInitialScreen(Str ReturnValue; Byte DesiredScreen)
+  0000: WPCOwner.GFxUIManager.WillowGFxUIManager.UpdatePause()
+  001a: if !(WPCOwner.Pawn.IsA('Vehicle')) goto 004a
+  003c: CurrentScreen = 4
+  0044: return "map"
+  004a: if !(NotEqual_IntInt(cast3a(WPCOwner.QuickAccessScreen), cast3a(0))) goto 007c
+  0064: DesiredScreen = WPCOwner.QuickAccessScreen
+  0079: goto 0091
+  007c: DesiredScreen = WPCOwner.LastActiveStatusMenuScreen
+  !! decode error list index out of range at byte 152 00 00 19 01 39 14 00 00 05 00 01 00 01 c8 11 00 00 05 01 00 00 f9 3a 00 00 0a b2 00 24 02 0f 01 3d 14 00 00 24 02 04 1f 69 6e 76 65 6e 74 6f 72
+
+ function StatusMenuExGFxMovie.Flash_SetCurrentScreen()
+  0000: SetVariableString("currentScreen", GetInitialScreen())
+  0023: return nothing
+
+ function StatusMenuExGFxMovie.Flash_SetVehicleRestrictions()
+  0000: SetVariableBool("bVehicleRestrictions", WPCOwner.Pawn.IsA('Vehicle'))
+  003f: return nothing
+
+ function StatusMenuExGFxMovie.extSetCurrentScreen(Str ScreenName)
+  0000: CleanupScreen(CurrentScreen)
+  000f: CurrentScreen = GetScreenByName(ScreenName)
+  0024: CacheKeyRebindings()
+  !! decode error list index out of range at byte 53 00 00 fe 3a 00 00 16 1b 42 11 00 00 00 00 00 00 16 05 00 00 00 fe 3a 00 00 0a 60 00 1f 69 6e 76 65 6e 74 6f 72 79 00 0f 01 31 14 00 00 2a 1b f2
+
+ function StatusMenuExGFxMovie.CleanupScreen(Byte Screen)
+  !! decode error list index out of range at byte 7 05 01 00 00 00 3b 00 00 0a 1b 00 24 01 0f 01 97 fb ff ff 1e 00 00 00 3f 06 89 01 0a c2 00 24
+
+ function StatusMenuExGFxMovie.GetScreenByName(Str ScreenName; Byte ReturnValue)
+  !! decode error list index out of range at byte 7 05 00 00 00 03 3b 00 00 0a 19 00 1f 69 6e 76 65 6e 74 6f 72 79 00 04 24 02 0a 28 00 1f 6d 69
+
+event function StatusMenuExGFxMovie.OnClose(Object WPRI)
+  0000: ClearInventoryRefreshTimer()
+  000a: StopMovingHighlight()
+  0014: if !(EqualEqual_IntInt(cast3a(WPCOwner.QuickAccessScreen), cast3a(0))) goto 0043
+  002e: WPCOwner.LastActiveStatusMenuScreen = CurrentScreen
+  0043: WPCOwner.QuickAccessScreen = 0
+  0055: WPRI = WillowPlayerReplicationInfo(WPCOwner.PlayerReplicationInfo)
+  !! decode error list index out of range at byte 143 00 00 1b 11 5e 00 00 00 00 00 00 43 ef 2e 00 00 00 00 00 00 16 1b 91 46 00 00 00 00 00 00 21 8b 3b 00 00 00 00 00 00 16 1b 59 29 00 00 00 00 00
+
+ function StatusMenuExGFxMovie.HandleCurrencyChanged(Int NewCurrency)
+  0000: ActionScript("HandleCurrencyChanged")
+  0021: return nothing
+
+ function StatusMenuExGFxMovie.WantsPause(Bool ReturnValue)
+  0000: return false
+  0002: return return
+
+ function StatusMenuExGFxMovie.DisplayMarketingUnlockDialogIfNecessary(Object Def; Object Globals; Object GlobalsDef; Str Caption; Str Prompt)
+  0000: if !(Greater_IntInt(WPCOwner.MarketingCodesNeedingNotification.Length, 0)) goto 0104
+  0016: Globals = class(WillowGlobals.WillowGlobals.GetWillowGlobals())
+  002c: GlobalsDef = Globals.GetGlobalsDefinition()
+  0046: Def = GlobalsDef.FindUnlockDefinitionForUnlockCode(WPCOwner.MarketingCodesNeedingNotification[0])
+  0071: WPCOwner.MarketingCodesNeedingNotification.Remove(0,1)
+  0083: Caption = Localize(Def.DialogLocSection, "Caption", Def.DialogLocFile)
+  00ba: Prompt = Localize(Def.DialogLocSection, "Prompt", Def.DialogLocFile)
+  00f0: ShowPopupModal(Prompt, Caption)
+  0104: return nothing
+
+ function StatusMenuExGFxMovie.SetupCharacterScreen(Str PlayerNickName; Byte Platform)
+  0000: if !(bRenderingDisabled) goto 000b
+  0009: return nothing
+  000b: Platform = class(WillowUIScene.GetPlatform())
+  0025: if !(AndAnd_BoolBool(NotEqual_ObjectObject(WPCOwner.OnlineSub, None), Core.Object.NotEqual_InterfaceInterface(WPCOwner.OnlineSub.PlayerInterface, OnlinePlayerInterface(None)))) goto 010f
+  0064: if !(AndAnd_BoolBool(WPCOwner.WorldInfo.Engine.WorldInfo.IsConsoleBuild(2), Not_PreBool(WPCOwner.IsPrimaryPlayer()))) goto 00c0
+  009e: PlayerNickName = WPCOwner.PlayerReplicationInfo.PlayerName
+  00bd: goto 010f
+  00c0: PlayerNickName = WPCOwner.OnlineSub.PlayerInterface.GetPlayerNickname(cast3d(LocalPlayer(WPCOwner.Player).ControllerId))
+  010f: if !(OrOr_BoolBool(EqualEqual_IntInt(Len(PlayerNickName), 0), AndAnd_BoolBool(NotEqual_IntInt(cast3a(Platform), cast3a(1)), EqualEqual_StrStr(PlayerNickName, Localize("OnlineSubsystemGameSpy", "LocalProfileName", "OnlineSubsystemGameSpy"))))) goto 01f8
+  0186: SetVariableString("character.name.text", Localize("StatusMenu", "Name", "WillowGame"))
+  01cd: SetVariableString("character.gamertag.text", PlayerName)
+  01f5: goto 0244
+  01f8: SetVariableString("character.name.text", PlayerName)
+  021c: SetVariableString("character.gamertag.text", PlayerNickName)
+  0244: SetPortrait()
+  024e: TickRateSeconds = 0.1
+  0259: DrawVolatileCharacterInfo()
+  0263: return nothing
+
+ function StatusMenuExGFxMovie.SetCharacterTotalCredits(Int Credits; Int DisplayedCredits)
+  0000: DisplayedCredits = GetCreditsToDisplay(Credits)
+  0015: SetCharacterDisplayedCredits(DisplayedCredits)
+  0024: return nothing
+
+ function StatusMenuExGFxMovie.SetCharacterDisplayedCredits(Int Credits)
+  0000: ActionScript("SetCharacterTotalCredits")
+  0024: return nothing
+
+ function StatusMenuExGFxMovie.SetInventoryTotalCredits(Int Credits; Int DisplayedCredits)
+  0000: DisplayedCredits = GetCreditsToDisplay(Credits)
+  0015: SetInventoryDisplayedCredits(DisplayedCredits)
+  0024: return nothing
+
+ function StatusMenuExGFxMovie.SetInventoryDisplayedCredits(Int Credits)
+  0000: ActionScript("SetInventoryTotalCredits")
+  0024: return nothing
+
+ function StatusMenuExGFxMovie.extSetupCharacterCard(Object WP; Int CurrentLevel; Int MaxLevel; Int LevelPercent; Int CurrentXP; Int CurrentLevelXP; Int NextLevelXP; Int XPPercent; Int CurrentHealth; Int MaxHealth; Int HealthPercent; Int CurrentShield; Int MaxShield; Int ShieldPercent; Bool bHasShieldVar; Str CommDeckText; Str CommDeckLabel; Object CommDeck; Str XPText; Str ShieldText; Str HealthText; Object WHUD)
+  0000: WP = PlayerOwner.Pawn.Core.Object.QueryInterface(IBodyPawn).GetAWillowPawn()
+  0035: CommDeckText = NoCommDeckString
+  0040: CommDeckLabel = "None"
+  004c: CommDeck = WP.GetEquippableItemInSlot(2)
+  0068: if !(NotEqual_ObjectObject(CommDeck, None)) goto 00a7
+  0073: CommDeckText = CommDeck.GenerateHumanReadableName(true)
+  008e: CommDeck.GetCommDeckIconLabel(CommDeckLabel)
+  00a7: MaxLevel = WPCOwner.GetMaxExpLevel()
+  00c1: CurrentLevel = WP.GetExpLevel()
+  00db: CurrentXP = WPCOwner.GetExpPoints()
+  00f5: XPText = Concat_StrStr("", cast53(CurrentXP))
+  0106: if !(Less_IntInt(CurrentLevel, MaxLevel)) goto 01b9
+  0115: LevelPercent = Add_IntInt(Divide_IntInt(Multiply_IntInt(CurrentLevel, 100), MaxLevel), 1)
+  012e: CurrentLevelXP = WPCOwner.GetExpPointsRequiredForLevel(CurrentLevel)
+  014d: NextLevelXP = WPCOwner.GetExpPointsRequiredForLevel(Add_IntInt(CurrentLevel, 1))
+  016f: ConcatEqual_StrStr(XPText, Concat_StrStr(" / ", cast53(NextLevelXP)))
+  018a: XPPercent = cast44(Multiply_FloatFloat(Divide_FloatFloat(cast3f(Subtract_IntInt(CurrentXP, CurrentLevelXP)), cast3f(Subtract_IntInt(NextLevelXP, CurrentLevelXP))), cast3f(100)))
+  01b6: goto 01c9
+  01b9: LevelPercent = 100
+  01c1: XPPercent = 100
+  01c9: WHUD = WillowHUD(PlayerOwner.myHUD)
+  01e3: CurrentHealth = Core.Object.FFloor(WP.GetHealth())
+  0203: MaxHealth = Core.Object.FFloor(WP.GetMaxHealth())
+  0223: HealthText = Concat_StrStr(Concat_StrStr(Concat_StrStr("", cast53(CurrentHealth)), " / "), cast53(MaxHealth))
+  0244: HealthPercent = Divide_IntInt(Multiply_IntInt(CurrentHealth, 100), MaxHealth)
+  025a: bHasShieldVar = WP.HasShieldVar()
+  0275: if !(bHasShieldVar) goto 03cb
+  027e: CurrentShield = cast44(WP.GetShieldStrength())
+  029a: MaxShield = cast44(WP.GetMaxShieldStrength())
+  02b6: if !(AndAnd_BoolBool(AndAnd_BoolBool(NotEqual_ObjectObject(WHUD, None), NotEqual_ObjectObject(WHUD.HUDDef, None)), NotEqual_ObjectObject(WHUD.HUDDef.CustomAttributePresentation, None))) goto 0383
+  02f9: ShieldText = Concat_StrStr(Concat_StrStr(Concat_StrStr("", WHUD.HUDDef.CustomAttributePresentation.AttributePresentationDefinition.ValueToString(WP.GetShieldStrength(), 0)), " / "), WHUD.HUDDef.CustomAttributePresentation.AttributePresentationDefinition.ValueToString(WP.GetMaxShieldStrength(), 0))
+  0380: goto 03a4
+  0383: ShieldText = Concat_StrStr(Concat_StrStr(Concat_StrStr("", cast53(CurrentShield)), " / "), cast53(MaxShield))
+  03a4: ShieldPercent = (Greater_IntInt(MaxShield, 0) ? Divide_IntInt(Multiply_IntInt(CurrentShield, 100), MaxShield) : 0)
+  03c8: goto 03da
+  03cb: ShieldText = ""
+  03d3: ShieldPercent = 0
+  03da: SetPlayerCardInfo(CommDeckText, CommDeckLabel, cast53(CurrentLevel), LevelPercent, XPText, XPPercent, ShieldText, ShieldPercent, HealthText, HealthPercent)
+  0418: return nothing
+
+ function StatusMenuExGFxMovie.SetCondensedHealthWidget(Object WP; Int CurrentHealth; Int MaxHealth; Int HealthPercent; Str HealthText)
+  0000: WP = PlayerOwner.Pawn.Core.Object.QueryInterface(IBodyPawn).GetAWillowPawn()
+  0035: CurrentHealth = Core.Object.FFloor(WP.GetHealth())
+  0055: MaxHealth = Core.Object.FCeil(WP.GetMaxHealth())
+  0075: HealthText = Concat_StrStr(Concat_StrStr(Concat_StrStr("", cast53(CurrentHealth)), " / "), cast53(MaxHealth))
+  0096: HealthPercent = Divide_IntInt(Multiply_IntInt(CurrentHealth, 100), MaxHealth)
+  00ac: SetCondensedHealthWidget_Wrapper(HealthText, HealthPercent)
+  00c0: return nothing
+
+ function StatusMenuExGFxMovie.SetCondensedHealthWidget_Wrapper(Str HealthText; Int HealthNumber)
+  0000: ActionScript("SetCondensedHealthWidget")
+  0024: return nothing
+
+ function StatusMenuExGFxMovie.SetPlayerCardInfo(Str CommDeckText; Str CommDeckFrameLabel; Str LevelText; Int LevelPercent; Str XPText; Int XPPercent; Str ShieldText; Int ShieldPercent; Str HealthText; Int HealthPercent)
+  0000: ActionScript("SetPlayerCardInfo")
+  001d: return nothing
+
+ function StatusMenuExGFxMovie.extSetupProficiencyCard(Int ProficiencyFrameNumber; Str ProficiencyText; Int ProficiencyIndex; Struct ProficiencySkill; Struct Skill)
+  0000: ProficiencyText = Concat_StrStr("p", cast53(ProficiencyFrameNumber))
+  0012: ProficiencyIndex = 0
+  0019: if !(Less_IntInt(ProficiencyIndex, WPCOwner.7)) goto 0194
+  002f: ProficiencySkill = WPCOwner.ProficiencySkills[ProficiencyIndex]
+  004a: Skill = WPCOwner.PlayerSkills[ProficiencySkill.PlayerSkillIndex]
+  0070: if !(AndAnd_BoolBool(NotEqual_ObjectObject(Skill.Definition, None), EqualEqual_StrStr(ProficiencyText, Skill.Definition.FlashMovieProperty))) goto 018a
+  00ac: SetVariableString("character.playercard.profTitle.text", Skill.Definition.SkillName)
+  00f5: ProficiencyText = ""
+  00fd: if !(Greater_IntInt(ProficiencySkill.Grade, 0)) goto 0153
+  0113: ProficiencyText = class(SkillTreeGFxHelper.GetSkillDescriptionForGrade(Skill.Definition, ProficiencySkill.Grade, WPCOwner, true))
+  0153: SetVariableString("character.playercard.prof2.htmlText", ProficiencyText)
+  0187: goto 0194
+  018a: AddAdd_Int(ProficiencyIndex)
+  0191: goto 0019
+  0194: return nothing
+
+ function StatusMenuExGFxMovie.SetWeaponProficiencyBars(Struct Skill; Int ProficiencyIndex; Struct ProficiencySkill; Str ProficiencyString; Str PropertyString; Int Grade; Float Percent; Struct arg; Array args)
+  0000: arg.Type = 2
+  0013: args.AddItem(arg)
+  0021: ProficiencyIndex
+  0026: 0
+  0027: if !(Less_IntInt(ProficiencyIndex, WPCOwner.7)) goto 01ff
+  003d: ProficiencySkill = WPCOwner.ProficiencySkills[ProficiencyIndex]
+  0058: Skill = WPCOwner.PlayerSkills[ProficiencySkill.PlayerSkillIndex]
+  007e: if !(NotEqual_ObjectObject(Skill.Definition, None)) goto 01f5
+  0094: if !(Greater_IntInt(Len(Skill.Definition.FlashMovieProperty), 0)) goto 01f5
+  00b6: WPCOwner.GetWeaponProficiency(Skill.Definition, Grade, Percent)
+  00e4: ProficiencyString = (Less_IntInt(ProficiencySkill.Grade, 10) ? Concat_StrStr("0", cast53(ProficiencySkill.Grade)) : Concat_StrStr("", cast53(ProficiencySkill.Grade)))
+  0130: PropertyString = Concat_StrStr("character.proficiencies.", Skill.Definition.FlashMovieProperty)
+  016c: SetVariableString(Concat_StrStr(PropertyString, ".text"), ProficiencyString)
+  0189: args[0].N = Divide_FloatFloat(Multiply_FloatFloat(cast3f(ProficiencySkill.GradePoints), 100.0), cast3f(ProficiencySkill.PointsToNextGrade))
+  01c9: Invoke(Concat_StrStr(PropertyString, "bar.gotoAndStop"), args)
+  01f5: AddAdd_Int(ProficiencyIndex)
+  01fc: goto 0027
+  01ff: return nothing
+
+ function StatusMenuExGFxMovie.SetAllAmmoCounts(Str BackMenuPage; Object GlobalsDef)
+  0000: GlobalsDef = class(WillowGlobals.WillowGlobals.GetWillowGlobals()).GetGlobalsDefinition()
+  0025: SetAmmoCount(Concat_StrStr(BackMenuPage, ".ammo.ammo_repeater"), GlobalsDef.AmmoDefinition_RepeaterPistol)
+  005a: SetAmmoCount(Concat_StrStr(BackMenuPage, ".ammo.ammo_revolver"), GlobalsDef.AmmoDefinition_RevolverPistol)
+  008f: SetAmmoCount(Concat_StrStr(BackMenuPage, ".ammo.ammo_smg"), GlobalsDef.AmmoDefinition_SMG)
+  00bf: SetAmmoCount(Concat_StrStr(BackMenuPage, ".ammo.ammo_shotgun"), GlobalsDef.AmmoDefinition_Shotgun)
+  00f3: SetAmmoCount(Concat_StrStr(BackMenuPage, ".ammo.ammo_ar"), GlobalsDef.AmmoDefinition_CombatRifle)
+  0122: SetAmmoCount(Concat_StrStr(BackMenuPage, ".ammo.ammo_sniper"), GlobalsDef.AmmoDefinition_SniperRifle)
+  0155: SetAmmoCount(Concat_StrStr(BackMenuPage, ".ammo.ammo_rocket"), GlobalsDef.AmmoDefinition_RocketLauncher)
+  0188: SetAmmoCount(Concat_StrStr(BackMenuPage, ".ammo.ammo_grenade"), GlobalsDef.GrenadeAmmoDefinition)
+  01bc: return nothing
+
+ function StatusMenuExGFxMovie.SetAmmoCount(Str FlashString; Object ResourceDef; Struct ResPoolRef; Object ResPool)
+  0000: ResPoolRef = PlayerOwner.GetResourcePoolForResourceDefinition(ResourceDef, <emptyparm>)
+  0020: SetVariableString(Concat_StrStr(FlashString, ".text"), Concat_StrStr("", cast53(cast44(class(Engine.Actor.Engine.Actor.GetResourcePoolCurrentValueOrDefault(ResPoolRef, 0.0))))))
+  005a: if !(class(Engine.Actor.Engine.Actor.IsResourcePoolValid(ResPoolRef))) goto 00be
+  0072: ResPool = ResPoolRef.Data
+  !! decode error index out of range at byte 223 70 00 60 3b 00 00 1f 5f 6d 61 78 2e 74 65 78 74 00 16 1f 00 16 04 0b 53
+
+ function StatusMenuExGFxMovie.SetupInventoryScreen(Object WInvMgr; Object WP; Object WPRI)
+  0000: WP = WillowPawn(WPCOwner.GetInventoryPawn())
+  001f: WPRI = WillowPlayerReplicationInfo(WP.PlayerReplicationInfo)
+  0039: SetInventoryRefreshTimer()
+  0043: ConfigureForPlayer(cast3f((WPCOwner.IsPrimaryPlayer() ? 0 : 1)))
+  006a: WInvMgr = WillowInventoryManager(WPCOwner.GetInventoryPawn().InvManager)
+  0093: MaxReadiedWeapons = WInvMgr.WillowInventoryManager.GetWeaponReadyMax(<emptyparm>)
+  00aa: if !(Greater_IntInt(CachedMaxReadied, 0)) goto 00d3
+  00b5: AwardNewQuickSlots(MaxReadiedWeapons, Subtract_IntInt(MaxReadiedWeapons, CachedMaxReadied))
+  00d0: goto 00e3
+  00d3: AwardNewQuickSlots(MaxReadiedWeapons, 0)
+  00e3: CachedMaxReadied = MaxReadiedWeapons
+  00ee: PrepareListOfAllInventory()
+  00f8: SetupContainerWithData(LeftSideTextList, BackpackThings)
+  010c: FlourishNewSlots(NewSlots)
+  011b: InitCellData()
+  0125: if !(bInListView) goto 013b
+  012e: SwitchToListView()
+  0138: goto 0159
+  013b: SwitchToCellsView()
+  0145: LeftSideTextList.SetHighlightBarOff()
+  0159: SetVariableString("inventory.tab.text", InventoryTabString)
+  017c: SetPortrait()
+  0186: SetAllAmmoCounts("inventory")
+  019b: SetInventoryTotalCredits(WPRI.GetCurrencyOnHand())
+  01b9: SetDPadFrames()
+  01c3: SetCondensedHealthWidget()
+  01cd: SetTooltipsText()
+  01d7: return nothing
+
+ function StatusMenuExGFxMovie.SetDPadFrames(Byte Platform)
+  0000: Platform = class(WillowUIScene.GetPlatform())
+  001a: if !(AndAnd_BoolBool(EqualEqual_IntInt(cast3a(Platform), cast3a(0)), Not_PreBool(PlayerOwner.PlayerInput.bUsingGamepad))) goto 0111
+  004b: WillowGFxMovie.SingleArgInvokeS("inventory.dpadleft.dpadup.gotoAndStop", "pc")
+  007c: WillowGFxMovie.SingleArgInvokeS("inventory.dpadright.dpadup.gotoAndStop", "pc")
+  00ae: WillowGFxMovie.SingleArgInvokeS("inventory.dpadup.dpadup.gotoAndStop", "pc")
+  00dd: WillowGFxMovie.SingleArgInvokeS("inventory.dpaddown.dpadup.gotoAndStop", "pc")
+  010e: goto 02f7
+  0111: if !(OrOr_BoolBool(EqualEqual_IntInt(cast3a(Platform), cast3a(1)), AndAnd_BoolBool(EqualEqual_IntInt(cast3a(Platform), cast3a(0)), PlayerOwner.PlayerInput.bUsingGamepad))) goto 0220
+  0152: WillowGFxMovie.SingleArgInvokeS("inventory.dpadleft.dpadup.gotoAndStop", "xbox")
+  0185: WillowGFxMovie.SingleArgInvokeS("inventory.dpadright.dpadup.gotoAndStop", "xbox")
+  01b9: WillowGFxMovie.SingleArgInvokeS("inventory.dpadup.dpadup.gotoAndStop", "xbox")
+  01ea: WillowGFxMovie.SingleArgInvokeS("inventory.dpaddown.dpadup.gotoAndStop", "xbox")
+  021d: goto 02f7
+  0220: if !(EqualEqual_IntInt(cast3a(Platform), cast3a(2))) goto 02f7
+  0230: WillowGFxMovie.SingleArgInvokeS("inventory.dpadleft.dpadup.gotoAndStop", "ps3")
+  0262: WillowGFxMovie.SingleArgInvokeS("inventory.dpadright.dpadup.gotoAndStop", "ps3")
+  0295: WillowGFxMovie.SingleArgInvokeS("inventory.dpadup.dpadup.gotoAndStop", "ps3")
+  02c5: WillowGFxMovie.SingleArgInvokeS("inventory.dpaddown.dpadup.gotoAndStop", "ps3")
+  02f7: return nothing
+
+ function StatusMenuExGFxMovie.IsComparing(Bool ReturnValue)
+  0000: return EqualEqual_IntInt(ChangingCard, 2)
+  000a: return return
+
+ function StatusMenuExGFxMovie.ConfigureForPlayer(Float ControllerId)
+  0000: ActionScript("ConfigureForPlayer")
+  001e: return nothing
+
+ function StatusMenuExGFxMovie.SetReadyWeaponLeft(Bool bVisible)
+  0000: ActionScript("SetReadyWeaponLeft")
+  001e: return nothing
+
+ function StatusMenuExGFxMovie.SetReadyWeaponRight(Bool bVisible)
+  0000: ActionScript("SetReadyWeaponRight")
+  001f: return nothing
+
+ function StatusMenuExGFxMovie.FlourishWeaponRight()
+  0000: ActionScript("FlourishWeaponRight")
+  001f: return nothing
+
+ function StatusMenuExGFxMovie.FlourishWeaponLeft()
+  0000: ActionScript("FlourishWeaponLeft")
+  001e: return nothing
+
+ function StatusMenuExGFxMovie.PrepareListOfAllInventory(Object WInvMgr; Object WWeap; Object WItem; Object ItemDef; Array ReadiedWeapons; Array UnReadiedWeapons; Array AllItems; Int EmptyIdx; Int CachedInventoryIdx)
+  0000: BackpackThings.Length = 0
+  0008: AllThings.Length = 0
+  0010: WInvMgr = WillowInventoryManager(WPCOwner.GetInventoryPawn().InvManager)
+  0039: MaxCapacity = WInvMgr.WillowInventoryManager.GetUnreadiedInventoryMaxSize()
+  004f: if !(Greater_IntInt(CachedMaxCapacity, 0)) goto 006c
+  005a: NewSlots = Subtract_IntInt(MaxCapacity, CachedMaxCapacity)
+  006c: CachedMaxCapacity = MaxCapacity
+  0077: WPCOwner.GetInventoryLists(ReadiedWeapons, UnReadiedWeapons, AllItems)
+  009a: foreach ReadiedWeapons(WWeap) (end 0184)
+  !! decode error list index out of range at byte 176 00 16 58 00 79 3b 00 00 00 7c 3b 00 00 00 4a 84 01 05 01 00 19 00 7c 3b 00 00 05 00 01 00 01 82 13 00 00 0a e9 00 24 01 0f 35 0b 14 00 00 0e 14
+
+ function StatusMenuExGFxMovie.SetupContainerWithData(Object Container; Array Things; Object GlobalsDef; Object WInv; Struct RarityColor; Int Idx)
+  0000: Container.EmptyData()
+  0014: GlobalsDef = class(WillowGlobals.WillowGlobals.GetWillowGlobals()).GetGlobalsDefinition()
+  0039: Idx = 0
+  0040: if !(Less_IntInt(Idx, out Things.Length)) goto 0113
+  0050: WInv = out Things[Idx]
+  0061: if !(NotEqual_ObjectObject(WInv, None)) goto 00df
+  006c: RarityColor = GlobalsDef.GetRarityColorForLevel(WInv.RarityLevel)
+  0095: Container.AddDataEntry(WInv, WInv.GetShortHumanReadableName(), RarityColor, Concat_StrStr("", cast57(WInv.ZippyFrame)))
+  00dc: goto 0109
+  00df: Container.AddDataEntry(None, EmptyInventorySlotText, StatusDef.EmptyInventorySlotColor, <emptyparm>)
+  0109: AddAdd_Int(Idx)
+  0110: goto 0040
+  0113: SortContainer(Container)
+  0122: return nothing
+
+native function StatusMenuExGFxMovie.SortContainer(Object Container)
+  0000: nativeparm Container
+  0005: nothing
+
+ function StatusMenuExGFxMovie.extSetInitialHighlightBar(Str Container)
+  0000: if !(EqualEqual_StrStr(StatusDef.LeftSideTextDefinition.ContainerName, Container)) goto 003a
+  0023: LeftSideTextList.PositionHighlightBar()
+  0037: goto 0071
+  003a: if !(EqualEqual_StrStr(StatusDef.RightSideTextDefinition.ContainerName, Container)) goto 0071
+  005d: RightSideTextList.PositionHighlightBar()
+  0071: return nothing
+
+ function StatusMenuExGFxMovie.extUpdateLeftSideListSize(Int NewSize)
+  0000: LeftSideTextList.UpdateEntriesPerPage(NewSize)
+  0019: return nothing
+
+ function StatusMenuExGFxMovie.extToggleSort(Str Direction)
+  0000: if !(IsComparing()) goto 000f
+  000d: return nothing
+  000f: if !(EqualEqual_StrStr(Direction, "Left")) goto 0043
+  001f: SubtractSubtract_Int(LeftSideSortConfigIndex)
+  0026: if !(Less_IntInt(LeftSideSortConfigIndex, 0)) goto 0040
+  0031: LeftSideSortConfigIndex = Subtract_IntInt(SortConfigurations.Length, 1)
+  0040: goto 0061
+  0043: AddAdd_Int(LeftSideSortConfigIndex)
+  004a: if !(GreaterEqual_IntInt(LeftSideSortConfigIndex, SortConfigurations.Length)) goto 0061
+  005a: LeftSideSortConfigIndex = 0
+  0061: SortContainer(LeftSideTextList)
+  0070: LeftSideTextList.ResetState()
+  0084: if !(bInListView) goto 0097
+  008d: UpdateCardPanelWithCurrentActiveListEntry()
+  0097: return nothing
+
+ function StatusMenuExGFxMovie.FlourishNewSlots(Int NewSlotsToShow; Int Idx)
+  0000: if !(Greater_IntInt(NewSlotsToShow, 0)) goto 008a
+  000b: LeftSideTextList.ScrollToBottomOfList()
+  001f: Idx = StatusDef.LeftSideTextDefinition.InitialEntryCount
+  003e: if !(Greater_IntInt(NewSlotsToShow, 0)) goto 008a
+  0049: WillowGFxMovie.SingleArgInvokeS(Concat_StrStr(Concat_StrStr("inventory.f", cast53(Idx)), ".gotoAndPlay"), "on")
+  0079: SubtractSubtract_Int(NewSlotsToShow)
+  0080: SubtractSubtract_Int(Idx)
+  0087: goto 003e
+  008a: return nothing
+
+ function StatusMenuExGFxMovie.GetCurrentMainAction(Object WInv; Name MainAction; Bool ReturnValue; Bool bActionAvailable)
+  0000: out MainAction = LastMainAction
+  000b: bActionAvailable = false
+  0013: if !(NotEqual_ObjectObject(EquippingWeapon, None)) goto 0038
+  001e: out MainAction = 'equip'
+  002d: bActionAvailable = true
+  0035: goto 00fa
+  0038: if !(NotEqual_ObjectObject(WInv, None)) goto 00fa
+  0043: if !(IsComparing()) goto 0078
+  0050: out MainAction = 'equip'
+  005f: bActionAvailable = CanReady(WInv)
+  0075: goto 00fa
+  0078: if !(WInv.bReadied) goto 00b3
+  008b: out MainAction = 'UnEquip'
+  009a: bActionAvailable = CanUnready(WInv)
+  00b0: goto 00fa
+  00b3: bActionAvailable = CanReady(WInv)
+  00c9: if !(NotEqual_ObjectObject(WillowUsableItem(WInv), None)) goto 00eb
+  00d9: out MainAction = 'Use'
+  00e8: goto 00fa
+  00eb: out MainAction = 'equip'
+  00fa: LastMainAction = out MainAction
+  0105: return bActionAvailable
+  010c: return return
+
+ function StatusMenuExGFxMovie.SetTooltipsText(Str S; Bool bAvailable; Name CurrentMainAction; Object WInv; Str TooltipBar)
+  !! decode error list index out of range at byte 7 05 01 00 01 3d 14 00 00 0a e0 00 24 03 0f 00 97 3b 00 00 1b bf 38 00 00 00 00 00 00 1f 53 74
+
+ function StatusMenuExGFxMovie.CanCompare(Object WInv; Bool ReturnValue)
+  0000: return AndAnd_BoolBool(NotEqual_ObjectObject(WInv, None), Not_PreBool(IsComparing()))
+  001a: return return
+
+ function StatusMenuExGFxMovie.CanDrop(Object WInv; Bool ReturnValue; Bool bCanDrop)
+  0000: bCanDrop = false
+  0008: if !(AndAnd_BoolBool(AndAnd_BoolBool(Not_PreBool(IsComparing()), NotEqual_ObjectObject(WInv, None)), WInv.CanThrow())) goto 0045
+  003d: bCanDrop = true
+  0045: return bCanDrop
+  004c: return return
+
+ function StatusMenuExGFxMovie.CanReady(Object WInv; Bool ReturnValue)
+  0000: return AndAnd_BoolBool(Not_PreBool(WInv.bReadied), WInv.CanBeUsedBy(WPCOwner.GetInventoryPawn()))
+  0040: return return
+
+ function StatusMenuExGFxMovie.CanUnready(Object WInv; Bool ReturnValue)
+  0000: return Less_IntInt(SlotsUsed, MaxCapacity)
+  000d: return return
+
+ function StatusMenuExGFxMovie.CanSort(Bool ReturnValue)
+  0000: return Not_PreBool(IsComparing())
+  000d: return return
+
+ function StatusMenuExGFxMovie.RefreshInventoryScreen(Object WInvMgr; Bool bNeedToRefreshCells; Int NewCapacity; Array ReadiedWeapons; Array UnReadiedWeapons; Array AllItems; Object WWeap; Object WItem; Int Idx)
+  0000: WInvMgr = WillowInventoryManager(WPCOwner.GetInventoryPawn().InvManager)
+  0029: if !(NotEqual_IntInt(CachedMaxReadied, WInvMgr.WillowInventoryManager.GetWeaponReadyMax(<emptyparm>))) goto 004c
+  0044: bNeedToRefreshCells = true
+  004c: NewCapacity = WInvMgr.WillowInventoryManager.GetUnreadiedInventoryMaxSize()
+  0062: if !(NotEqual_IntInt(CachedMaxCapacity, NewCapacity)) goto 0079
+  0071: bNeedToRefreshCells = true
+  0079: if !(Not_PreBool(bNeedToRefreshCells)) goto 023c
+  0084: WPCOwner.GetInventoryLists(ReadiedWeapons, UnReadiedWeapons, AllItems)
+  00a7: if !(NotEqual_IntInt(Add_IntInt(Add_IntInt(ReadiedWeapons.Length, UnReadiedWeapons.Length), AllItems.Length), CachedInventory.Length)) goto 00d0
+  00c8: bNeedToRefreshCells = true
+  00d0: Idx = 0
+  00d7: if !(Not_PreBool(bNeedToRefreshCells)) goto 014e
+  00e2: foreach ReadiedWeapons(WWeap) (end 014d)
+  00f1: if !(OrOr_BoolBool(NotEqual_ObjectObject(CachedInventory[Idx].Inv, WWeap), NotEqual_BoolBool(CachedInventory[AddAdd_Int(Idx)].bReadied, WWeap.bReadied))) goto 014c
+  0141: bNeedToRefreshCells = true
+  0149: goto 014d
+  014c: iteratornext
+  014d: iteratorpop
+  014e: if !(Not_PreBool(bNeedToRefreshCells)) goto 01c5
+  0159: foreach UnReadiedWeapons(WWeap) (end 01c4)
+  0168: if !(OrOr_BoolBool(NotEqual_ObjectObject(CachedInventory[Idx].Inv, WWeap), NotEqual_BoolBool(CachedInventory[AddAdd_Int(Idx)].bReadied, WWeap.bReadied))) goto 01c3
+  01b8: bNeedToRefreshCells = true
+  01c0: goto 01c4
+  01c3: iteratornext
+  01c4: iteratorpop
+  01c5: if !(Not_PreBool(bNeedToRefreshCells)) goto 023c
+  01d0: foreach AllItems(WItem) (end 023b)
+  01df: if !(OrOr_BoolBool(NotEqual_ObjectObject(CachedInventory[Idx].Inv, WItem), NotEqual_BoolBool(CachedInventory[AddAdd_Int(Idx)].bReadied, WItem.bReadied))) goto 023a
+  022f: bNeedToRefreshCells = true
+  0237: goto 023b
+  023a: iteratornext
+  023b: iteratorpop
+  023c: if !(bNeedToRefreshCells) goto 0276
+  0245: FreeCellData()
+  024f: SetupInventoryScreen()
+  0259: if !(bInListView) goto 0276
+  0262: LeftSideTextList.RestoreState()
+  0276: return nothing
+
+ function StatusMenuExGFxMovie.SetInventoryRefreshTimer(Object WP)
+  0000: WP = WillowPawn(WPCOwner.GetInventoryPawn())
+  001f: WP.SetTimer(InventoryRefreshRate, true, 'RefreshInventoryScreen', self)
+  003c: return nothing
+
+ function StatusMenuExGFxMovie.ClearInventoryRefreshTimer(Object WP)
+  0000: WP = WillowPawn(WPCOwner.GetInventoryPawn())
+  001f: WP.Engine.Actor.ClearTimer('RefreshInventoryScreen', self)
+  0039: return nothing
+
+ function StatusMenuExGFxMovie.AwardNewQuickSlots(Int TotalSlotCount; Int NewlyOpenedSlotCount; Bool bFlourishLeft; Bool bFlourishRight)
+  0000: bFlourishLeft = OrOr_BoolBool(AndAnd_BoolBool(EqualEqual_IntInt(TotalSlotCount, 3), EqualEqual_IntInt(NewlyOpenedSlotCount, 1)), AndAnd_BoolBool(EqualEqual_IntInt(TotalSlotCount, 4), EqualEqual_IntInt(NewlyOpenedSlotCount, 2)))
+  0039: bFlourishRight = AndAnd_BoolBool(EqualEqual_IntInt(TotalSlotCount, 4), EqualEqual_IntInt(NewlyOpenedSlotCount, 1))
+  0056: if !(bFlourishLeft) goto 006c
+  005f: FlourishWeaponLeft()
+  0069: goto 007f
+  006c: SetReadyWeaponLeft(GreaterEqual_IntInt(TotalSlotCount, 3))
+  007f: if !(bFlourishRight) goto 0095
+  0088: FlourishWeaponRight()
+  0092: goto 00a8
+  0095: SetReadyWeaponRight(GreaterEqual_IntInt(TotalSlotCount, 4))
+  00a8: return nothing
+
+ function StatusMenuExGFxMovie.GetCurrentHighlightedObject(Object ReturnValue; Object WInv)
+  0000: if !(IsComparing()) goto 002f
+  000d: WInv = WillowInventory(ActiveTextList.GetHighlightedObject())
+  002c: goto 005b
+  002f: if !(bInListView) goto 004b
+  0038: WInv = GetHighlightedLeftSideEntry()
+  0048: goto 005b
+  004b: WInv = GetHighlightedCellEntry()
+  005b: return WInv
+  0061: return return
+
+ function StatusMenuExGFxMovie.GetHighlightedLeftSideEntry(Object ReturnValue)
+  0000: return WillowInventory(LeftSideTextList.GetHighlightedObject())
+  001a: return return
+
+ function StatusMenuExGFxMovie.GetHighlightedRightSideEntry(Object ReturnValue)
+  0000: return WillowInventory(RightSideTextList.GetHighlightedObject())
+  001a: return return
+
+ function StatusMenuExGFxMovie.GetHighlightedCellEntry(Object ReturnValue; Int Idx)
+  0000: Idx = StatusDef.Directions.Find('This',CurrentCellName)
+  0027: <?4f @39>
+  !! decode error list index out of range at byte 45 00 0e 00 21 b0 5a 00 00 00 00 00 00 01 30 14 00 00 07 4f 00 9b 00 c9 3b 00 00 1d ff ff ff ff 16 04 35 0b 14 00 00 0e 14 00 00 00 00 1a 00 c9 3b
+
+ function StatusMenuExGFxMovie.extCompare()
+  0000: if !(Not_PreBool(IsComparing())) goto 00be
+  000f: LeftSideTextList.SaveState()
+  0023: if !(bInListView) goto 003f
+  002c: FrozenThing = GetHighlightedLeftSideEntry()
+  003c: goto 004f
+  003f: FrozenThing = GetHighlightedCellEntry()
+  004f: if !(NotEqual_ObjectObject(FrozenThing, None)) goto 00be
+  005a: ChangingCard = 2
+  0062: if !(bInListView) goto 00a0
+  006b: PrepareForCompare_Backpack()
+  0075: LeftSideTextList.SetHighlightBarSelected()
+  0089: RightSideTextList.ResetState()
+  009d: goto 00be
+  00a0: PrepareForCompare_Equipped()
+  00aa: LeftSideTextList.ResetState()
+  00be: return nothing
+
+ function StatusMenuExGFxMovie.extCard2Visible(Bool bCard2OnLeft)
+  0000: ConfigureForPlayer(cast3f((WPCOwner.IsPrimaryPlayer() ? 0 : 1)))
+  0027: SetPortrait()
+  0031: if !(true) goto 00e6
+  0035: if !(bCard2OnLeft) goto 009f
+  003e: LeftSideTextList.SetHighlightBarNormal()
+  0052: SetupContainerWithData(LeftSideTextList, AllThings)
+  0066: UpdateCardPanel(2, GetHighlightedLeftSideEntry(), FrozenThing)
+  0081: AwardNewQuickSlots(CachedMaxReadied, 0)
+  0091: ActiveTextList = LeftSideTextList
+  009c: goto 00d9
+  009f: SetupContainerWithData(RightSideTextList, AllThings)
+  00b3: UpdateCardPanel(2, GetHighlightedRightSideEntry(), FrozenThing)
+  00ce: ActiveTextList = RightSideTextList
+  00d9: SetTooltipsText()
+  00e3: goto 010b
+  00e6: SetVariableBool("inventory.card2._visible", false)
+  010b: return nothing
+
+ function StatusMenuExGFxMovie.extQuitCompare()
+  0000: FrozenThing = None
+  0007: ChangingCard = 1
+  000e: ActiveTextList = LeftSideTextList
+  0019: LeftSideTextList.RestoreState()
+  002d: if !(bInListView) goto 004d
+  0036: LeftSideTextList.SetHighlightBarNormal()
+  004a: goto 0061
+  004d: LeftSideTextList.SetHighlightBarOff()
+  0061: SetVariableString("inventory.equippedLabel.text", Localize("StatusMenu", "Equipped", "WillowGame"))
+  00b5: SetTooltipsText()
+  00bf: return nothing
+
+ function StatusMenuExGFxMovie.CleanupCompare()
+  0000: ActionScript("CleanupCompare")
+  001a: return nothing
+
+ function StatusMenuExGFxMovie.PrepareForCompare_Backpack()
+  0000: ActionScript("PrepareForCompare_Backpack")
+  0026: return nothing
+
+ function StatusMenuExGFxMovie.PrepareForCompare_Equipped()
+  0000: ActionScript("PrepareForCompare_Equipped")
+  0026: return nothing
+
+ function StatusMenuExGFxMovie.extUpdateBackpackListSize(Int NewSize)
+  0000: LeftSideTextList.UpdateEntriesPerPage(NewSize)
+  0019: return nothing
+
+ function StatusMenuExGFxMovie.EnableCancel()
+  0000: ActionScript("EnableCancel")
+  0018: return nothing
+
+ function StatusMenuExGFxMovie.DisableCancel()
+  0000: ActionScript("DisableCancel")
+  0019: return nothing
+
+ function StatusMenuExGFxMovie.RestoreAllNormalState()
+  0000: ActionScript("RestoreAllNormalState")
+  0021: return nothing
+
+ function StatusMenuExGFxMovie.SetSelectedState(Str CellName; Byte NewState; Array args; Struct arg)
+  0000: arg.Type = 3
+  0013: arg.S = CellName
+  0029: args.AddItem(arg)
+  !! decode error list index out of range at byte 60 00 dc 3b 00 00 55 00 da 3b 00 00 05 00 00 d9 3b 00 00 05 01 00 00 db 3b 00 00 0a 6c 00 24 00 0e 49 f5 ff ff 1b 45 34 00 00 00 00 00 00 1f 53 65
+
+ function StatusMenuExGFxMovie.extCancel()
+  0000: if !(NotEqual_ObjectObject(EquippingWeapon, None)) goto 0044
+  000b: EquippingWeapon = None
+  0012: SetCellsForWeaponEquipping(false)
+  001d: SwitchToListView()
+  0027: SetTooltipsText()
+  0031: PlayUISound('CancelEquip')
+  0044: return nothing
+
+ function StatusMenuExGFxMovie.ShowContextMenu(Object HighlightedThing)
+  0000: if !(IsComparing()) goto 000f
+  000d: return nothing
+  000f: HighlightedThing = GetCurrentHighlightedObject()
+  001f: if !(AndAnd_BoolBool(Not_PreBool(bContextMenuUp), NotEqual_ObjectObject(HighlightedThing, None))) goto 005c
+  0037: bContextMenuUp = true
+  003f: PlayUISound('SubMenuOpen')
+  0052: ShowContextMenuWrapper()
+  005c: return nothing
+
+ function StatusMenuExGFxMovie.ShowContextMenuWrapper()
+  0000: ActionScript("ShowContextMenu")
+  001b: return nothing
+
+ function StatusMenuExGFxMovie.extContextMenuClicked(Str Tag)
+  0000: bContextMenuUp = false
+  0008: if !(EqualEqual_StrStr(Tag, "none")) goto 001a
+  0018: return nothing
+  001a: PlayUISound('Confirm')
+  002d: if !(EqualEqual_StrStr(Tag, "drop")) goto 004a
+  003d: extDropItem()
+  0047: goto 009e
+  004a: if !(EqualEqual_StrStr(Tag, "compare")) goto 006a
+  005d: extCompare()
+  0067: goto 009e
+  006a: if !(EqualEqual_StrStr(Tag, "savescreen")) goto 009e
+  0080: WPCOwner.SaveScreenShotOfItemCard(GetCurrentHighlightedObject())
+  009e: return nothing
+
+ function StatusMenuExGFxMovie.InitCellData(Int ItemIdx; Str ControllerPrefix)
+  0000: if !(PlayerOwner.IsPrimaryPlayer()) goto 0022
+  0017: ControllerPrefix = ""
+  001f: goto 002d
+  0022: ControllerPrefix = "p2_"
+  002d: if !(EqualEqual_ObjectObject(RTM, None)) goto 003a
+  0038: return nothing
+  003a: ItemIdx = 0
+  0041: if !(Less_IntInt(ItemIdx, 7)) goto 01af
+  004d: if !(EqualEqual_ObjectObject(EquippedContents[ItemIdx].Tex, None)) goto 0169
+  0069: EquippedContents[ItemIdx].Tex = RTM.GearboxFramework.GearboxRenderTextureManager.GetThumbnail(StatusDef.EquippedTextureWidth, StatusDef.EquippedTextureHeight, 0, cast44(StatusDef.EquippedCellWidth), cast44(StatusDef.EquippedCellHeight))
+  00d2: EquippedContents[ItemIdx].Mesh = (NotEqual_ObjectObject(EquippedContents[ItemIdx].Inv, None) ? EquippedContents[ItemIdx].Inv.ConstructInvMesh() : None)
+  012d: SetExternalTexture(Concat_StrStr(ControllerPrefix, StatusDef.ExternalTextureMap[ItemIdx]), EquippedContents[ItemIdx].Tex)
+  0169: RTM.GearboxFramework.GearboxRenderTextureManager.SetThumbnailMesh(EquippedContents[ItemIdx].Tex, EquippedContents[ItemIdx].Mesh)
+  01a5: AddAdd_Int(ItemIdx)
+  01ac: goto 0041
+  01af: ItemIdx = 0
+  01b6: if !(Less_IntInt(ItemIdx, 2)) goto 0289
+  01c2: if !(EqualEqual_ObjectObject(CardContents[ItemIdx].Tex, None)) goto 027f
+  01de: CardContents[ItemIdx].Tex = RTM.GearboxFramework.GearboxRenderTextureManager.GetThumbnail(StatusDef.CardTextureWidth, StatusDef.CardTextureWidth, 2, StatusDef.CardCellWidth, StatusDef.CardCellHeight)
+  0243: SetExternalTexture(Concat_StrStr(ControllerPrefix, StatusDef.CardExternalTextureMap[ItemIdx]), CardContents[ItemIdx].Tex)
+  027f: AddAdd_Int(ItemIdx)
+  0286: goto 01b6
+  0289: return nothing
+
+ function StatusMenuExGFxMovie.FreeCellData(Int ItemIdx)
+  0000: if !(EqualEqual_ObjectObject(RTM, None)) goto 000d
+  000b: return nothing
+  000d: ItemIdx = 0
+  0014: if !(Less_IntInt(ItemIdx, 7)) goto 00b4
+  0020: if !(NotEqual_ObjectObject(EquippedContents[ItemIdx].Tex, None)) goto 0062
+  003c: RTM.GearboxFramework.GearboxRenderTextureManager.FreeThumbnail(EquippedContents[ItemIdx].Tex)
+  0062: EquippedContents[ItemIdx].Tex = None
+  007a: EquippedContents[ItemIdx].Mesh = None
+  0092: EquippedContents[ItemIdx].Inv = None
+  00aa: AddAdd_Int(ItemIdx)
+  00b1: goto 0014
+  00b4: ItemIdx = 0
+  00bb: if !(Less_IntInt(ItemIdx, 2)) goto 0177
+  00c7: if !(NotEqual_ObjectObject(CardContents[ItemIdx].Tex, None)) goto 016d
+  00e3: if !(NotEqual_ObjectObject(CardContents[ItemIdx].Tex, None)) goto 0125
+  00ff: RTM.GearboxFramework.GearboxRenderTextureManager.FreeThumbnail(CardContents[ItemIdx].Tex)
+  0125: CardContents[ItemIdx].Tex = None
+  013d: CardContents[ItemIdx].Mesh = None
+  0155: CardContents[ItemIdx].Inv = None
+  016d: AddAdd_Int(ItemIdx)
+  0174: goto 00bb
+  0177: return nothing
+
+ function StatusMenuExGFxMovie.UpdateCellData(Int CellIndex; Object TheItem; Component TheMesh)
+  0000: nothing
+  0001: EquippedContents[CellIndex].Inv = TheItem
+  001d: EquippedContents[CellIndex].Mesh = TheMesh
+  0039: if !(NotEqual_ObjectObject(RTM, None)) goto 0080
+  0044: RTM.GearboxFramework.GearboxRenderTextureManager.SetThumbnailMesh(EquippedContents[CellIndex].Tex, EquippedContents[CellIndex].Mesh)
+  0080: return nothing
+
+ function StatusMenuExGFxMovie.DetachCell(Int CellIndex)
+  0000: if !(AndAnd_BoolBool(NotEqual_ObjectObject(RTM, None), NotEqual_ObjectObject(EquippedContents[CellIndex].Tex, None))) goto 0050
+  0029: RTM.GearboxFramework.GearboxRenderTextureManager.SetThumbnailMesh(EquippedContents[CellIndex].Tex, None)
+  0050: return nothing
+
+ function StatusMenuExGFxMovie.extConditionallyUseItem(Str ReleasedWidget; Name ReleasedName)
+  0000: ReleasedName = cast60(ReleasedWidget)
+  000d: if !(OrOr_BoolBool(bInListView, IsComparing())) goto 0032
+  0025: extUseItem()
+  002f: goto 004b
+  0032: if !(EqualEqual_NameName(ReleasedName, CurrentCellName)) goto 004b
+  0041: extUseItem()
+  004b: return nothing
+
+ function StatusMenuExGFxMovie.extUseItem(Object SelectedThing; Object WillowInvManager; Str ErrorString)
+  0000: WillowInvManager = WPCOwner.GetPawnInventoryManager()
+  001a: if !(EqualEqual_IntInt(cast3a(CurrentScreen), cast3a(2))) goto 0482
+  002a: if !(OrOr_BoolBool(bInListView, IsComparing())) goto 0257
+  0042: SelectedThing = GetCurrentHighlightedObject()
+  0052: if !(NotEqual_ObjectObject(SelectedThing, None)) goto 0254
+  005d: if !(CanReady(SelectedThing)) goto 015b
+  006f: if !(IsComparing()) goto 00b3
+  007c: extQuitCompare()
+  0086: CleanupCompare()
+  0090: SetupInventoryScreen()
+  009a: LeftSideTextList.SetObjectHighlighted(SelectedThing)
+  00b3: EquippingWeapon = WillowWeapon(SelectedThing)
+  00c3: if !(NotEqual_ObjectObject(EquippingWeapon, None)) goto 012b
+  00ce: SetCellsForWeaponEquipping(true)
+  00d9: if !(bInListView) goto 00f7
+  00e2: CurrentCellName = StatusDef.Up
+  00f7: SwitchToCellsView()
+  0101: LeftSideTextList.SetHighlightBarSelected()
+  0115: PlayUISound('BeginEquip')
+  0128: goto 0158
+  012b: PlayUISound('FinishEquip')
+  013e: WillowInvManager.ReadyBackpackInventory(SelectedThing, <emptyparm>)
+  0158: goto 0254
+  015b: PlayUISound('ResultFailure')
+  016e: if !(AndAnd_BoolBool(IsComparing(), SelectedThing.bReadied)) goto 01f5
+  0190: ErrorString = Repl(AlreadyEquipped, "%s", SelectedThing.GetShortHumanReadableName(), <emptyparm>)
+  01b6: ShowPopup(ErrorString, Localize("Errors", "Warning_Title", "WillowGame"))
+  01f2: goto 0254
+  01f5: ShowPopup(SelectedThing.GetLastCanBeUsedByResult(WPCOwner.GetInventoryPawn()), Localize("Errors", "Warning_Title", "WillowGame"))
+  0254: goto 0482
+  0257: if !(NotEqual_ObjectObject(EquippingWeapon, None)) goto 037d
+  !! decode error list index out of range at byte 617 00 16 16 06 82 04 07 7d 03 77 01 31 14 00 00 2a 16 05 08 00 01 30 14 00 00 0a 9a 02 19 01 68 14 00 00 05 00 08 00 01 13 3d 00 00 19 00 f3 3b 00
+
+ function StatusMenuExGFxMovie.EquipFlourish(Str CellName)
+  0000: ActionScript("EquipFlourish")
+  0019: return nothing
+
+ function StatusMenuExGFxMovie.extDropItem(Object WInv; Object WillowInvManager; Bool bInBackpack)
+  0000: if !(EqualEqual_IntInt(cast3a(CurrentScreen), cast3a(2))) goto 016a
+  0010: if !(bInListView) goto 0034
+  0019: WInv = GetHighlightedLeftSideEntry()
+  0029: bInBackpack = true
+  0031: goto 004c
+  0034: WInv = GetHighlightedCellEntry()
+  0044: bInBackpack = false
+  004c: if !(CanDrop(WInv)) goto 016a
+  005e: class(GearboxFramework.SparkHelper.PostEventIntStringString(49, 0, WInv.GetInventoryClassNumberForSpark(), 7, WInv.GetHumanReadableName(), 33, WInv.GetInventorySerialNumber()))
+  00b6: WillowInvManager = WPCOwner.GetPawnInventoryManager()
+  00d0: if !(bInBackpack) goto 0109
+  00d9: WillowInvManager.ThrowBackpackInventory(WInv)
+  00f2: LeftSideTextList.SaveState()
+  0106: goto 0156
+  0109: if !(Less_IntInt(cast3a(WPCOwner.Role), cast3a(3))) goto 013c
+  0123: WillowInvManager.RemoveFromInventory(WInv)
+  013c: WPCOwner.ThrowInventory(WInv, <emptyparm>)
+  0156: FlourishDrop()
+  0160: RefreshInventoryScreen()
+  016a: return nothing
+
+ function StatusMenuExGFxMovie.FlourishDrop()
+  0000: ActionScript("FlourishDrop")
+  0018: return nothing
+
+native function StatusMenuExGFxMovie.SetDissimilarCells()
+  0000: nothing
+
+ function StatusMenuExGFxMovie.AddCell(Str CellName)
+  0000: ActionScript("AddCell")
+  0013: return nothing
+
+ function StatusMenuExGFxMovie.DEBUGGetSelectedInventory(Object ReturnValue)
+  0000: if !(EqualEqual_IntInt(cast3a(CurrentScreen), cast3a(2))) goto 0035
+  0010: if !(bInListView) goto 0027
+  0019: return GetHighlightedLeftSideEntry()
+  0024: goto 0032
+  0027: return GetHighlightedCellEntry()
+  0032: goto 0037
+  0035: return None
+  0037: return return
+
+ function StatusMenuExGFxMovie.DEBUGGetComparisonInventory(Object ReturnValue)
+  0000: return FrozenThing
+  0006: return return
+
+native function StatusMenuExGFxMovie.UpdateCardPanel(Int CardIndex; Object MainThing; Object OtherThing)
+  0000: nativeparm CardIndex
+  0005: nativeparm MainThing
+  000a: nativeparm OtherThing
+  000f: nothing
+
+ function StatusMenuExGFxMovie.UpdateCardPanelWithCurrentCell()
+  0000: UpdateCardPanel(ChangingCard, GetHighlightedCellEntry(), FrozenThing)
+  001e: return nothing
+
+ function StatusMenuExGFxMovie.UpdateCardPanelWithCurrentActiveListEntry()
+  0000: UpdateCardPanel(ChangingCard, WillowInventory(ActiveTextList.GetHighlightedObject()), FrozenThing)
+  002d: return nothing
+
+ function StatusMenuExGFxMovie.extInventoryCellMove(Str Direction)
+  0000: ProcessCellMove(cast60(Direction))
+  0011: SetTooltipsText()
+  001b: return nothing
+
+ function StatusMenuExGFxMovie.ProcessCellMove(Name Direction; Int Idx; Name NewCell)
+  0000: Idx = StatusDef.Directions.Find('This',CurrentCellName)
+  !! decode error list index out of range at byte 45 00 0e 00 21 b0 5a 00 00 00 00 00 00 01 30 14 00 00 07 14 01 9b 00 0d 3c 00 00 1d ff ff ff ff 16 05 08 00 00 0e 3c 00 00 0a 72 00 21 2f 5e 00 00
+
+ function StatusMenuExGFxMovie.TryToFindNextValidCell(Name Direction; Name NewCell; Name ReturnValue; Int Idx; Name TestCell)
+  0000: Idx = StatusDef.Directions.Find('This',NewCell)
+  !! decode error list index out of range at byte 45 00 0e 00 21 b0 5a 00 00 00 00 00 00 00 13 3c 00 00 07 dd 00 82 fe 00 13 3c 00 00 21 7f 12 00 00 00 00 00 00 16 18 0a 00 96 01 3f 14 00 00 2c 04
+
+ function StatusMenuExGFxMovie.IsCellValid(Name NewCell; Bool ReturnValue)
+  0000: if !(EqualEqual_NameName(NewCell, 'None')) goto 0015
+  0013: return false
+  0015: if !(NotEqual_ObjectObject(EquippingWeapon, None)) goto 008c
+  0020: if !(AndAnd_BoolBool(AndAnd_BoolBool(AndAnd_BoolBool(NotEqual_NameName(NewCell, StatusDef.Up), NotEqual_NameName(NewCell, StatusDef.Down)), NotEqual_NameName(NewCell, StatusDef.Left)), NotEqual_NameName(NewCell, StatusDef.Right))) goto 008c
+  008a: return false
+  008c: if !(AndAnd_BoolBool(EqualEqual_NameName(NewCell, 'cel3'), Less_IntInt(MaxReadiedWeapons, 3))) goto 00af
+  00ad: return false
+  00af: if !(AndAnd_BoolBool(EqualEqual_NameName(NewCell, 'cel4'), Less_IntInt(MaxReadiedWeapons, 4))) goto 00d2
+  00d0: return false
+  00d2: return true
+  00d4: return return
+
+ function StatusMenuExGFxMovie.extCellsSet(Str NewCellString; Name NewCellName)
+  0000: NewCellName = cast60(NewCellString)
+  000d: if !(bInListView) goto 0020
+  0016: SwitchToCellsView()
+  0020: if !(IsCellValid(NewCellName)) goto 008a
+  0032: PlayUISound('VerticalMovement')
+  0045: SetSelectedState(cast57(CurrentCellName), 2)
+  0058: SetSelectedState(cast57(NewCellName), 3)
+  006b: CurrentCellName = NewCellName
+  0076: SetTooltipsText()
+  0080: UpdateCardPanelWithCurrentCell()
+  008a: return nothing
+
+ function StatusMenuExGFxMovie.extInventoryListMove(Str Direction; Name Dir)
+  0000: Dir = cast60(Direction)
+  !! decode error list index out of range at byte 20 0f 00 1c 3c 00 00 38 60 00 1d 3c 00 00 05 08 00 00 1c 3c 00 00 0a 3d 00 21 67 4c 00 00 00 00 00 00 07 3a 00 81 1b 98 34 00 00 00 00
+
+ function StatusMenuExGFxMovie.extInventoryListSet(Int NewEntry)
+  0000: if !(EqualEqual_ObjectObject(EquippingWeapon, None)) goto 0074
+  000b: if !(AndAnd_BoolBool(Not_PreBool(bInListView), Not_PreBool(IsComparing()))) goto 0031
+  0027: SwitchToListView()
+  0031: if !(ActiveTextList.SelectSlot(NewEntry)) goto 0074
+  004d: UpdateCardPanelWithCurrentActiveListEntry()
+  0057: SetTooltipsText()
+  0061: PlayUISound('VerticalMovement')
+  0074: return nothing
+
+ function StatusMenuExGFxMovie.StartMovingHighlight(Object WP)
+  0000: MoveHighlight()
+  000a: WP = WillowPawn(WPCOwner.GetInventoryPawn())
+  0029: WP.SetTimer(MoveHighlightRepeatRate, true, 'MoveHighlight', self)
+  0046: return nothing
+
+ function StatusMenuExGFxMovie.StopMovingHighlight(Object WP)
+  0000: WP = WillowPawn(WPCOwner.GetInventoryPawn())
+  001f: WP.Engine.Actor.ClearTimer('MoveHighlight', self)
+  0039: return nothing
+
+ function StatusMenuExGFxMovie.MoveHighlight(Str currentButton)
+  0000: currentButton = GetVariableString("currentButton")
+  001f: if !(EqualEqual_StrStr(currentButton, "moreup")) goto 006f
+  0031: if !(EqualEqual_IntInt(cast3a(CurrentScreen), cast3a(2))) goto 0052
+  0041: extInventoryListMove("Up")
+  004f: goto 006c
+  0052: if !(EqualEqual_IntInt(cast3a(CurrentScreen), cast3a(3))) goto 006c
+  0062: extLogUp()
+  006c: goto 0113
+  006f: if !(EqualEqual_StrStr(currentButton, "moredn")) goto 00c1
+  0081: if !(EqualEqual_IntInt(cast3a(CurrentScreen), cast3a(2))) goto 00a4
+  0091: extInventoryListMove("Down")
+  00a1: goto 00be
+  00a4: if !(EqualEqual_IntInt(cast3a(CurrentScreen), cast3a(3))) goto 00be
+  00b4: extLogDown()
+  00be: goto 0113
+  00c1: if !(EqualEqual_StrStr(currentButton, "sideup")) goto 00e4
+  00d3: ScrollSidePanel("Up")
+  00e1: goto 0113
+  00e4: if !(EqualEqual_StrStr(currentButton, "sidedn")) goto 0109
+  00f6: ScrollSidePanel("Down")
+  0106: goto 0113
+  0109: StopMovingHighlight()
+  0113: return nothing
+
+ function StatusMenuExGFxMovie.ConditionallyScroll(Str Direction; Str currentButton)
+  0000: if !(EqualEqual_IntInt(cast3a(CurrentScreen), cast3a(2))) goto 003a
+  0010: if !(AndAnd_BoolBool(Not_PreBool(bContextMenuUp), EqualEqual_ObjectObject(EquippingWeapon, None))) goto 0037
+  0028: extInventoryListMove(Direction)
+  0037: goto 00b3
+  003a: if !(EqualEqual_IntInt(cast3a(CurrentScreen), cast3a(3))) goto 00b3
+  004a: currentButton = GetVariableString("currentButton")
+  0069: if !(EqualEqual_StrStr(currentButton, "sidectr")) goto 008e
+  007c: ScrollSidePanel(Direction)
+  008b: goto 00b3
+  008e: if !(EqualEqual_StrStr(Direction, "Up")) goto 00a9
+  009c: extLogUp()
+  00a6: goto 00b3
+  00a9: extLogDown()
+  00b3: return nothing
+
+ function StatusMenuExGFxMovie.SwitchToListView()
+  0000: bInListView = true
+  0008: SetSelectedState(cast57(CurrentCellName), 2)
+  001b: LeftSideTextList.SetHighlightBarNormal()
+  002f: UpdateCardPanelWithCurrentActiveListEntry()
+  0039: EnterListView()
+  0043: return nothing
+
+ function StatusMenuExGFxMovie.EnterListView()
+  0000: ActionScript("EnterListView")
+  0019: return nothing
+
+ function StatusMenuExGFxMovie.SwitchToCellsView()
+  0000: if !(bInListView) goto 001d
+  0009: LeftSideTextList.SetHighlightBarOff()
+  001d: bInListView = false
+  0025: SetSelectedState(cast57(CurrentCellName), 3)
+  0038: UpdateCardPanelWithCurrentCell()
+  0042: EnterCellsView()
+  004c: return nothing
+
+ function StatusMenuExGFxMovie.EnterCellsView()
+  0000: ActionScript("EnterCellsView")
+  001a: return nothing
+
+ function StatusMenuExGFxMovie.SetCellsForWeaponEquipping(Bool bIsEquipping)
+  0000: ActionScript("SetCellsForWeaponEquipping")
+  0026: return nothing
+
+ function StatusMenuExGFxMovie.OnInventoryScreenDeactivated(Object Scene)
+  0000: GFxUI.GFxMovie.SetFocus(true, true)
+  0008: SetRenderingEnabled(true)
+  0013: return nothing
+
+event function StatusMenuExGFxMovie.OnTick()
+  !! decode error list index out of range at byte 7 05 01 00 01 3d 14 00 00 0a 1a 00 24 01 1b c5 21 00 00 00 00 00 00 16 06 3c 00 0a 39 00 24 02
+
+ function StatusMenuExGFxMovie.DrawVolatileCharacterInfo(Object WP; Object WPRI; Str PreferredManufacturer)
+  0000: WP = WillowPawn(WPCOwner.GetInventoryPawn())
+  001f: if !(NotEqual_ObjectObject(WP.PlayerReplicationInfo, None)) goto 0051
+  0034: WPRI = WillowPlayerReplicationInfo(WP.PlayerReplicationInfo)
+  004e: goto 008a
+  0051: if !(NotEqual_ObjectObject(WP.DrivenVehicle, None)) goto 008a
+  0066: WPRI = WillowPlayerReplicationInfo(WP.DrivenVehicle.PlayerReplicationInfo)
+  008a: extSetupCharacterCard()
+  0094: SetWeaponProficiencyBars()
+  009e: PreferredManufacturer = Locs(Core.Object.Split(cast57(WPCOwner.GetPreferredManufacturer(<emptyparm>)), "STAT_PLAYER_MANUFACTURER_PREF_", true))
+  00e4: SetManufacturerLogo(PreferredManufacturer)
+  00f3: SetCharacterTotalCredits(WPRI.GetCurrencyOnHand())
+  0111: SetAllAmmoCounts("character")
+  0126: return nothing
+
+ function StatusMenuExGFxMovie.SetPortrait(Int PortraitFrame; Int I1; Int I2; Int I3)
+  !! decode error list index out of range at byte 7 05 01 00 19 19 01 39 14 00 00 05 00 04 00 01 b3 11 00 00 05 00 01 00 01 70 31 00 00 0a 2b 00
+
+ function StatusMenuExGFxMovie.SetPortraitFrameAndColors(Float FrameNumber; Int C1; Int C2; Int C3)
+  0000: ActionScript("SetPortraitFrameAndColors")
+  0025: return nothing
+
+event function StatusMenuExGFxMovie.SetupGenericLogs(Object WPC)
+  0000: SetVariableString("missions.tab.text", LogTabString)
+  0022: return nothing
+
+ function StatusMenuExGFxMovie.extChangeMissionLogSorting()
+  0000: bSortMissionsByRegion = Not_PreBool(bSortMissionsByRegion)
+  000f: MissionLogTextList.ResetState()
+  0023: extSetupMissionLogScreen()
+  002d: return nothing
+
+ function StatusMenuExGFxMovie.extSetupMissionLogScreen()
+  0000: SetupGenericLogs(WPCOwner)
+  000f: CurrentLog = 0
+  0017: MissionsInProgress.Length = 0
+  001f: WPCOwner.GetPlayerAllMissions(MissionsInProgress, ActiveMissionIndex)
+  003d: if !(EqualEqual_IntInt(MissionsInProgress.Length, 0)) goto 0060
+  0049: GotoNoMissions()
+  0053: UpdateGeneralDetails()
+  005d: goto 007e
+  0060: GotoRegularMissions()
+  006a: UpdateListOfMissionTitles()
+  0074: UpdateMissionDetails()
+  007e: SetTooltipsText()
+  0088: return nothing
+
+ function StatusMenuExGFxMovie.extSetupChallengeLogScreen()
+  0000: SetupGenericLogs(WPCOwner)
+  000f: CurrentLog = 1
+  0017: ChallengeList = class(WillowGlobals.WillowGlobals.GetWillowGlobals()).PlayerChallenges
+  0037: if !(OrOr_BoolBool(EqualEqual_ObjectObject(ChallengeList, None), EqualEqual_IntInt(ChallengeList.PlayerChallenges.Length, 0))) goto 0071
+  005a: GotoNoChallenges()
+  0064: UpdateGeneralDetails()
+  006e: goto 008f
+  0071: GotoRegularChallenges()
+  007b: UpdateListOfChallenges()
+  0085: UpdateChallengeDetails()
+  008f: return nothing
+
+native function StatusMenuExGFxMovie.extSetupEchoLogScreen()
+  0000: nothing
+
+ function StatusMenuExGFxMovie.SetAvailability(Bool T1; Bool T2; Bool T3; Bool T4; Bool T5; Bool T6; Bool T7; Bool T8; Bool T9; Bool T10; Bool T11; Bool T12; Bool T13; Bool T14; Bool T15; Bool T16)
+  0000: ActionScript("SetAvailability")
+  001b: return nothing
+
+native function StatusMenuExGFxMovie.UpdateMissionTextList()
+  0000: nothing
+
+native function StatusMenuExGFxMovie.UpdateChallengeTextList()
+  0000: nothing
+
+native function StatusMenuExGFxMovie.UpdateEchoTextList()
+  0000: nothing
+
+ function StatusMenuExGFxMovie.UpdateListOfMissionTitles(Int MissionTitleIdx; Object Mission; Str MissionTitleString; Str MissionIconFrame; Struct MissionTextColor)
+  0000: MissionLogTextList.EmptyData()
+  0014: MissionTitleIdx = 0
+  001b: if !(Less_IntInt(MissionTitleIdx, StatusDef.NumEntriesOnMissionLog)) goto 007d
+  0034: SetVariableBool(Concat_StrStr(Concat_StrStr("missions.selections.track", cast53(Add_IntInt(MissionTitleIdx, 1))), "._visible"), false)
+  0073: AddAdd_PreInt(MissionTitleIdx)
+  007a: goto 001b
+  007d: MissionTitleIdx = 0
+  0084: if !(Less_IntInt(MissionTitleIdx, MissionsInProgress.Length)) goto 0369
+  0094: Mission = None
+  009b: MissionTitleString = ""
+  00a3: Mission = MissionsInProgress[MissionTitleIdx].MissionDef
+  00bf: if !(NotEqual_ObjectObject(Mission, None)) goto 00df
+  00ca: MissionTitleString = Mission.MissionName
+  !! decode error list index out of range at byte 230 00 00 19 00 5e 3c 00 00 05 00 00 00 01 75 2e 00 00 05 01 00 35 19 0b 00 00 1b 0b 00 00 00 00 10 00 5f 3c 00 00 01 51 14 00 00 0a 9d 01 24 01 07
+
+ function StatusMenuExGFxMovie.UpdateListOfChallenges(Int ChallengeTitleIdx; Object ChallengeDef; Object ConDef; Str ChallengeTitleString; Object PlayerStats; Str IconFrame; Bool ConditionsComplete)
+  0000: ChallengeLogTextList.EmptyData()
+  0014: ChallengeTitleIdx = 0
+  001b: if !(Less_IntInt(ChallengeTitleIdx, StatusDef.NumEntriesOnMissionLog)) goto 007d
+  0034: SetVariableBool(Concat_StrStr(Concat_StrStr("missions.selections.track", cast53(Add_IntInt(ChallengeTitleIdx, 1))), "._visible"), false)
+  0073: AddAdd_PreInt(ChallengeTitleIdx)
+  007a: goto 001b
+  007d: ChallengeTitleIdx = 0
+  0084: if !(Less_IntInt(ChallengeTitleIdx, ChallengeList.PlayerChallenges.Length)) goto 01d9
+  009e: ChallengeDef = None
+  00a5: ChallengeTitleString = ""
+  00ad: ChallengeDef = ChallengeList.PlayerChallenges[ChallengeTitleIdx]
+  00c8: if !(NotEqual_ObjectObject(ChallengeDef, None)) goto 00e8
+  00d3: ChallengeTitleString = ChallengeDef.ChallengeName
+  00e8: PlayerStats = WillowPlayerController(PlayerOwner).PlayerStats
+  0102: IconFrame = "inprogress"
+  0114: if !(NotEqual_ObjectObject(ChallengeDef, None)) goto 019d
+  011f: ConditionsComplete = true
+  0127: foreach ChallengeDef.ConditionDefinitions(ConDef) (end 0183)
+  0140: ConditionsComplete = AndAnd_BoolBool(ConditionsComplete, GreaterEqual_IntInt(PlayerStats.WillowBaseStats.GetIntStat(ConDef.StatId), ConDef.TargetValue))
+  0182: iteratornext
+  0183: iteratorpop
+  0184: if !(ConditionsComplete) goto 019d
+  018d: IconFrame = "complete"
+  019d: ChallengeLogTextList.AddDataEntry(ChallengeDef, ChallengeTitleString, StatusDef.UnselectedChallengeLogTextColor, IconFrame)
+  01cf: AddAdd_Int(ChallengeTitleIdx)
+  01d6: goto 0084
+  01d9: UpdateChallengeTextList()
+  01e3: ChallengeLogTextList.PositionHighlightBar()
+  01f7: return nothing
+
+native function StatusMenuExGFxMovie.UpdateListOfEchoLogs()
+  0000: nothing
+
+ function StatusMenuExGFxMovie.UpdateMissionDetails(Object Mission; Str FullMissionDescription; Int MissionIndex; Int PlayThroughNumber; Object WPRI; Int CurrentLevel; Str XPRewardsText; Int MissionLevel; Str LevelText; Str DifficultyFrame; Int LevelDifference; Object GlobalsDef)
+  0000: Mission = MissionDefinition(MissionLogTextList.GetHighlightedObject())
+  001f: MissionIndex = WillowPlayerController(PlayerOwner).GetMissionIndexForMission(Mission)
+  0043: PlayThroughNumber = WillowPlayerController(PlayerOwner).GetCurrentPlaythrough()
+  0062: Mission = MissionDefinition(MissionLogTextList.GetHighlightedObject())
+  0081: if !(NotEqual_ObjectObject(WPCOwner, None)) goto 00ac
+  008c: FullMissionDescription = WPCOwner.GetMissionDescriptionForUI(Mission, false)
+  00ac: if !(NotEqual_ObjectObject(WPCOwner, None)) goto 0116
+  00b7: WPRI = WillowPlayerReplicationInfo(WPCOwner.PlayerReplicationInfo)
+  00d1: CurrentLevel = 0
+  00d8: if !(NotEqual_ObjectObject(WPRI, None)) goto 0116
+  00e3: SetPlayerTotalCredits(WPRI.GetCurrencyOnHand())
+  0101: CurrentLevel = WPRI.ExpLevel
+  !! decode error list index out of range at byte 285 00 00 19 00 71 3c 00 00 05 00 04 00 01 1f 85 00 00 05 01 00 35 e8 13 00 00 ea 13 00 00 00 00 10 00 73 3c 00 00 35 c1 12 00 00 c2 12 00 00 00 00
+
+ function StatusMenuExGFxMovie.UpdateChallengeDetails(Object PlayerStats; Object ChalDef; Object ConDef; Str ChalDescString; Bool ConditionsComplete; Str HeaderFrame)
+  0000: ChalDef = ChallengeDefinition(ChallengeLogTextList.GetHighlightedObject())
+  001f: PlayerStats = WillowPlayerController(PlayerOwner).PlayerStats
+  0039: if !(NotEqual_ObjectObject(ChalDef, None)) goto 0239
+  0044: foreach ChalDef.ConditionDefinitions(ConDef) (end 00d7)
+  005d: ConcatEqual_StrStr(ChalDescString, Concat_StrStr(Concat_StrStr(Concat_StrStr(Concat_StrStr(Concat_StrStr(ConDef.ConditionName, "  [ "), cast53(Min(ConDef.TargetValue, PlayerStats.WillowBaseStats.GetIntStat(ConDef.StatId)))), " / "), cast53(ConDef.TargetValue)), " ]
+"))
+  00d6: iteratornext
+  00d7: iteratorpop
+  00d8: HeaderFrame = "inprogress"
+  00ea: if !(NotEqual_ObjectObject(ChalDef, None)) goto 0173
+  00f5: ConditionsComplete = true
+  00fd: foreach ChalDef.ConditionDefinitions(ConDef) (end 0159)
+  0116: ConditionsComplete = AndAnd_BoolBool(ConditionsComplete, GreaterEqual_IntInt(PlayerStats.WillowBaseStats.GetIntStat(ConDef.StatId), ConDef.TargetValue))
+  0158: iteratornext
+  0159: iteratorpop
+  015a: if !(ConditionsComplete) goto 0173
+  0163: HeaderFrame = "complete"
+  0173: WillowGFxMovie.SingleArgInvokeS("missions.header.gotoAndStop", HeaderFrame)
+  019b: SetVariableString("missions.header.description.text", ChalDef.ChallengeName)
+  01d6: ChalDescString = Concat_StrStr(Concat_StrStr(Concat_StrStr(Concat_StrStr(ChalDef.Description, "
+
+"), ChalDef.RewardText), "
+
+"), ChalDescString)
+  020f: SetVariableString("missions.description.text", ChalDescString)
+  0239: UpdateGeneralDetails()
+  0243: return nothing
+
+native function StatusMenuExGFxMovie.UpdateEchoDetails()
+  0000: nothing
+
+event function StatusMenuExGFxMovie.UpdateGeneralDetails(Object WPRI; Int MaxLevel; Int CurrentLevel; Int CurrentXP; Str XPText; Int CurrentLevelXP; Int NextLevelXP; Int XPPercent)
+  0000: if !(NotEqual_ObjectObject(WPCOwner, None)) goto 01ba
+  000b: WPRI = WillowPlayerReplicationInfo(WPCOwner.PlayerReplicationInfo)
+  0025: CurrentLevel = 0
+  002c: if !(NotEqual_ObjectObject(WPRI, None)) goto 006a
+  0037: SetPlayerTotalCredits(WPRI.GetCurrencyOnHand())
+  0055: CurrentLevel = WPRI.ExpLevel
+  006a: MaxLevel = WPCOwner.GetMaxExpLevel()
+  0084: CurrentXP = WPCOwner.GetExpPoints()
+  009e: XPText = Concat_StrStr("", cast53(CurrentXP))
+  00af: if !(Less_IntInt(CurrentLevel, MaxLevel)) goto 019e
+  00be: CurrentLevelXP = WPCOwner.GetExpPointsRequiredForLevel(CurrentLevel)
+  00dd: NextLevelXP = WPCOwner.GetExpPointsRequiredForLevel(Add_IntInt(CurrentLevel, 1))
+  00ff: if !(GreaterEqual_IntInt(CurrentXP, NextLevelXP)) goto 0159
+  010e: AddAdd_Int(CurrentLevel)
+  0115: CurrentLevelXP = WPCOwner.GetExpPointsRequiredForLevel(CurrentLevel)
+  0134: NextLevelXP = WPCOwner.GetExpPointsRequiredForLevel(Add_IntInt(CurrentLevel, 1))
+  0156: goto 00ff
+  0159: ConcatEqual_StrStr(XPText, Concat_StrStr(" / ", cast53(NextLevelXP)))
+  0174: XPPercent = Add_IntInt(Divide_IntInt(Multiply_IntInt(Subtract_IntInt(CurrentXP, CurrentLevelXP), 100), Subtract_IntInt(NextLevelXP, CurrentLevelXP)), 1)
+  019b: goto 01a6
+  019e: XPPercent = 100
+  01a6: SetPlayerXP(XPText, XPPercent)
+  01ba: SetScrollArrows()
+  01c4: return nothing
+
+ function StatusMenuExGFxMovie.SetScrollArrows()
+  0000: ActionScript("SetScrollArrows")
+  001b: return nothing
+
+ function StatusMenuExGFxMovie.SetRewardCard(Object MissionDef; Object WPC; Object InvDef; Object ItemReward; Object PresentationDef; Str RewardIconFrame; Bool bHasRewardItem)
+  0000: bHasRewardItem = false
+  0008: ItemReward = MissionDef.GetItemRewardForPlayer(WPC)
+  0027: if !(NotEqual_ObjectObject(ItemReward, None)) goto 0070
+  0032: bHasRewardItem = true
+  003a: InvDef = ItemReward.InventoryBalanceDefinition.HACKGetVehicleInventoryDefinition()
+  0050: if !(NotEqual_ObjectObject(InvDef, None)) goto 0070
+  005b: PresentationDef = InvDef.Presentation
+  0070: if !(bHasRewardItem) goto 0149
+  0079: SetVariableBool("missions.reward_weap.inicon14._visible", true)
+  00ac: if !(AndAnd_BoolBool(NotEqual_ObjectObject(MissionDef, None), NotEqual_ObjectObject(MissionDef.RewardIconPresentationDefinition, None))) goto 00f0
+  00ce: RewardIconFrame = MissionDef.RewardIconPresentationDefinition.ZippyFrame
+  00ed: goto 0110
+  00f0: if !(NotEqual_ObjectObject(PresentationDef, None)) goto 0110
+  00fb: RewardIconFrame = PresentationDef.ZippyFrame
+  0110: WillowGFxMovie.SingleArgInvokeS("missions.reward_weap.inicon14.gotoAndStop", RewardIconFrame)
+  0146: goto 017c
+  0149: SetVariableBool("missions.reward_weap.inicon14._visible", false)
+  017c: return nothing
+
+ function StatusMenuExGFxMovie.SetPlayerTotalCredits(Int Credits; Int DisplayedCredits)
+  0000: DisplayedCredits = GetCreditsToDisplay(Credits)
+  0015: SetPlayerDisplayedCredits(DisplayedCredits)
+  0024: return nothing
+
+ function StatusMenuExGFxMovie.SetPlayerDisplayedCredits(Int Credits)
+  0000: ActionScript("SetPlayerTotalCredits")
+  0021: return nothing
+
+ function StatusMenuExGFxMovie.SetRewardsTotalCredits(Int Credits)
+  0000: ActionScript("SetRewardsTotalCredits")
+  0022: return nothing
+
+ function StatusMenuExGFxMovie.SetPlayerXP(Str XPText; Int XPPercent)
+  0000: ActionScript("SetPlayerXP")
+  0017: return nothing
+
+ function StatusMenuExGFxMovie.SetRewardsXP(Str XPText)
+  0000: ActionScript("SetRewardsXP")
+  0018: return nothing
+
+ function StatusMenuExGFxMovie.SetRewardsItem()
+  0000: ActionScript("SetRewardsItem")
+  001a: return nothing
+
+ function StatusMenuExGFxMovie.SetLevelAndDifficulty(Str LevelText; Str Difficulty)
+  0000: ActionScript("SetLevelAndDifficulty")
+  0021: return nothing
+
+ function StatusMenuExGFxMovie.extLogUp()
+  !! decode error list index out of range at byte 7 05 01 00 01 3c 14 00 00 0a 3a 00 24 00 19 01 1f 14 00 00 0c 00 04 00 1b 27 3d 00 00 00 00 00
+
+ function StatusMenuExGFxMovie.extLogDown()
+  !! decode error list index out of range at byte 7 05 01 00 01 3c 14 00 00 0a 3a 00 24 00 19 01 1f 14 00 00 0c 00 04 00 1b 27 3d 00 00 00 00 00
+
+ function StatusMenuExGFxMovie.extLogListSet(Int NewSlot)
+  !! decode error list index out of range at byte 7 05 01 00 01 3c 14 00 00 0a 53 00 24 00 07 50 00 19 01 1f 14 00 00 0f 00 04 00 1b c5 4e 00 00
+
+ function StatusMenuExGFxMovie.ScrollSidePanel(Str Direction)
+  0000: ActionScript("ScrollSidePanel")
+  001b: return nothing
+
+ function StatusMenuExGFxMovie.extHitEnterOnLog()
+  0000: if !(EqualEqual_IntInt(cast3a(CurrentLog), cast3a(0))) goto 004d
+  0010: if !(WPCOwner.PlayerSetMissionToTrack(MissionDefinition(MissionLogTextList.GetHighlightedObject()))) goto 004a
+  0040: UpdateActiveMissionIcon()
+  004a: goto 00a2
+  004d: if !(EqualEqual_IntInt(cast3a(CurrentLog), cast3a(2))) goto 00a2
+  005d: extHide()
+  0067: PlaybackSelectedEchoLog(WPCOwner)
+  0076: EchoLogTextList.SetIconOverrideFor(WPCOwner.CurrentEchoCall, "playing")
+  00a2: return nothing
+
+ function StatusMenuExGFxMovie.UpdateActiveMissionIcon(Int I)
+  0000: if !(EqualEqual_IntInt(cast3a(CurrentLog), cast3a(0))) goto 0126
+  0010: I = 0
+  0017: if !(Less_IntInt(I, StatusDef.NumEntriesOnMissionLog)) goto 0079
+  0030: SetVariableBool(Concat_StrStr(Concat_StrStr("missions.selections.track", cast53(Add_IntInt(I, 1))), "._visible"), false)
+  006f: AddAdd_PreInt(I)
+  0076: goto 0017
+  0079: WPCOwner.GetPlayerActiveMissionIndex(MissionsInProgress, ActiveMissionIndex)
+  0097: TrackedMissionTextListIdx = MissionLogTextList.FindObjectIndex(MissionsInProgress[ActiveMissionIndex].MissionDef)
+  00c7: if !(NotEqual_IntInt(TrackedMissionTextListIdx, -1)) goto 0126
+  00d6: SetVariableBool(Concat_StrStr(Concat_StrStr("missions.selections.track", cast53(Add_IntInt(Subtract_IntInt(TrackedMissionTextListIdx, MissionLogTextList.IndexOfTopEntry), 1))), "._visible"), true)
+  0126: return nothing
+
+event function StatusMenuExGFxMovie.ClearEchoPlaybackIcon()
+  0000: if !(EqualEqual_IntInt(cast3a(CurrentLog), cast3a(2))) goto 003f
+  0010: extSetupEchoLogScreen()
+  001a: EchoLogTextList.SetIconOverrideFor(WPCOwner.CurrentEchoCall, "")
+  003f: return nothing
+
+native function StatusMenuExGFxMovie.PlaybackSelectedEchoLog(Object WPC)
+  0000: nativeparm WPC
+  0005: nothing
+
+ function StatusMenuExGFxMovie.SetManufacturerLogo(Str ManufacturerName)
+  0000: ActionScript("character.manufacturer.gotoAndStop")
+  002e: return nothing
+
+ function StatusMenuExGFxMovie.ResetScroll()
+  0000: ActionScript("resetScroll")
+  0017: return nothing
+
+ function StatusMenuExGFxMovie.GotoNoMissions()
+  0000: ActionScript("gotoNoMissions")
+  001a: return nothing
+
+ function StatusMenuExGFxMovie.GotoRegularMissions()
+  0000: ActionScript("gotoRegularMissions")
+  001f: return nothing
+
+event function StatusMenuExGFxMovie.GotoNoEchoLogs()
+  0000: ActionScript("gotoNoEchoLogs")
+  001a: return nothing
+
+event function StatusMenuExGFxMovie.GotoRegularEchos()
+  0000: ActionScript("gotoRegularEchos")
+  001c: return nothing
+
+ function StatusMenuExGFxMovie.GotoNoChallenges()
+  0000: ActionScript("gotoNoChallenges")
+  001c: return nothing
+
+ function StatusMenuExGFxMovie.GotoRegularChallenges()
+  0000: ActionScript("gotoRegularChallenges")
+  0021: return nothing
+
+ function StatusMenuExGFxMovie.extSetupNoMissionsPage()
+  0000: SetVariableString("missions.title_questname.text", NoMissionsString)
+  002e: return nothing
+
+ function StatusMenuExGFxMovie.extSetupNoEchoLogsPage()
+  0000: SetVariableString("missions.title_questname.text", NoEchoLogsString)
+  002e: return nothing
+
+ function StatusMenuExGFxMovie.ShowPopup(Str PopupText; Str PopupTitle)
+  0000: ActionScript("ShowPopup")
+  0015: return nothing
+
+ function StatusMenuExGFxMovie.ShowPopupModal(Str PopupText; Str PopupTitle)
+  0000: ActionScript("ShowPopupModal")
+  001a: return nothing
+
+ function StatusMenuExGFxMovie.extUpdateMapPage()
+  0000: MapHelper.WillowGFxHelperMap.UpdateObjects(true)
+  0011: MapHelper.WillowGFxHelperMap.ApplyFlash(self)
+  0022: return nothing
+
+ function StatusMenuExGFxMovie.extZoomToggle()
+  0000: MapHelper.CycleScale(self)
+  0015: MapHelper.WillowGFxHelperMap.UpdateObjects(true)
+  0026: MapHelper.WillowGFxHelperMap.ApplyFlash(self)
+  0037: return nothing
+
+ function StatusMenuExGFxMovie.extPanHorz(Int Dir)
+  0000: return nothing
+
+ function StatusMenuExGFxMovie.extPanVert(Int Dir)
+  0000: return nothing
+
+ function StatusMenuExGFxMovie.extInitComplete()
+  0000: MapHelper.WillowGFxHelperMap.InitMapFrameVars(self)
+  0011: MapHelper.WillowGFxHelperMap.UpdateObjects(true)
+  0022: if !(EqualEqual_IntInt(cast3a(WPCOwner.QuickAccessScreen), cast3a(4))) goto 0065
+  003c: MapHelper.ApplyScale(self)
+  0051: MapHelper.QuickAccessInit()
+  0065: if !(Greater_FloatFloat(MapHelper.CurrScaleVal, cast3f(0))) goto 00a3
+  007c: MapHelper.ApplyAnalogScale(self, MapHelper.CurrScaleVal)
+  00a0: goto 00b8
+  00a3: MapHelper.ApplyScale(self)
+  00b8: MapHelper.WillowGFxHelperMap.ApplyFlash(self)
+  00c9: return nothing
+
+ function StatusMenuExGFxMovie.SetupMapPage()
+  0000: MapHelper.ResetMapObjects()
+  0014: if !(Not_PreBool(MapHelper.WillowGFxHelperMap.InitMapFrame(self))) goto 0034
+  002a: extInitComplete()
+  0034: SetVariableBool("map.maptexture._visible", false)
+  0058: SetVariableString("map.tab.text", MapTabString)
+  !! decode error list index out of range at byte 136 64 14 00 00 16 44 01 7b fc ff ff 43 fa 2e 00 00 00 00 00 00 44 01 7a fc ff ff 43 fb 2e 00 00 00 00 00 00 04 0b 53
+
+ function StatusMenuExGFxMovie.HandleInputKey(Int ControllerId; Name ukey; Byte uevent; Bool ReturnValue)
+  0000: if !(EqualEqual_IntInt(LocalPlayer(WPCOwner.Player).ControllerId, ControllerId)) goto 0183
+  0028: if !(OrOr_BoolBool(OrOr_BoolBool(EqualEqual_IntInt(cast3a(uevent), cast3a(0)), EqualEqual_IntInt(cast3a(uevent), cast3a(2))), EqualEqual_IntInt(cast3a(uevent), cast3a(1)))) goto 0087
+  005c: if !(EqualEqual_NameName(ukey, ScreenExitKey)) goto 0087
+  006b: if !(EqualEqual_IntInt(cast3a(uevent), cast3a(1))) goto 0085
+  007b: extHide()
+  0085: return true
+  0087: if !(OrOr_BoolBool(EqualEqual_IntInt(cast3a(CurrentScreen), cast3a(2)), EqualEqual_IntInt(cast3a(CurrentScreen), cast3a(3)))) goto 0146
+  00a9: if !(EqualEqual_IntInt(cast3a(uevent), cast3a(0))) goto 00d6
+  00b9: if !(EqualEqual_NameName(ukey, 'LeftMouseButton')) goto 00d6
+  00cc: StartMovingHighlight()
+  00d6: if !(EqualEqual_IntInt(cast3a(uevent), cast3a(1))) goto 0146
+  !! decode error list index out of range at byte 237 16 07 46 01 9a 38 3a 00 c7 3c 00 00 38 3a 24 01 16 05 08 00 00 c8 3c 00 00 0a 07 01 21 be 37 00 00 00 00 00 00 1b 05 58 00 00 00 00 00 00 16 06
+
+ function StatusMenuExGFxMovie.HandleSkillsInputKey(Int ControllerId; Name ukey; Byte uevent; Bool ReturnValue)
+  0000: if !(NotEqual_ObjectObject(SkillHelper, None)) goto 0052
+  000b: if !(Not_PreBool(HandleInputKey(ControllerId, ukey, uevent))) goto 0050
+  0029: return SkillHelper.HandleInputKey(ControllerId, ukey, uevent)
+  004d: goto 0052
+  0050: return true
+  0052: return return
+
+ function StatusMenuExGFxMovie.HandleMapInputKey(Int ControllerId; Name ukey; Byte uevent; Bool ReturnValue)
+  0000: if !(Not_PreBool(HandleInputKey(ControllerId, ukey, uevent))) goto 01f6
+  001e: if !(EqualEqual_NameName(ukey, 'LeftMouseButton')) goto 006b
+  0031: if !(EqualEqual_IntInt(cast3a(uevent), cast3a(0))) goto 004c
+  0041: bDraggingMouse = true
+  0049: goto 0066
+  004c: if !(EqualEqual_IntInt(cast3a(uevent), cast3a(1))) goto 0066
+  005c: StopMouseDrag()
+  0066: return false
+  0068: goto 0142
+  006b: if !(EqualEqual_NameName(ukey, 'MouseScrollUp')) goto 00e0
+  007e: if !(EqualEqual_IntInt(cast3a(uevent), cast3a(1))) goto 00dd
+  008e: PlayUISound('ZoomIn')
+  00a1: MapHelper.AnalogScale(self, 1.0)
+  00bb: MapHelper.WillowGFxHelperMap.UpdateObjects(true)
+  00cc: MapHelper.WillowGFxHelperMap.ApplyFlash(self)
+  00dd: goto 0142
+  00e0: if !(EqualEqual_NameName(ukey, 'MouseScrollDown')) goto 0142
+  00f3: PlayUISound('ZoomOut')
+  0106: MapHelper.AnalogScale(self, -1.0)
+  0120: MapHelper.WillowGFxHelperMap.UpdateObjects(true)
+  0131: MapHelper.WillowGFxHelperMap.ApplyFlash(self)
+  0142: if !(OrOr_BoolBool(EqualEqual_IntInt(cast3a(uevent), cast3a(0)), EqualEqual_IntInt(cast3a(uevent), cast3a(2)))) goto 01f3
+  !! decode error list index out of range at byte 363 18 0e 00 9a 38 3a 00 d1 3c 00 00 38 3a 24 02 16 16 05 08 00 00 d2 3c 00 00 0a 8d 01 21 2f 5e 00 00 00 00 00 00 04 1b 8c 43 00 00 00 00 00 00 1e
+
+ function StatusMenuExGFxMovie.HandleMapInputAxis(Int ControllerId; Name ukey; Float Delta; Float DeltaTime; Bool ReturnValue)
+  !! decode error list index out of range at byte 7 05 08 00 00 d8 3c 00 00 0a 29 00 21 c8 64 00 00 00 00 00 00 04 1b 8c 43 00 00 00 00 00 00 00
+
+ function StatusMenuExGFxMovie.StopMouseDrag()
+  0000: bDraggingMouse = false
+  0008: DragMouseLoc.X = -1
+  001e: DragMouseLoc.Y = -1
+  0034: return nothing
+
+event function StatusMenuExGFxMovie.HandleMouseDrag(Int dx; Int dy)
+  0000: if !(bDraggingMouse) goto 002f
+  0009: PanMap(Multiply_FloatFloat(MouseDragScale, cast3f(dx)), Multiply_FloatFloat(MouseDragScale, cast3f(dy)))
+  002f: return nothing
+
+ function StatusMenuExGFxMovie.PanMap(Float X; Float Y; Bool ReturnValue; Bool bModifiedPan)
+  0000: if !(NotEqual_FloatFloat(X, cast3f(0))) goto 002e
+  000d: MapHelper.PanHorz(X)
+  0026: bModifiedPan = true
+  002e: if !(NotEqual_FloatFloat(Y, cast3f(0))) goto 005c
+  003b: MapHelper.PanVert(Y)
+  0054: bModifiedPan = true
+  005c: if !(bModifiedPan) goto 0089
+  0065: MapHelper.WillowGFxHelperMap.UpdateObjects(true)
+  0076: MapHelper.WillowGFxHelperMap.ApplyFlash(self)
+  0087: return true
+  0089: return false
+  008b: return return
+
+ function StatusMenuExGFxMovie.SetupSkillTree()
+  0000: SkillHelper.HandleOpen(WPCOwner, self, SkillDef)
+  001f: SetPortrait()
+  !! decode error list index out of range at byte 60 00 00 00 00 16 44 01 7a fc ff ff 43 0b 2f 00 00 00 00 00 00 0f 01 97 fb ff ff 1e cd cc 4c 3d 1b c9 51 00 00 00 00 00 00 16 04 0b 53
+
+ function StatusMenuExGFxMovie.extInvalidateQuickAccess()
+  0000: WPCOwner.QuickAccessScreen = 0
+  0012: return nothing
+
+ function StatusMenuExGFxMovie.NotifySkillPointsChanged()
+  0000: SetTooltipsText()
+  000a: return nothing
+
+ function StatusMenuExGFxMovie.extHoverSkillCell(Str HoveredCell)
+  0000: SkillHelper.HoverSkillCell(HoveredCell)
+  0019: return nothing
+
+ function StatusMenuExGFxMovie.extSkillActivate()
+  0000: SkillHelper.Activate(-1)
+  0019: return nothing
+
+ function StatusMenuExGFxMovie.extArtifactSelect(Int IdxSelected)
+  0000: SkillHelper.ArtifactSelect(IdxSelected)
+  0019: return nothing
+
+ function StatusMenuExGFxMovie.extArtifactClose()
+  0000: SkillHelper.Nav_Back(-1)
+  0019: return nothing
+
+native function StatusMenuExGFxMovie.TranslateReboundKey(Name ukey; Name ReturnValue)
+  0000: nativeparm ukey
+  0005: nothing
+
+ function StatusMenuExGFxMovie.CacheKeyRebindings(Object KeyBindDef)
+  0000: KeyBindDef = class(WillowGlobals.WillowGlobals.GetWillowGlobals()).GetGlobalsDefinition().KeyBindingDef
+  002f: CachedRebindingsLUT[0].UnrealSideName = KeyBindDef.GetKeyForAction(WPCOwner, 'ShowStatusMenu_Character')
+  0064: CachedRebindingsLUT[0].ActionScriptName = 'One'
+  0080: CachedRebindingsLUT[1].UnrealSideName = KeyBindDef.GetKeyForAction(WPCOwner, 'ShowStatusMenu_Inventory')
+  00b5: CachedRebindingsLUT[1].ActionScriptName = 'Two'
+  00d1: CachedRebindingsLUT[2].UnrealSideName = KeyBindDef.GetKeyForAction(WPCOwner, 'ShowStatusMenu_Skills')
+  0107: CachedRebindingsLUT[2].ActionScriptName = 'Three'
+  0124: CachedRebindingsLUT[3].UnrealSideName = KeyBindDef.GetKeyForAction(WPCOwner, 'ShowStatusMenu_Logs')
+  015a: CachedRebindingsLUT[3].ActionScriptName = 'Four'
+  0177: CachedRebindingsLUT[4].UnrealSideName = KeyBindDef.GetKeyForAction(WPCOwner, 'ShowMap')
+  01ad: CachedRebindingsLUT[4].ActionScriptName = 'Five'
+  01ca: return nothing

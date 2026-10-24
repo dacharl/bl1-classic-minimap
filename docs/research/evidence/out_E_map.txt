@@ -1,0 +1,175 @@
+
+ function WillowGFxHelperMap.FindThreats()
+  0000: return nothing
+
+ function WillowGFxHelperMap.Init(Object InPlayerOwner)
+  0000: PlayerOwner = InPlayerOwner
+  0013: if !(EqualEqual_IntInt(MapObjects.Length, 0)) goto 0030
+  0023: BuildMapObjects()
+  002d: goto 003a
+  0030: ResetMapObjects()
+  003a: return nothing
+
+ function WillowGFxHelperMap.BuildMapObjects()
+  0000: FindLandmarks()
+  000a: WillowGFxHelperMap.FindObjects()
+  0014: FindPlayers()
+  001e: FindThreats()
+  0028: FindWaypoint()
+  0032: return nothing
+
+ function WillowGFxHelperMap.ResetMapObjects(Int I)
+  0000: I = 0
+  000b: if !(Less_IntInt(I, MapObjects.Length)) goto 005a
+  0023: MapObjects[I].AS_IconPath = ""
+  004c: AddAdd_Int(I)
+  0057: goto 000b
+  005a: bMapFrameDirty = true
+  0066: bCenterDirty = true
+  0072: bPlayersDirty = true
+  007e: return nothing
+
+native function WillowGFxHelperMap.InitMapFrameVars(Object Movie)
+  0000: nativeparm Movie
+  0009: nothing
+
+native function WillowGFxHelperMap.InitMapFrame(Object Movie; Bool ReturnValue)
+  0000: nativeparm Movie
+  0009: nothing
+
+native function WillowGFxHelperMap.ApplyFlash(Object Movie)
+  0000: nativeparm Movie
+  0009: nothing
+
+native function WillowGFxHelperMap.UpdateObjects(Bool bStaticUpdate)
+  0000: defaultparm(false)
+  0005: nativeparm bStaticUpdate
+  000e: nothing
+
+native function WillowGFxHelperMap.FindPlayers()
+  0000: nothing
+
+native function WillowGFxHelperMap.FindWaypoint()
+  0000: nothing
+
+native function WillowGFxHelperMap.UpdateMapTooltips(Object Movie)
+  0000: nativeparm Movie
+  0009: nothing
+
+native function WillowGFxHelperMap.FindObjects()
+  0000: nothing
+
+native function WillowGFxHelperMap.ClearMapObjects()
+  0000: nothing
+
+ function WillowGFxHelperMap.CycleScale(Object Movie)
+  0000: CurrentScaleIdx = Percent_IntInt(Add_IntInt(CurrentScaleIdx, 1), Scales.Length)
+  0022: bCenterDirty = true
+  002e: Movie.PlaySpecialUISound("ZoomIn")
+  0055: ApplyScale(Movie)
+  0068: return nothing
+
+ function WillowGFxHelperMap.SetWaypointPosition(Object Movie; Array Args)
+  0000: Args.Length = 1
+  000c: Args[0].Type = 1
+  002d: Movie.Invoke("GetCrosshairCoordinates", Args)
+  0077: return nothing
+
+ function WillowGFxHelperMap.ApplyScale(Object Movie; Array Args)
+  0000: bForceAppearanceUpdate = true
+  000c: CurrScaleVal = cast3f(Scales[CurrentScaleIdx])
+  002b: Args.Length = 1
+  0037: Args[0].Type = 2
+  0058: Args[0].N = cast3f(Scales[CurrentScaleIdx])
+  008c: Movie.Invoke("SetMapScale", Args)
+  00ca: ClipSize.X = Movie.GetVariableNumber("map.maps.themap._width")
+  011e: ClipSize.Y = Movie.GetVariableNumber("map.maps.themap._height")
+  0173: return nothing
+
+ function WillowGFxHelperMap.AnalogScale(Object Movie; Float ScaleVal)
+  0000: CurrScaleVal = FClamp(Add_FloatFloat(CurrScaleVal, Multiply_FloatFloat(ScaleVal, ZoomSpeedFactor)), MinScale, MaxScale)
+  003d: bCenterDirty = true
+  0049: ApplyAnalogScale(Movie, CurrScaleVal)
+  0065: return nothing
+
+ function WillowGFxHelperMap.ApplyAnalogScale(Object Movie; Float ScaleVal; Array Args)
+  0000: bForceAppearanceUpdate = true
+  000c: Args.Length = 1
+  0018: Args[0].Type = 2
+  0039: Args[0].N = ScaleVal
+  0061: Movie.Invoke("SetMapScale", Args)
+  009f: ClipSize.X = Movie.GetVariableNumber("map.maps.themap._width")
+  00f3: ClipSize.Y = Movie.GetVariableNumber("map.maps.themap._height")
+  0148: return nothing
+
+ function WillowGFxHelperMap.PanHorz(Float Dir; Float Increment)
+  0000: Increment = Multiply_FloatFloat(PanScalingFactor, Divide_FloatFloat(ViewSize.X, ClipSize.X))
+  004f: DesiredCenter.X = FClamp(Add_FloatFloat(DesiredCenter.X, Multiply_FloatFloat(Multiply_FloatFloat(PanRate, Dir), Increment)), -0.1, 1.1)
+  00b5: bCenterDirty = true
+  00c1: return nothing
+
+ function WillowGFxHelperMap.PanVert(Float Dir; Float Increment)
+  0000: Increment = Multiply_FloatFloat(PanScalingFactor, Divide_FloatFloat(ViewSize.Y, ClipSize.Y))
+  004f: DesiredCenter.Y = FClamp(Add_FloatFloat(DesiredCenter.Y, Multiply_FloatFloat(Multiply_FloatFloat(PanRate, Dir), Increment)), -0.1, 1.1)
+  00b5: bCenterDirty = true
+  00c1: return nothing
+
+ function WillowGFxHelperMap.ClearWaypoint(Int mapItem)
+  0000: mapItem = 0
+  000b: if !(Less_IntInt(mapItem, MapObjects.Length)) goto 007b
+  0023: if !(MapObjects[mapItem].bWaypoint) goto 006d
+  004d: MapObjects.RemoveItem(MapObjects[mapItem])
+  006d: AddAdd_Int(mapItem)
+  0078: goto 000b
+  007b: return nothing
+
+ function WillowGFxHelperMap.FindLandmarks(Int Index; Object Landmark; Object MapTransition; Str MapName)
+  0000: foreach PlayerOwner.AllActors(Engine.LevelLandmark, Landmark) (end 0512)
+  002d: if !(EqualEqual_ObjectObject(Landmark, None)) goto 0040
+  003c: iteratornext
+  003d: goto 0512
+  0040: if !(Landmark.IsA('LevelLandmarkAnchor')) goto 0094
+  0063: if !(EqualEqual_ObjectObject(Anchor, None)) goto 0091
+  0072: Anchor = LevelLandmarkAnchor(Landmark)
+  008e: goto 0091
+  0091: goto 0511
+  0094: Index = 0
+  009f: if !(AndAnd_BoolBool(NotEqual_IntInt(cast3a(Landmark.LandmarkType), cast3a(1)), NotEqual_NameName(Landmark.AssociatedOutpostName, 'None'))) goto 0140
+  00f6: Index = PlayerOwner.ActivatedTeleportersList.Find(Landmark.AssociatedOutpostName)
+  0140: if !(NotEqual_IntInt(Index, -1)) goto 0511
+  0153: Index = MapObjects.Length
+  0167: MapObjects.Length = Add_IntInt(Index, 1)
+  017e: MapObjects[Index].Landmark = Landmark
+  01ae: if !(bIsMinimap) goto 01f5
+  01bb: MapObjects[Index].AS_IconClipPath = "maps.landmarks"
+  01f2: goto 0230
+  01f5: MapObjects[Index].AS_IconClipPath = "map.maps.landmarks"
+  0230: MapObjects[Index].TooltipTitle = (NotEqual_StrStr(Landmark.LandmarkName, "") ? Localize("MapTooltips", Landmark.LandmarkName, "WillowMenu") : "MISSING TITLE")
+  02ce: MapObjects[Index].TooltipBody = "MISSING BODY"
+  0303: if !(EqualEqual_IntInt(cast3a(MapObjects[Index].Landmark.LandmarkType), cast3a(1))) goto 0480
+  0349: MapTransition = PersistentTransitionLandmark(Landmark)
+  0365: if !(NotEqual_ObjectObject(MapTransition, None)) goto 0480
+  0374: MapName = Localize("MapLocationNames", MapTransition.ToMapName, "WillowGame")
+  03c4: MapObjects[Index].TooltipTitle = Localize("MapTooltips", "transition", "WillowGame")
+  041a: MapObjects[Index].TooltipBody = At_StrStr(Localize("MapTooltips", "transition_body", "WillowGame"), MapName)
+  0480: switch (Landmark.LandmarkType)
+  04a8: case 1: (next 04e3)
+  04ad: MapObjects[Index].AS_IconClipFrame = "transition"
+  04e0: goto 050e
+  04e3: case 0: (next 04e8)
+  04e8: default: (next ffff)
+  04eb: MapObjects.RemoveItem(MapObjects[Index])
+  050b: goto 050e
+  050e: goto 0511
+  0511: iteratornext
+  0512: iteratorpop
+  0513: if !(EqualEqual_ObjectObject(Anchor, None)) goto 0569
+  0522: AnchorSize.X = 1.0
+  0544: AnchorSize.Y = 1.0
+  0566: goto 05e3
+  0569: AnchorSize.X = cast3f(Anchor.TextureSizeX)
+  05a6: AnchorSize.Y = cast3f(Anchor.TextureSizeY)
+  05e3: return nothing
+
+native function WillowGFxHelperMap.QuickAccessInit()
+  0000: nothing

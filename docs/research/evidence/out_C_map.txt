@@ -1,0 +1,108 @@
+
+ function WillowGFxHelperMap.Init(Object InPlayerOwner)
+  0000: PlayerOwner = InPlayerOwner
+  000b: if !(EqualEqual_IntInt(MapObjects.Length, 0)) goto 0030
+  0017: FindLandmarks()
+  0021: WillowGFxHelperMap.FindObjects()
+  0027: WillowGFxHelperMap.FindPlayers()
+  002d: goto 003a
+  0030: ResetMapObjects()
+  003a: return nothing
+
+ function WillowGFxHelperMap.ResetMapObjects(Int I)
+  0000: I = 0
+  0007: if !(Less_IntInt(I, MapObjects.Length)) goto 003a
+  0017: MapObjects[I].AS_IconPath = ""
+  0030: AddAdd_Int(I)
+  0037: goto 0007
+  003a: bMapFrameDirty = true
+  0042: bCenterDirty = true
+  004a: bPlayersDirty = true
+  0052: return nothing
+
+native function WillowGFxHelperMap.InitMapFrameVars(Object Movie)
+  0000: nativeparm Movie
+  0005: nothing
+
+native function WillowGFxHelperMap.InitMapFrame(Object Movie; Bool ReturnValue)
+  0000: nativeparm Movie
+  0005: nothing
+
+native function WillowGFxHelperMap.ApplyFlash(Object Movie)
+  0000: nativeparm Movie
+  0005: nothing
+
+native function WillowGFxHelperMap.UpdateObjects(Bool bStaticUpdate)
+  0000: defaultparm(false)
+  0005: nativeparm bStaticUpdate
+  000a: nothing
+
+native function WillowGFxHelperMap.FindPlayers()
+  0000: nothing
+
+native function WillowGFxHelperMap.FindObjects()
+  0000: nothing
+
+ function WillowGFxHelperMap.CycleScale(Object Movie)
+  0000: CurrentScaleIdx = Percent_IntInt(Add_IntInt(CurrentScaleIdx, 1), Scales.Length)
+  0016: bCenterDirty = true
+  001e: Movie.PlaySpecialUISound("ZoomIn")
+  003a: ApplyScale(Movie)
+  0049: return nothing
+
+ function WillowGFxHelperMap.ApplyScale(Object Movie; Array args)
+  0000: CurrScaleVal = cast3f(Scales[CurrentScaleIdx])
+  0013: args.Length = 1
+  001b: args[0].Type = 2
+  0030: args[0].N = cast3f(Scales[CurrentScaleIdx])
+  0050: Movie.Invoke("SetMapScale", args)
+  007b: ClipSize.X = Movie.GetVariableNumber("map.maps.themap._width")
+  00b8: ClipSize.Y = Movie.GetVariableNumber("map.maps.themap._height")
+  00f6: return nothing
+
+ function WillowGFxHelperMap.AnalogScale(Object Movie; Float ScaleVal)
+  0000: CurrScaleVal = FClamp(Add_FloatFloat(CurrScaleVal, Multiply_FloatFloat(ScaleVal, ZoomSpeedFactor)), MinScale, MaxScale)
+  0025: bCenterDirty = true
+  002d: ApplyAnalogScale(Movie, CurrScaleVal)
+  0041: return nothing
+
+ function WillowGFxHelperMap.ApplyAnalogScale(Object Movie; Float ScaleVal; Array args)
+  0000: args.Length = 1
+  0008: args[0].Type = 2
+  001d: args[0].N = ScaleVal
+  0035: Movie.Invoke("SetMapScale", args)
+  0060: ClipSize.X = Movie.GetVariableNumber("map.maps.themap._width")
+  009d: ClipSize.Y = Movie.GetVariableNumber("map.maps.themap._height")
+  00db: return nothing
+
+ function WillowGFxHelperMap.PanHorz(Float Dir; Float Increment; Float CenterMax)
+  0000: Increment = Multiply_FloatFloat(PanScalingFactor, Divide_FloatFloat(ViewSize.X, ClipSize.X))
+  002f: CenterMax = Divide_FloatFloat(Subtract_FloatFloat(Add_FloatFloat(Subtract_FloatFloat(ClipSize.X, Multiply_FloatFloat(ViewBorder, ViewSize.X)), Multiply_FloatFloat(0.5, ViewSize.X)), ViewOffset.X), ClipSize.X)
+  009b: DesiredCenter.X = FClamp(Add_FloatFloat(DesiredCenter.X, Multiply_FloatFloat(Multiply_FloatFloat(PanRate, Dir), Increment)), Subtract_FloatFloat(1.0, CenterMax), CenterMax)
+  00e4: bCenterDirty = true
+  00ec: return nothing
+
+ function WillowGFxHelperMap.PanVert(Float Dir; Float Increment; Float CenterMax)
+  0000: Increment = Multiply_FloatFloat(PanScalingFactor, Divide_FloatFloat(ViewSize.Y, ClipSize.Y))
+  002f: CenterMax = Divide_FloatFloat(Subtract_FloatFloat(Add_FloatFloat(Subtract_FloatFloat(ClipSize.Y, Multiply_FloatFloat(ViewBorder, ViewSize.Y)), Multiply_FloatFloat(0.5, ViewSize.Y)), ViewOffset.Y), ClipSize.Y)
+  009b: DesiredCenter.Y = FClamp(Add_FloatFloat(DesiredCenter.Y, Multiply_FloatFloat(Multiply_FloatFloat(PanRate, Dir), Increment)), Subtract_FloatFloat(1.0, CenterMax), CenterMax)
+  00e4: bCenterDirty = true
+  00ec: return nothing
+
+ function WillowGFxHelperMap.FindLandmarks(Int Index; Object Landmark)
+  0000: foreach PlayerOwner.AllActors(Engine.LevelLandmark, Landmark) (end 01a2)
+  001a: if !(EqualEqual_ObjectObject(Landmark, None)) goto 0029
+  0025: iteratornext
+  0026: goto 01a2
+  0029: if !(Landmark.IsA('LevelLandmarkAnchor')) goto 0062
+  0041: if !(EqualEqual_ObjectObject(Anchor, None)) goto 005f
+  004c: Anchor = LevelLandmarkAnchor(Landmark)
+  005c: goto 005f
+  005f: goto 01a1
+  0062: Index = 0
+  0069: if !(AndAnd_BoolBool(NotEqual_IntInt(cast3a(Landmark.LandmarkType), cast3a(1)), NotEqual_NameName(Landmark.AssociatedOutpostName, 'None'))) goto 00c9
+  00a2: Index = PlayerOwner.ActivatedTeleportersList.Find(Landmark.AssociatedOutpostName)
+  !! decode error list index out of range at byte 208 0f 00 19 00 a4 5f 00 00 05 00 08 00 01 35 f7 ff ff 07 a1 01 9b 00 a5 5f 00 00 1d ff ff ff ff 16 0f 00 a5 5f 00 00 36 01 79 5f 00 00 0f 36 01 79
+
+native function WillowGFxHelperMap.QuickAccessInit()
+  0000: nothing

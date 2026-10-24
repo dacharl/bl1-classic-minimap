@@ -1,0 +1,94 @@
+
+native function WillowGFxHelperMinimap.ApplyFlash(Object Movie)
+  0000: nativeparm Movie
+  0009: nothing
+
+native function WillowGFxHelperMinimap.FindPlayers()
+  0000: nothing
+
+native function WillowGFxHelperMinimap.FindWaypoint()
+  0000: nothing
+
+native function WillowGFxHelperMinimap.UpdateThreats(Object Movie)
+  0000: nativeparm Movie
+  0009: nothing
+
+ function WillowGFxHelperMinimap.Init(Object InPlayerOwner)
+  0000: bIsMinimap = true
+  000c: WillowGFxHelperMap.Init(InPlayerOwner)
+  001f: return nothing
+
+ function WillowGFxHelperMinimap.SetMinimapShouldRotate(Int PlayerIdx; Int shouldRotate; Array Args)
+  0000: Args.Length = 2
+  000d: Args[0].Type = 2
+  002e: Args[1].Type = 2
+  004f: Args[0].N = cast3f(PlayerIdx)
+  0079: Args[1].N = cast3f(shouldRotate)
+  00a3: HUDMovie.Invoke("SetMinimapShouldRotate", Args)
+  00ec: return nothing
+
+ function WillowGFxHelperMinimap.SetHUDMovie(Object Movie)
+  0000: HUDMovie = Movie
+  0013: return nothing
+
+ function WillowGFxHelperMinimap.ApplyScale(Object Movie; Array Args)
+  0000: bForceAppearanceUpdate = true
+  000c: CurrScaleVal = cast3f(Scales[CurrentScaleIdx])
+  002b: Args.Length = 1
+  0037: Args[0].Type = 2
+  0058: Args[0].N = cast3f(Scales[CurrentScaleIdx])
+  008c: Movie.Invoke("SetMapScale", Args)
+  00ca: ClipSize.X = cast3f(GetMapWidth(Movie))
+  00fc: ClipSize.Y = cast3f(GetMapHeight(Movie))
+  012e: return nothing
+
+ function WillowGFxHelperMinimap.ApplyAnalogScale(Object Movie; Float ScaleVal; Array Args)
+  0000: bForceAppearanceUpdate = true
+  000c: Args.Length = 1
+  0018: Args[0].Type = 2
+  0039: Args[0].N = ScaleVal
+  0061: Movie.Invoke("SetMapScale", Args)
+  009f: ClipSize.X = cast3f(GetMapWidth(Movie))
+  00d1: ClipSize.Y = cast3f(GetMapHeight(Movie))
+  0103: return nothing
+
+ function WillowGFxHelperMinimap.GetMapWidth(Object Movie; Int ReturnValue; Array EmptyArgs; Struct Result)
+  0000: EmptyArgs.Length = 0
+  000c: Result = Movie.Invoke("GetMapWidth", EmptyArgs)
+  004b: return cast44(Result.N)
+  006a: return return
+
+ function WillowGFxHelperMinimap.GetMapHeight(Object Movie; Int ReturnValue; Array EmptyArgs; Struct Result)
+  0000: EmptyArgs.Length = 0
+  000c: Result = Movie.Invoke("GetMapHeight", EmptyArgs)
+  004c: return cast44(Result.N)
+  006b: return return
+
+ function WillowGFxHelperMinimap.ClearWaypoint(Int mapItem)
+  0000: mapItem = 0
+  000b: if !(Less_IntInt(mapItem, MapObjects.Length)) goto 00ab
+  0023: if !(MapObjects[mapItem].bWaypoint) goto 009d
+  004d: AS_RemoveLandmark(MapObjects[mapItem].AS_IconClipPath)
+  007d: MapObjects.RemoveItem(MapObjects[mapItem])
+  009d: AddAdd_Int(mapItem)
+  00a8: goto 000b
+  00ab: return nothing
+
+ function WillowGFxHelperMinimap.RemoveLandmark(Object Object; Int I)
+  0000: I = 0
+  000b: if !(Less_IntInt(I, MapObjects.Length)) goto 00b8
+  0023: if !(EqualEqual_ObjectObject(MapObjects[I].ClientInteractiveObject, Object)) goto 00aa
+  0057: AS_RemoveLandmark(MapObjects[I].AS_IconClipPath)
+  0087: MapObjects.RemoveItem(MapObjects[I])
+  00a7: goto 00b8
+  00aa: AddAdd_PreInt(I)
+  00b5: goto 000b
+  00b8: return nothing
+
+ function WillowGFxHelperMinimap.AS_RemoveLandmark(Str clip; Array Args)
+  0000: if !(NotEqual_ObjectObject(HUDMovie, None)) goto 00a5
+  000f: Args.Length = 1
+  001b: Args[0].Type = 3
+  003c: Args[0].S = clip
+  0064: HUDMovie.Invoke("RemoveLandmark", Args)
+  00a5: return nothing

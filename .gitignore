@@ -1,0 +1,31 @@
+# Local builds, backups, decoded executables and analysis output.
+/dist/
+
+# Extracted game packages and movie scratchpads.
+/tools/pk/
+/pk/
+/swf/
+*.upk
+*.u
+*.gfx
+*.swf
+*.sdkmod
+*.exe
+*.dll
+*.dmp
+
+# Python caches and local environments.
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# Local credentials and editor/OS state.
+.env
+.env.*
+!.env.example
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store

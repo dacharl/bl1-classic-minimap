@@ -1,0 +1,16 @@
+
+ function WillowPlayerController.SetMinimapShouldRotateFromProfile(Int IValue; Object WHUD; Int splitPlayerIdx)
+  0000: if !(ProfileSettings.GetProfileSettingValueIdByName('MinimapShouldRotate', IValue)) goto 00e0
+  0034: WHUD = WillowHUD(myHUD)
+  0050: if !(AndAnd_BoolBool(NotEqual_ObjectObject(WHUD, None), NotEqual_ObjectObject(WHUD.GetHUDMovie(), None))) goto 00e0
+  0086: IsSplitscreenPlayer(splitPlayerIdx)
+  0099: WHUD.GetHUDMovie().SetMinimapShouldRotate(splitPlayerIdx, IValue)
+  00e0: return nothing
+
+ function WillowPlayerController.MarkMinimapDirty(Object WHUD; Object HUDMovie)
+  0000: WHUD = WillowHUD(myHUD)
+  001c: if !(NotEqual_ObjectObject(WHUD, None)) goto 0084
+  002b: HUDMovie = WHUD.GetHUDMovie()
+  0054: if !(NotEqual_ObjectObject(HUDMovie, None)) goto 0084
+  0063: HUDMovie.bRebuildMinimapObjects = true
+  0084: return nothing

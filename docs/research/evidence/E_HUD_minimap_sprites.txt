@@ -1,0 +1,147 @@
+DefineSprite 101
+DefineSprite 103
+DefineSprite 105
+DefineSprite 107
+DefineSprite 109
+DefineSprite 111
+DefineSprite 112
+  [sprite112 frame 0] DoAction
+      0000 Stop
+  [sprite112 frame 0] label 'objective'
+  [sprite112 frame 0] place char 91 as 'objective' depth 1
+  [sprite112 frame 1] label 'rstation'
+  [sprite112 frame 1] place char 93 as 'rstation' depth 1
+  [sprite112 frame 2] label 'poi'
+  [sprite112 frame 2] place char 95 as 'landmark1' depth 1
+  [sprite112 frame 3] label 'transition'
+  [sprite112 frame 3] place char 97 as 'landmark3' depth 1
+  [sprite112 frame 4] label 'vss'
+  [sprite112 frame 4] place char 99 as 'catcharide' depth 1
+  [sprite112 frame 5] label 'bb'
+  [sprite112 frame 5] place char 101 as 'bb' depth 1
+  [sprite112 frame 6] label 'health'
+  [sprite112 frame 6] place char 103 as 'health' depth 1
+  [sprite112 frame 7] label 'shop'
+  [sprite112 frame 7] place char 105 as 'shop' depth 1
+  [sprite112 frame 8] label 'newu'
+  [sprite112 frame 8] place char 93 as 'rstation' depth 1
+  [sprite112 frame 9] label 'questionmark'
+  [sprite112 frame 10] label 'waypoint'
+  [sprite112 frame 10] place char 91 as 'objective' depth 1
+  [sprite112 frame 11] label 'turnin'
+  [sprite112 frame 12] DoAction
+      0000 Stop
+  [sprite112 frame 12] label 'newmission'
+DefineSprite 115
+DefineSprite 116
+  [sprite116 frame 0] place char 115 as 'tintme_NO' depth 2
+DefineSprite 118
+DefineSprite 120
+DefineSprite 121
+  [sprite121 frame 0] place char 120 as 'tintme' depth 4
+DefineSprite 123
+  [sprite123 frame 0] place char 121 as 'buddy' depth 1
+DefineSprite 124
+  [sprite124 frame 0] place char 121 as 'buddy' depth 1
+DefineSprite 125
+  [sprite125 frame 0] place char 121 as 'buddy' depth 1
+DefineSprite 126
+  [sprite126 frame 0] DoAction
+      0000 Stop
+  [sprite126 frame 0] label 'player'
+  [sprite126 frame 0] place char 116 as 'player' depth 1
+  [sprite126 frame 1] label 'buddy1'
+  [sprite126 frame 1] place char 123 as 'buddy' depth 1
+  [sprite126 frame 2] label 'buddy2'
+  [sprite126 frame 2] place char 124 as 'buddy' depth 1
+  [sprite126 frame 3] label 'buddy3'
+  [sprite126 frame 3] place char 125 as 'buddy' depth 1
+  [sprite126 frame 4] DoAction
+  [sprite126 frame 4] label 'buddy'
+  [sprite126 frame 4] place char 121 as 'buddy' depth 1
+DefineSprite 128
+DefineSprite 130
+DefineSprite 132
+DefineSprite 134
+DefineSprite 136
+DefineSprite 138
+DefineSprite 140
+DefineSprite 142
+DefineSprite 144
+DefineSprite 146
+DefineSprite 148
+DefineSprite 150
+DefineSprite 152
+DefineSprite 154
+DefineSprite 156
+DefineSprite 158
+DefineSprite 160
+DefineSprite 162
+DefineSprite 164
+DefineSprite 166
+DefineSprite 168
+DefineSprite 170
+DefineSprite 172
+DefineSprite 174
+DefineSprite 176
+DefineSprite 177
+DefineSprite 178
+  [sprite178 frame 0] DoAction
+      0000 Stop
+      0001 Push '_parent'
+      000d GetVariable
+      000e Push 'zone', 'UNKNOWN'
+      0020 SetMember
+  [sprite178 frame 0] label 'none'
+  [sprite178 frame 0] place char 85 as 'themap' depth 1
+  [sprite178 frame 1] DoAction
+      0000 Stop
+      0001 Push '_parent'
+      000d GetVariable
+      000e Push 'zone', 'THE ARID BADLANDS'
+      002a SetMember
+      002b Push 'extInitComplete', 1, 'flash'
+      004b GetVariable
+      004c Push 'external'
+      0059 GetMember
+      00b3 GetMember
+      00b4 Push 'themap'
+      00b9 GetURL2
+  [sprite178 frame 30] label 'dlcmap1'
+  [sprite178 frame 30] place char 177 as 'themap' depth 1
+DefineSprite 180
+DefineSprite 181
+  [sprite181 frame 0] place char 180 as 'north' depth 1
+DefineSprite 182
+  [sprite182 frame 0] DoAction
+      0000 Stop
+  [sprite182 frame 0] place char 181 as 'align_point' depth 1
+DefineSprite 183
+  [sprite183 frame 0] place char 91 as 'objective' depth 1
+DefineSprite 184
+  [sprite184 frame 0] DoAction
+      0000 Stop
+  [sprite184 frame 0] place char 183 as 'align_point' depth 1
+DefineSprite 185
+  [sprite185 frame 0] place char 91 as 'objective' depth 1
+DefineSprite 186
+  [sprite186 frame 0] DoAction
+      0000 Stop
+  [sprite186 frame 0] place char 185 as 'align_point' depth 1
+DefineSprite 187
+  [sprite187 frame 0] place char 83 as 'mask' depth 4
+  [sprite187 frame 0] place char 178 as 'maps' depth 6
+  [sprite187 frame 0] place char 182 as 'northMC' depth 19
+  [sprite187 frame 0] place char 184 as 'customWaypointMC' depth 21
+  [sprite187 frame 0] place char 186 as 'currentObjectiveMC' depth 23
+Export 187 -> 'minimap_frame'
+DefineSprite 190
+DefineSprite 191
+DefineSprite 192
+DefineSprite 196
+  [sprite196 frame 0] DoAction
+      0000 Stop
+  [sprite196 frame 1] label 'go'
+DefineSprite 206
+  [sprite206 frame 0] DoAction
+      0000 Stop

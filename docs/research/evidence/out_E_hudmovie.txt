@@ -1,0 +1,682 @@
+
+event function WillowHUDGFxMovie.Start(Bool StartPaused; Bool ReturnValue; Bool bStarted)
+  0000: defaultparm(false)
+  0005: bStarted = WillowGFxMovie.Start(StartPaused)
+  0024: if !(Not_PreBool(bStarted)) goto 0033
+  0033: ShowForPlayer(0)
+  003e: TickRateSeconds = 0.05
+  004d: RTM = class(GearboxFramework.GearboxGlobals.GearboxFramework.GearboxGlobals.GetGearboxGlobals()).GetRenderTextureManager()
+  008c: class(Engine.GameEngine.Engine.GameEngine.GetOnlineSubsystem()).VoiceInterface.AddPlayerTalkingDelegate(delegate OnPlayerTalking)
+  00e8: return bStarted
+  00f3: return return
+
+event function WillowHUDGFxMovie.OnClose()
+  0000: class(Engine.GameEngine.Engine.GameEngine.GetOnlineSubsystem()).VoiceInterface.ClearPlayerTalkingDelegate(delegate OnPlayerTalking)
+  005c: GearboxFramework.GearboxGFxMovie.OnClose()
+  0066: return nothing
+
+ function WillowHUDGFxMovie.OnPlayerTalking(Struct Player)
+  0000: UpdateAllyTalkingFromNetId(Player)
+  0013: return nothing
+
+ function WillowHUDGFxMovie.UpdateCompassMinimapVisibility(Int IntResult; Int I; Object WPC; Bool bMinimapVisible)
+  0000: if !(bIsInitializingAnimPlaying) goto 000f
+  000d: return nothing
+  000f: IntResult = -1
+  001e: I = 0
+  0029: if !(Less_IntInt(I, NumSplitscreenPlayers)) goto 0273
+  0040: WPC = WPlayerOwner[I]
+  005d: if !(AndAnd_BoolBool(NotEqual_ObjectObject(WPC, None), NotEqual_ObjectObject(WPC.ProfileSettings, None))) goto 0265
+  0092: if !(WPC.ProfileSettings.GetProfileSettingValueIdByName('ShowCompass', IntResult)) goto 0119
+  00db: SetVariableBool(Concat_StrStr(Concat_StrStr("p", cast53(Add_IntInt(I, 1))), ".bearing._visible"), EqualEqual_IntInt(IntResult, 1))
+  0119: bMinimapVisible = false
+  0125: if !(WPC.ProfileSettings.GetProfileSettingValueIdByName('ShowMinimap', IntResult)) goto 01bd
+  016e: bMinimapVisible = EqualEqual_IntInt(IntResult, 1)
+  0185: SetVariableBool(Concat_StrStr(Concat_StrStr("p", cast53(Add_IntInt(I, 1))), ".map._visible"), bMinimapVisible)
+  01bd: AS_UpdateEchoPosition(I, bMinimapVisible)
+  01da: if !(AndAnd_BoolBool(NotEqual_ObjectObject(MapHelper, None), WPC.ProfileSettings.GetProfileSettingValueIdByName('MinimapShouldRotate', IntResult))) goto 0265
+  0234: MapHelper.SetMinimapShouldRotate(I, IntResult)
+  0265: AddAdd_PreInt(I)
+  0270: goto 0029
+  0273: return nothing
+
+ function WillowHUDGFxMovie.AS_UpdateEchoPosition(Int Player; Bool bMinimapVisible; Array Args; Str PlayerStr)
+  0000: Args.Length = 1
+  000c: Args[0].Type = 4
+  002d: Args[0].B = bMinimapVisible
+  0057: PlayerStr = Concat_StrStr("p", cast53(Add_IntInt(Player, 1)))
+  0074: Invoke(Concat_StrStr(PlayerStr, ".UpdateEchoPosition"), Args)
+  00b0: return nothing
+
+ function WillowHUDGFxMovie.extInitMinimap()
+  0000: MapHelper = new(nothing,nothing,nothing,WillowGFxHelperMinimap)
+  0017: nothing
+  0018: AS_ClearLandmarks()
+  0022: MapHelper.SetHUDMovie(self)
+  0042: MapHelper.Init(WillowPlayerController(PlayerOwner))
+  0073: MapHelper.ResetMapObjects()
+  0092: if !(Not_PreBool(MapHelper.WillowGFxHelperMap.InitMapFrame(self))) goto 00b7
+  00b7: return nothing
+
+ function WillowHUDGFxMovie.extInitComplete()
+  0000: MapHelper.WillowGFxHelperMap.InitMapFrameVars(self)
+  0020: MapHelper.WillowGFxHelperMap.UpdateObjects(true)
+  0040: MapHelper.CurrentScaleIdx = 3
+  0061: MapHelper.ApplyScale(self)
+  0081: MapHelper.QuickAccessInit()
+  00a0: MapHelper.AnalogScale(self, 1.0)
+  00c5: MapHelper.ApplyFlash(self)
+  00e5: UpdateCompassMinimapVisibility()
+  00ef: return nothing
+
+native function WillowHUDGFxMovie.InitCachedValues()
+  0000: nothing
+
+native function WillowHUDGFxMovie.UpdateHealth(Int PlayerNum)
+  0000: nativeparm PlayerNum
+  0009: nothing
+
+native function WillowHUDGFxMovie.UpdateShield(Int PlayerNum)
+  0000: nativeparm PlayerNum
+  0009: nothing
+
+native function WillowHUDGFxMovie.UpdateXP(Int PlayerNum)
+  0000: nativeparm PlayerNum
+  0009: nothing
+
+native function WillowHUDGFxMovie.UpdateInstinct(Int PlayerNum)
+  0000: nativeparm PlayerNum
+  0009: nothing
+
+native function WillowHUDGFxMovie.UpdateActionSkill(Int PlayerNum)
+  0000: nativeparm PlayerNum
+  0009: nothing
+
+native function WillowHUDGFxMovie.UpdateAmmo(Int PlayerNum)
+  0000: nativeparm PlayerNum
+  0009: nothing
+
+native function WillowHUDGFxMovie.UpdateGrenades(Int PlayerNum)
+  0000: nativeparm PlayerNum
+  0009: nothing
+
+native function WillowHUDGFxMovie.UpdateLevel(Int PlayerNum)
+  0000: nativeparm PlayerNum
+  0009: nothing
+
+native function WillowHUDGFxMovie.UpdateCommDeck(Int PlayerNum)
+  0000: nativeparm PlayerNum
+  0009: nothing
+
+native function WillowHUDGFxMovie.UpdateCharacter(Int PlayerNum)
+  0000: nativeparm PlayerNum
+  0009: nothing
+
+native function WillowHUDGFxMovie.UpdateBearing(Int PlayerNum)
+  0000: nativeparm PlayerNum
+  0009: nothing
+
+native function WillowHUDGFxMovie.UpdateTrackedMission(Int PlayerNum)
+  0000: nativeparm PlayerNum
+  0009: nothing
+
+native function WillowHUDGFxMovie.UpdateSkillPoints(Int PlayerNum)
+  0000: nativeparm PlayerNum
+  0009: nothing
+
+native function WillowHUDGFxMovie.UpdateAfterburner(Int PlayerNum)
+  0000: nativeparm PlayerNum
+  0009: nothing
+
+native function WillowHUDGFxMovie.UpdateCredits(Int PlayerNum)
+  0000: nativeparm PlayerNum
+  0009: nothing
+
+native function WillowHUDGFxMovie.StopCredits(Int PlayerNum; Int DigitNum)
+  0000: nativeparm PlayerNum
+  0009: nativeparm DigitNum
+  0012: nothing
+
+native function WillowHUDGFxMovie.UpdateInjured(Int PlayerNum)
+  0000: nativeparm PlayerNum
+  0009: nothing
+
+native function WillowHUDGFxMovie.UpdateBootup(Int PlayerNum)
+  0000: nativeparm PlayerNum
+  0009: nothing
+
+native function WillowHUDGFxMovie.UpdateMinimap(Int PlayerNum)
+  0000: nativeparm PlayerNum
+  0009: nothing
+
+native function WillowHUDGFxMovie.SetAllyVisible(Int AllyNum; Str AllyString; Bool bVisible)
+  0000: nativeparm AllyNum
+  0009: nativeparm AllyString
+  0012: nativeparm bVisible
+  001b: nothing
+
+native function WillowHUDGFxMovie.UpdateAllyHealth(Int AllyNum; Object AllyPRI; Str AllyString)
+  0000: nativeparm AllyNum
+  0009: nativeparm AllyPRI
+  0012: nativeparm AllyString
+  001b: nothing
+
+native function WillowHUDGFxMovie.UpdateAllyShield(Int AllyNum; Object AllyPRI; Str AllyString)
+  0000: nativeparm AllyNum
+  0009: nativeparm AllyPRI
+  0012: nativeparm AllyString
+  001b: nothing
+
+native function WillowHUDGFxMovie.UpdateAllyLevel(Int AllyNum; Object AllyPRI; Str AllyString)
+  0000: nativeparm AllyNum
+  0009: nativeparm AllyPRI
+  0012: nativeparm AllyString
+  001b: nothing
+
+native function WillowHUDGFxMovie.UpdateAllyCharacter(Int AllyNum; Object AllyPRI; Str AllyString)
+  0000: nativeparm AllyNum
+  0009: nativeparm AllyPRI
+  0012: nativeparm AllyString
+  001b: nothing
+
+native function WillowHUDGFxMovie.UpdateAllyName(Int AllyNum; Object AllyPRI; Str AllyString)
+  0000: nativeparm AllyNum
+  0009: nativeparm AllyPRI
+  0012: nativeparm AllyString
+  001b: nothing
+
+native function WillowHUDGFxMovie.UpdateAllyCommDeck(Int AllyNum; Object AllyPRI; Str AllyString)
+  0000: nativeparm AllyNum
+  0009: nativeparm AllyPRI
+  0012: nativeparm AllyString
+  001b: nothing
+
+native function WillowHUDGFxMovie.UpdateAllyTalking(Int AllyNum; Object AllyPRI; Str AllyString)
+  0000: nativeparm AllyNum
+  0009: nativeparm AllyPRI
+  0012: nativeparm AllyString
+  001b: nothing
+
+native function WillowHUDGFxMovie.UpdateAllyTalkingFromNetId(Struct Player)
+  0000: nativeparm Player
+  0009: nothing
+
+native function WillowHUDGFxMovie.UpdateAllyInjured(Int AllyNum; Object AllyPRI; Str AllyString)
+  0000: nativeparm AllyNum
+  0009: nativeparm AllyPRI
+  0012: nativeparm AllyString
+  001b: nothing
+
+native function WillowHUDGFxMovie.UpdateArenaMode()
+  0000: nothing
+
+native function WillowHUDGFxMovie.SetArenaMode(Bool bArenaMode)
+  0000: nativeparm bArenaMode
+  0009: nothing
+
+native function WillowHUDGFxMovie.SetArenaPlayerExists(Int ArenaNum; Bool bExists)
+  0000: nativeparm ArenaNum
+  0009: nativeparm bExists
+  0012: nothing
+
+native function WillowHUDGFxMovie.UpdateArenaPlayer(Int ArenaNum; Object PRI; Object WVTI)
+  0000: nativeparm ArenaNum
+  0009: nativeparm PRI
+  0012: nativeparm WVTI
+  001b: nothing
+
+native function WillowHUDGFxMovie.extResAnimFinished()
+  0000: nothing
+
+native function WillowHUDGFxMovie.ShowForPlayer(Int PlayerNum)
+  0000: nativeparm PlayerNum
+  0009: nothing
+
+native function WillowHUDGFxMovie.HideForPlayer(Int PlayerNum)
+  0000: nativeparm PlayerNum
+  0009: nothing
+
+native function WillowHUDGFxMovie.UpdateMainFrame(Bool bSkipOpeningAnim)
+  0000: defaultparm(false)
+  0005: nativeparm bSkipOpeningAnim
+  000e: nothing
+
+native function WillowHUDGFxMovie.Refresh()
+  0000: nothing
+
+native function WillowHUDGFxMovie.PlayEchoCall(Object CallDef; Object Replayer; Bool bDisableEchoVideos; Bool bSkipFadeIn)
+  0000: nothing
+  0001: nativeparm CallDef
+  000a: nativeparm Replayer
+  0013: nativeparm bDisableEchoVideos
+  001c: nativeparm bSkipFadeIn
+  0025: nothing
+
+native function WillowHUDGFxMovie.StopEchoCall()
+  0000: nothing
+
+native function WillowHUDGFxMovie.ClearEchoCallCache(Int PlayerNum)
+  0000: nativeparm PlayerNum
+  0009: nothing
+
+native function WillowHUDGFxMovie.StartDynamicEchoUI(Str FrameLabel)
+  0000: nativeparm FrameLabel
+  0009: nothing
+
+native function WillowHUDGFxMovie.EndDynamicEchoUI()
+  0000: nothing
+
+native function WillowHUDGFxMovie.SetVehicleUIWidgetVisibility(Int PlayerNum; Bool bInVehicle; Bool bInTurret)
+  0000: nothing
+  0001: nativeparm PlayerNum
+  000a: nativeparm bInVehicle
+  0013: nativeparm bInTurret
+  001c: nothing
+
+native function WillowHUDGFxMovie.SetArenaUIWidgetVisibility(Int PlayerNum; Bool bInArena)
+  0000: nativeparm PlayerNum
+  0009: nativeparm bInArena
+  0012: nothing
+
+native function WillowHUDGFxMovie.UpdateCurrentTarget(Int PlayerNum; Interface CurrentTarget; Bool bMobileRing; Struct MobileRingLocation)
+  0000: nativeparm PlayerNum
+  0009: nativeparm CurrentTarget
+  0012: nativeparm bMobileRing
+  001b: nativeparm MobileRingLocation
+  0024: nothing
+
+native function WillowHUDGFxMovie.UpdateTargetInformation(Int PlayerNum; Bool bForceUpdateIcons)
+  0000: nothing
+  0001: nativeparm PlayerNum
+  000a: nativeparm bForceUpdateIcons
+  0013: nothing
+
+native function WillowHUDGFxMovie.extEnemyRingFadeOutFinished(Str ParentName)
+  0000: nativeparm ParentName
+  0009: nothing
+
+native function WillowHUDGFxMovie.extEnemyRingFadeInFinished(Str ParentName)
+  0000: nativeparm ParentName
+  0009: nothing
+
+native function WillowHUDGFxMovie.DisplayCouldNotPickUpMessage(Object Player; Str Message)
+  0000: nativeparm Player
+  0009: nativeparm Message
+  0012: nothing
+
+event function WillowHUDGFxMovie.AddCriticalText(Int PlayerNum; Str MessageString; Float Duration; Struct DrawColor; Object Related_PRI1; Struct TextMessage)
+  0000: if !(Greater_FloatFloat(Duration, 0.0)) goto 00d8
+  0013: TextMessage.Message = GFxUI.GFxMovie.ResolveDataStoreMarkup(MessageString)
+  0043: TextMessage.DestroyTime = Duration
+  0069: TextMessage.DrawColor = DrawColor
+  008f: CriticalTextMessages[PlayerNum].MessageArray.AddItem(TextMessage)
+  00c2: DrawCriticalText(PlayerNum)
+  00d5: goto 00d8
+  00d8: return nothing
+
+event function WillowHUDGFxMovie.AddChatText(Int PlayerNum; Str MessageString; Float Duration; Struct DrawColor; Object Related_PRI1; Struct TextMessage)
+  0000: if !(Greater_FloatFloat(Duration, 0.0)) goto 00d8
+  0013: TextMessage.Message = GFxUI.GFxMovie.ResolveDataStoreMarkup(MessageString)
+  0043: TextMessage.DestroyTime = Duration
+  0069: TextMessage.DrawColor = DrawColor
+  008f: ChatTextMessages[PlayerNum].MessageArray.AddItem(TextMessage)
+  00c2: DrawChatText(PlayerNum)
+  00d5: goto 00d8
+  00d8: return nothing
+
+event function WillowHUDGFxMovie.AddTrainingText(Int PlayerNum; Str MessageString; Str TitleString; Float Duration; Struct DrawColor; Str HUDInitializationFrame; Bool PausesGame; Float PauseContinueDelay; Object Related_PRI1; Bool bIsntActuallyATrainingMessage; Struct TextMessage; Object GI; Bool bCanPause; Object WGRI)
+  0000: nothing
+  0001: WGRI = WillowGameReplicationInfo(WPlayerOwner[PlayerNum].WorldInfo.GRI)
+  0051: if !(AndAnd_BoolBool(Greater_FloatFloat(Duration, 0.0), OrOr_BoolBool(AndAnd_BoolBool(WPlayerOwner[PlayerNum].IsTrainingEnabled(), OrOr_BoolBool(EqualEqual_ObjectObject(WGRI, None), EqualEqual_IntInt(WGRI.GetCurrPlaythrough(), 0))), bIsntActuallyATrainingMessage))) goto 0376
+  00d9: bCanPause = true
+  00e5: if !(PausesGame) goto 0184
+  00f2: GI = WPlayerOwner[PlayerNum].WorldInfo.Game
+  0139: if !(NotEqual_ObjectObject(GI, None)) goto 0178
+  0148: bCanPause = EqualEqual_IntInt(GI.GetNumPlayers(), 1)
+  0175: goto 0184
+  0178: bCanPause = false
+  0184: if !(OrOr_BoolBool(Not_PreBool(PausesGame), Not_PreBool(bCanPause))) goto 0306
+  01a4: if !(EqualEqual_IntInt(TrainingTextMessages[PlayerNum].MessageArray.Length, 0)) goto 01e7
+  01d1: OpenTrainingTextBox(PlayerNum)
+  01e4: goto 0211
+  01e7: TrainingTextMessages[PlayerNum].MessageArray.Remove(0,1)
+  0210: <endparms>
+  0211: TextMessage.Message = GFxUI.GFxMovie.ResolveDataStoreMarkup(MessageString)
+  0241: TextMessage.Title = GFxUI.GFxMovie.ResolveDataStoreMarkup(TitleString)
+  0271: TextMessage.DestroyTime = Duration
+  0297: TextMessage.DrawColor = DrawColor
+  02bd: TrainingTextMessages[PlayerNum].MessageArray.AddItem(TextMessage)
+  02f0: DrawTrainingText(PlayerNum)
+  0303: goto 0373
+  0306: WPlayerOwner[PlayerNum].GFxUIManager.WillowGFxUIManager.ShowTrainingDialog(GFxUI.GFxMovie.ResolveDataStoreMarkup(MessageString), GFxUI.GFxMovie.ResolveDataStoreMarkup(TitleString), PauseContinueDelay)
+  0373: goto 0389
+  0376: if !(LessEqual_FloatFloat(Duration, 0.0)) goto 0389
+  0389: if !(NotEqual_StrStr(HUDInitializationFrame, "")) goto 03c2
+  0399: bIsInitializingAnimPlaying = true
+  03a5: QueuedInitFrame[PlayerNum] = HUDInitializationFrame
+  03c2: return nothing
+
+event function WillowHUDGFxMovie.ClearTrainingText(Int PlayerNum)
+  0000: TrainingTextMessages[PlayerNum].MessageArray.Length = 0
+  0029: CloseTrainingTextBox(PlayerNum)
+  003c: return nothing
+
+native function WillowHUDGFxMovie.TickCriticalText(Int PlayerNum; Float DeltaTime)
+  0000: nativeparm PlayerNum
+  0009: nativeparm DeltaTime
+  0012: nothing
+
+native function WillowHUDGFxMovie.DrawCriticalText(Int PlayerNum)
+  0000: nativeparm PlayerNum
+  0009: nothing
+
+native function WillowHUDGFxMovie.GetFontColorTag(Struct DrawColor; Str ReturnValue)
+  0000: nativeparm DrawColor
+  0009: nothing
+
+native function WillowHUDGFxMovie.DrawChatText(Int PlayerNum)
+  0000: nativeparm PlayerNum
+  0009: nothing
+
+native function WillowHUDGFxMovie.DrawTrainingText(Int PlayerNum)
+  0000: nativeparm PlayerNum
+  0009: nothing
+
+native function WillowHUDGFxMovie.OpenTrainingTextBox(Int PlayerNum)
+  0000: nativeparm PlayerNum
+  0009: nothing
+
+native function WillowHUDGFxMovie.CloseTrainingTextBox(Int PlayerNum)
+  0000: nativeparm PlayerNum
+  0009: nothing
+
+native function WillowHUDGFxMovie.extTrainingTextBoxOpened(Str ParentName)
+  0000: nativeparm ParentName
+  0009: nothing
+
+native function WillowHUDGFxMovie.DisplayCrouchingIcon(Int PlayerNum; Bool bCrouched)
+  0000: nativeparm PlayerNum
+  0009: nativeparm bCrouched
+  0012: nothing
+
+ function WillowHUDGFxMovie.extBearingStripDirty()
+  0000: CachedBearing[0].Cached_Yaw = -1
+  0024: CachedBearing[1].Cached_Yaw = -1
+  0048: return nothing
+
+ function WillowHUDGFxMovie.extNewCharInitAnimationDone()
+  0000: bIsInitializingAnimPlaying = false
+  000c: UpdateCompassMinimapVisibility()
+  0016: return nothing
+
+ function WillowHUDGFxMovie.SetDangerousIconDifference(Int DangerousIconDifference; Int ImpossibleIconDifference)
+  0000: DangerousDifference = DangerousIconDifference
+  0013: ImpossibleDifference = ImpossibleIconDifference
+  0026: return nothing
+
+ function WillowHUDGFxMovie.OpenQuickSelectWeaponMenuForPlayer(Int Player; Int UpStatus; Int DownStatus; Int LeftStatus; Int RightStatus; Object UpThing; Object DownThing; Object LeftThing; Object RightThing; Int PlatformNumber; Array WeaponArray; Array WeaponTextureArray; Object GlobalsDef; Struct RarityColor)
+  0000: switch (Player)
+  0013: case 1: (next 0055)
+  0017: WeaponArray = P2WeaponSelect
+  002a: WeaponTextureArray = MyHUDDefinition.P2QuickSlotTextures
+  0052: goto 011c
+  0055: case 2: (next 0098)
+  005a: WeaponArray = P3WeaponSelect
+  006d: WeaponTextureArray = MyHUDDefinition.P3QuickSlotTextures
+  0095: goto 011c
+  0098: case 3: (next 00db)
+  009d: WeaponArray = P4WeaponSelect
+  00b0: WeaponTextureArray = MyHUDDefinition.P4QuickSlotTextures
+  00d8: goto 011c
+  00db: default: (next ffff)
+  00de: WeaponArray = P1WeaponSelect
+  00f1: WeaponTextureArray = MyHUDDefinition.P1QuickSlotTextures
+  0119: goto 011c
+  011c: WillowHUDGFxMovie.SetResourcesInArray(WeaponArray, WeaponTextureArray, UpThing, DownThing, LeftThing, RightThing)
+  015c: WillowHUDGFxMovie.PrivateOpenQuickSelectWeaponMenuForPlayer(Player, UpStatus, DownStatus, LeftStatus, RightStatus, PlatformNumber)
+  019c: GlobalsDef = class(WillowGlobals.WillowGlobals.GetWillowGlobals()).GetGlobalsDefinition()
+  01db: RarityColor = GlobalsDef.GetRarityColorForLevel(UpThing.RarityLevel)
+  0222: SetSlotRarityColorForPlayer(Player, 1, cast3a(RarityColor.R), cast3a(RarityColor.G), cast3a(RarityColor.B))
+  0290: RarityColor = GlobalsDef.GetRarityColorForLevel(DownThing.RarityLevel)
+  02d7: SetSlotRarityColorForPlayer(Player, 2, cast3a(RarityColor.R), cast3a(RarityColor.G), cast3a(RarityColor.B))
+  0346: RarityColor = GlobalsDef.GetRarityColorForLevel(LeftThing.RarityLevel)
+  038d: SetSlotRarityColorForPlayer(Player, 3, cast3a(RarityColor.R), cast3a(RarityColor.G), cast3a(RarityColor.B))
+  03fc: RarityColor = GlobalsDef.GetRarityColorForLevel(RightThing.RarityLevel)
+  0443: SetSlotRarityColorForPlayer(Player, 4, cast3a(RarityColor.R), cast3a(RarityColor.G), cast3a(RarityColor.B))
+  04b2: return nothing
+
+ function WillowHUDGFxMovie.SetResourcesInArray(Array Resources; Array TextureNames; Object UpThing; Object DownThing; Object LeftThing; Object RightThing; Int Idx)
+  0000: if !(NotEqual_ObjectObject(RTM, None)) goto 02c7
+  000f: out Resources.Length = 4
+  001c: out Resources[0].Mesh = class(CellsNavigator.ConstructInvMesh(UpThing))
+  0063: out Resources[1].Mesh = class(CellsNavigator.ConstructInvMesh(DownThing))
+  00aa: out Resources[2].Mesh = class(CellsNavigator.ConstructInvMesh(LeftThing))
+  00f2: out Resources[3].Mesh = class(CellsNavigator.ConstructInvMesh(RightThing))
+  013a: Idx = 0
+  0145: if !(Less_IntInt(Idx, 4)) goto 02c7
+  0155: if !(EqualEqual_ObjectObject(out Resources[Idx].Tex, None)) goto 024e
+  0181: out Resources[Idx].Tex = RTM.GearboxFramework.GearboxRenderTextureManager.GetThumbnail(128, 128, 0, MyHUDDefinition.QUICKSLOT_TEX_WIDTH, MyHUDDefinition.QUICKSLOT_TEX_HEIGHT)
+  0209: SetExternalTexture(cast57(out TextureNames[Idx]), out Resources[Idx].Tex)
+  024e: RTM.GearboxFramework.GearboxRenderTextureManager.SetThumbnailMesh(out Resources[Idx].Tex, out Resources[Idx].Mesh)
+  02b9: AddAdd_Int(Idx)
+  02c4: goto 0145
+  02c7: return nothing
+
+ function WillowHUDGFxMovie.PrivateOpenQuickSelectWeaponMenuForPlayer(Int ControllerId; Int UpStatus; Int DownStatus; Int LeftStatus; Int RightStatus; Int PlatformNumber)
+  0000: ActionScript("OpenQuickSelectWeaponMenuForPlayer")
+  002e: return nothing
+
+ function WillowHUDGFxMovie.HideQuickSelectWeaponMenuForPlayer(Int Player; Byte ReturnValue; Array Args; Float DesiredSlotNumber; Byte DesiredSlot; Str PlayerStr)
+  0000: Args.Length = 1
+  000c: Args[0].Type = 3
+  002d: Args[0].S = "off"
+  0051: PlayerStr = Concat_StrStr("p", cast53(Add_IntInt(Player, 1)))
+  006e: DesiredSlotNumber = GetVariableNumber(Concat_StrStr(PlayerStr, "DesiredQuickSlot"))
+  009f: Invoke(Concat_StrStr(PlayerStr, ".radial.gotoAndStop"), Args)
+  00db: switch (Player)
+  00ee: case 1: (next 0108)
+  00f2: WillowHUDGFxMovie.FreeResourcesInArray(P2WeaponSelect)
+  0105: goto 0157
+  0108: case 2: (next 0123)
+  010d: WillowHUDGFxMovie.FreeResourcesInArray(P3WeaponSelect)
+  0120: goto 0157
+  0123: case 3: (next 013e)
+  0128: WillowHUDGFxMovie.FreeResourcesInArray(P4WeaponSelect)
+  013b: goto 0157
+  013e: default: (next ffff)
+  0141: WillowHUDGFxMovie.FreeResourcesInArray(P1WeaponSelect)
+  0154: goto 0157
+  0157: DesiredSlot = cast43(DesiredSlotNumber)
+  016c: return DesiredSlot
+  0176: return return
+
+ function WillowHUDGFxMovie.FreeResourcesInArray(Array Resources; Int Idx)
+  0000: if !(NotEqual_ObjectObject(RTM, None)) goto 011b
+  000f: Idx = 0
+  001a: if !(Less_IntInt(Idx, out Resources.Length)) goto 011b
+  0032: RTM.GearboxFramework.GearboxRenderTextureManager.SetThumbnailMesh(out Resources[Idx].Tex, None)
+  0078: RTM.GearboxFramework.GearboxRenderTextureManager.FreeThumbnail(out Resources[Idx].Tex)
+  00bd: out Resources[Idx].Tex = None
+  00e5: out Resources[Idx].Mesh = None
+  010d: AddAdd_Int(Idx)
+  0118: goto 001a
+  011b: return nothing
+
+native function WillowHUDGFxMovie.DisplayBerserkGuide(Int PlayerNum)
+  0000: nativeparm PlayerNum
+  0009: nothing
+
+native function WillowHUDGFxMovie.DisplayLevelUp(Int PlayerNum)
+  0000: nativeparm PlayerNum
+  0009: nothing
+
+native function WillowHUDGFxMovie.DisplayDuel(Int PlayerNum)
+  0000: nativeparm PlayerNum
+  0009: nothing
+
+native function WillowHUDGFxMovie.DisplaySecondWind(Int PlayerNum)
+  0000: nativeparm PlayerNum
+  0009: nothing
+
+ function WillowHUDGFxMovie.HighlightSlotForPlayer(Int Player; Byte QuickSlot)
+  0000: ActionScript("HighlightSlotsForPlayer")
+  0023: return nothing
+
+ function WillowHUDGFxMovie.SetSlotRarityColorForPlayer(Int Player; Int Index; Int R; Int G; Int B)
+  0000: ActionScript("SetSlotRarityColorForPlayer")
+  0027: return nothing
+
+native function WillowHUDGFxMovie.ShowPickupCard(Bool bPrimaryPlayer)
+  0000: nativeparm bPrimaryPlayer
+  0009: nothing
+
+native function WillowHUDGFxMovie.HidePickupCard(Bool bPrimaryPlayer)
+  0000: nativeparm bPrimaryPlayer
+  0009: nothing
+
+native function WillowHUDGFxMovie.ShowPickupIcon(Int PlayerNum; Bool bCanPickup; Bool bAutoUse)
+  0000: nativeparm PlayerNum
+  0009: nativeparm bCanPickup
+  0012: nativeparm bAutoUse
+  001b: nothing
+
+native function WillowHUDGFxMovie.HidePickupIcon(Int PlayerNum)
+  0000: nativeparm PlayerNum
+  0009: nothing
+
+ function WillowHUDGFxMovie.extReadyForInventoryInfo(Str Path; Int CardIndex; Str PlayerID)
+  0000: PlayerID = Mid(Path, 9, 1)
+  0018: if !(EqualEqual_StrStr(PlayerID, "1")) goto 0037
+  0029: CardIndex = 0
+  0034: goto 0042
+  0037: CardIndex = 1
+  0042: class(InventoryCardGFx.SetInventoryCard(self, CardIndex, MyHUDOwner.SavedLookAtInventory, None, <emptyparm>))
+  008b: return nothing
+
+native function WillowHUDGFxMovie.extEquippedCardOpened(Str ParentName)
+  0000: nativeparm ParentName
+  0009: nothing
+
+native function WillowHUDGFxMovie.UpdateEquippedWeaponCardFrom(Int PlayerNum; Object TheWeapon)
+  0000: nativeparm PlayerNum
+  0009: nativeparm TheWeapon
+  0012: nothing
+
+native function WillowHUDGFxMovie.UpdateEquippedItemCardFrom(Int PlayerNum; Object TheItem)
+  0000: nativeparm PlayerNum
+  0009: nativeparm TheItem
+  0012: nothing
+
+native function WillowHUDGFxMovie.UpdateEquippedShieldCardFrom(Int PlayerNum; Object TheItem)
+  0000: nativeparm PlayerNum
+  0009: nativeparm TheItem
+  0012: nothing
+
+native function WillowHUDGFxMovie.UpdateEquippedMODCardFrom(Int PlayerNum; Object TheItem)
+  0000: nativeparm PlayerNum
+  0009: nativeparm TheItem
+  0012: nothing
+
+native function WillowHUDGFxMovie.UpdateEquippedCommDeckCardFrom(Int PlayerNum; Object TheItem)
+  0000: nativeparm PlayerNum
+  0009: nativeparm TheItem
+  0012: nothing
+
+native static function WillowHUDGFxMovie.SetEquippedCardUIStats(Object Movie; Int CardIndex; Array UIStats)
+  0000: nativeparm Movie
+  0009: nativeparm CardIndex
+  0012: nativeparm UIStats
+  001b: nothing
+
+native function WillowHUDGFxMovie.ShowToolTip(Int PlayerNum; Byte HUDIcon)
+  0000: nativeparm PlayerNum
+  0009: nativeparm HUDIcon
+  0012: nothing
+
+event function WillowHUDGFxMovie.SetRushIcons(Int PlayerNum; Int AugmentationNumber; Int RushNum; Struct Skill)
+  0000: if !(NotEqual_ObjectObject(WPlayerOwner[PlayerNum], None)) goto 0199
+  0019: RushNum = 1
+  0024: foreach WPlayerOwner[PlayerNum].WillowPlayerController.AllAugmentationsForSkillType(3, AugmentationNumber, true, true) (end 0125)
+  005d: Skill = WPlayerOwner[PlayerNum].PlayerSkills[AugmentationNumber]
+  0099: WillowGFxMovie.SingleArgInvokeS(Concat_StrStr(Concat_StrStr(Concat_StrStr(Concat_StrStr("p", cast53(Add_IntInt(PlayerNum, 1))), ".instinctbar.rush"), cast53(RushNum)), ".gotoAndStop"), Skill.Definition.ScaleformFrameName)
+  0119: AddAdd_PreInt(RushNum)
+  0124: iteratornext
+  0125: iteratorpop
+  0126: if !(Less_IntInt(RushNum, 5)) goto 0199
+  0136: WillowGFxMovie.SingleArgInvokeS(Concat_StrStr(Concat_StrStr(Concat_StrStr(Concat_StrStr("p", cast53(Add_IntInt(PlayerNum, 1))), ".instinctbar.rush"), cast53(RushNum)), ".gotoAndStop"), "none")
+  018b: AddAdd_PreInt(RushNum)
+  0196: goto 0126
+  0199: return nothing
+
+native function WillowHUDGFxMovie.RefreshKeys(Int GamePlayersIndex)
+  0000: nativeparm GamePlayersIndex
+  0009: nothing
+
+native function WillowHUDGFxMovie.ToggleBoundaryWarning(Int PlayerNum; Bool bEnable; Bool bForInjuredAlly)
+  0000: defaultparm(false)
+  0005: nativeparm PlayerNum
+  000e: nativeparm bEnable
+  0017: nativeparm bForInjuredAlly
+  0020: nothing
+
+native function WillowHUDGFxMovie.DoMissionStatusFanfare(Int PlayerNum; Str Frame; Object MissionDef; Bool bShowObjectiveFlourish; Int ObjectiveIndex)
+  0000: defaultparm(-1)
+  0009: nativeparm PlayerNum
+  0012: nativeparm Frame
+  001b: nativeparm MissionDef
+  0024: nativeparm bShowObjectiveFlourish
+  002d: nativeparm ObjectiveIndex
+  0036: nothing
+
+native function WillowHUDGFxMovie.AddSuicideToolTip(Int PlayerNum)
+  0000: nativeparm PlayerNum
+  0009: nothing
+
+ function WillowHUDGFxMovie.UpdateCachedXPValue(Int PlayerNum; Int ExpPoints)
+  0000: CachedXP[PlayerNum] = cast3f(ExpPoints)
+  001f: return nothing
+
+native function WillowHUDGFxMovie.extDuelClipEnded(Str ParentName)
+  0000: nativeparm ParentName
+  0009: nothing
+
+native function WillowHUDGFxMovie.HideBrickActionSkillGuides(Int PlayerNum)
+  0000: nativeparm PlayerNum
+  0009: nothing
+
+native function WillowHUDGFxMovie.ResumeBrickActionSkillGuides(Int PlayerNum)
+  0000: nativeparm PlayerNum
+  0009: nothing
+
+ function WillowHUDGFxMovie.AS_ClearLandmarks()
+  0000: ActionScript("ClearLandmarks")
+  001a: return nothing
+
+ function WillowHUDGFxMovie.RemoveLandmark(Object Object)
+  0000: if !(NotEqual_ObjectObject(MapHelper, None)) goto 0037
+  000f: MapHelper.RemoveLandmark(Object)
+  0037: return nothing
+
+ function WillowHUDGFxMovie.AddInteractiveObject(Object Object)
+  0000: bRebuildMinimapObjects = true
+  000c: return nothing
+
+event function WillowHUDGFxMovie.RebuildMinimapObjects()
+  0000: if !(NotEqual_ObjectObject(MapHelper, None)) goto 0057
+  000f: MapHelper.WillowGFxHelperMap.ClearMapObjects()
+  002e: AS_ClearLandmarks()
+  0038: MapHelper.BuildMapObjects()
+  0057: return nothing
+
+ function WillowHUDGFxMovie.SetMinimapShouldRotate(Int PlayerIdx; Int shouldRotate)
+  0000: MapHelper.SetMinimapShouldRotate(PlayerIdx, shouldRotate)
+  0031: return nothing
+
+event function WillowHUDGFxMovie.TryPlayInitMovieClip(Int PlayerIdx)
+  0000: if !(EqualEqual_StrStr(QueuedInitFrame[PlayerIdx], "")) goto 0030
+  001a: AS_TryPlayInitMovieClip(Add_IntInt(PlayerIdx, 1))
+  0030: return nothing
+
+ function WillowHUDGFxMovie.AS_TryPlayInitMovieClip(Int PlayerIdx)
+  0000: ActionScript("TryPlayInitMovieClip")
+  0020: return nothing

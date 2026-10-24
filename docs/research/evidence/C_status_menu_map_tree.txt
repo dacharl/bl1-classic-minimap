@@ -1,0 +1,62 @@
+13040:  [sprite1132 frame 0] label 'none'
+13041:  [sprite1132 frame 0] place char 1044 as 'themap' depth 1
+13057:  [sprite1132 frame 1] label 'arid'
+13058:  [sprite1132 frame 1] place char 1046 as 'themap' depth 1
+13059:  [sprite1132 frame 1] place char 1066 as 'landmarks' depth 6
+13060:  [sprite1132 frame 1] place char 1080 as 'players' depth 9
+13076:  [sprite1132 frame 2] label 'arid_arena'
+13077:  [sprite1132 frame 2] place char 1082 as 'themap' depth 1
+13093:  [sprite1132 frame 3] label 'arid_bunker'
+13094:  [sprite1132 frame 3] place char 1084 as 'themap' depth 1
+13110:  [sprite1132 frame 4] label 'arid_cave'
+13111:  [sprite1132 frame 4] place char 1086 as 'themap' depth 1
+13127:  [sprite1132 frame 5] label 'arid_mine'
+13128:  [sprite1132 frame 5] place char 1088 as 'themap' depth 1
+13144:  [sprite1132 frame 6] label 'dry'
+13145:  [sprite1132 frame 6] place char 1090 as 'themap' depth 1
+13161:  [sprite1132 frame 7] label 'interlude1'
+13162:  [sprite1132 frame 7] place char 1092 as 'themap' depth 1
+13178:  [sprite1132 frame 8] label 'interlude2'
+13179:  [sprite1132 frame 8] place char 1094 as 'themap' depth 1
+13195:  [sprite1132 frame 9] label 'interlude2_cave'
+13196:  [sprite1132 frame 9] place char 1096 as 'themap' depth 1
+13212:  [sprite1132 frame 10] label 'newhaven'
+13213:  [sprite1132 frame 10] place char 1100 as 'themap' depth 1
+13229:  [sprite1132 frame 11] label 'scrap'
+13230:  [sprite1132 frame 11] place char 1102 as 'themap' depth 1
+13246:  [sprite1132 frame 12] label 'scrap_arena'
+13247:  [sprite1132 frame 12] place char 1104 as 'themap' depth 1
+13263:  [sprite1132 frame 13] label 'scrap_canyon'
+13264:  [sprite1132 frame 13] place char 1106 as 'themap' depth 1
+13280:  [sprite1132 frame 14] label 'scrap_caves'
+13281:  [sprite1132 frame 14] place char 1108 as 'themap' depth 1
+13297:  [sprite1132 frame 15] label 'scrap_coast'
+13298:  [sprite1132 frame 15] place char 1110 as 'themap' depth 1
+13314:  [sprite1132 frame 16] label 'scrap_oldhaven'
+13315:  [sprite1132 frame 16] place char 1112 as 'themap' depth 1
+13331:  [sprite1132 frame 17] label 'scrap_piratebay'
+13332:  [sprite1132 frame 17] place char 1114 as 'themap' depth 1
+13348:  [sprite1132 frame 18] label 'scrap_scrapyard'
+13349:  [sprite1132 frame 18] place char 1116 as 'themap' depth 1
+13365:  [sprite1132 frame 19] label 'skag_gulley'
+13366:  [sprite1132 frame 19] place char 1118 as 'themap' depth 1
+13382:  [sprite1132 frame 20] label 'waste_arena'
+13383:  [sprite1132 frame 20] place char 1120 as 'themap' depth 1
+13399:  [sprite1132 frame 21] label 'waste_crimson'
+13400:  [sprite1132 frame 21] place char 1122 as 'themap' depth 1
+13416:  [sprite1132 frame 22] label 'waste_crimsonbunker'
+13417:  [sprite1132 frame 22] place char 1124 as 'themap' depth 1
+13433:  [sprite1132 frame 23] label 'waste_descent'
+13434:  [sprite1132 frame 23] place char 1044 as 'themap' depth 1
+13450:  [sprite1132 frame 24] label 'waste_digsite'
+13451:  [sprite1132 frame 24] place char 1126 as 'themap' depth 1
+13467:  [sprite1132 frame 25] label 'waste_vault'
+13468:  [sprite1132 frame 25] place char 1128 as 'themap' depth 1
+13484:  [sprite1132 frame 26] label 'trash'
+13485:  [sprite1132 frame 26] place char 1130 as 'themap' depth 1
+13498:  [sprite1132 frame 30] label 'dlcmap1'
+13499:  [sprite1132 frame 30] place char 1131 as 'themap' depth 1
+13526:  [sprite1154 frame 0] place char 1040 as 'mask' depth 1
+13527:  [sprite1154 frame 0] place char 1040 as 'mask' depth 5
+13528:  [sprite1154 frame 0] place char 1132 as 'maps' depth 8
+13541:[root frame 10] place char 1154 as 'map' depth 8
