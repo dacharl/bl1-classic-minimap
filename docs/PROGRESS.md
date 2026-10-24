@@ -6,6 +6,7 @@ This page tracks where the project stands: what works, what's installed, how to 
 
 ## Where it stands
 
+- **Next planned: external timing/performance telemetry.** PLAN_V11 is being grilled: confirmed separate in-process profiler, unchanged standard artifact, required MCP adapter, and explicitly started 60-second captures that stop/save automatically without periodic measurement-window writes. See GLOSSARY and ADR 0001. Planning only; no telemetry code or installation yet.
 - **Automatic test workers (2026-10-24):** task branch `test/auto-parallel-workers` adds CPU-based defaults for unit and mutation tests, independent unit processes with merged coverage, and clean mutation-worker shutdown on Python 3.13. CI and local commands use the same defaults; see CI.md and PHASE3 §3s. No runtime or installed files change.
 - **Feature worktree rebase:** v0.10/F7 work is rebased onto main `6f840a6`; both real-movie suites, all 11 automatic unit cases, coverage/mutation gates and lint pass. All 2,898 mutations complete without errors, timeouts or cleanup warnings (PHASE3 §3x).
 
@@ -36,6 +37,7 @@ This page tracks where the project stands: what works, what's installed, how to 
 | v0.8 | Enhanced zoom and icon size, north/objective edge indicators, "!"/turn-in mission givers | Run 11: disk-full crash (§3m). Run 12: zoom, icons, tilt and north confirmed; double marker and giver calls fixed in v0.8.1 (§3n) |
 | v0.9 | Enhanced's box art and 207.95 × 173.65 window, dock/icon values, edge indicators on the box border | Run 13: box matches; fixed zoom and clipped icons need correction (§3u) |
 | v0.10 | Native-style objective-fit zoom, full-icon edge handoff, F7 zoom diagnostics and console confirmation | Built; not installed or played (§3v/3w) |
+| v0.11 | Planned: separate optional profiler, telemetry-free core artifact, overhead validation | Not implemented; PLAN_V11 |
 
 ## Doc map
 
@@ -55,6 +57,8 @@ Docs are cited across the code and docs by bare name (e.g. "PHASE3 §3l", "PLAN_
 | [PLAN_V08.md](plans/PLAN_V08.md) | v0.8: Enhanced zoom (108% relative to the window), edge indicators, mission givers via classic's IMissionDirector script |
 | [PLAN_V09.md](plans/PLAN_V09.md) | v0.9: Enhanced's box and clip-layer window; its fixed-zoom conclusion is superseded by PLAN_V10 |
 | [PLAN_V10.md](plans/PLAN_V10.md) | v0.10: native `QuickAccessInit` objective-fit zoom (108% without objectives), full-icon edge handoff; N overlap matches Enhanced |
+| [PLAN_V11_MCP_HANDOFF.md](plans/PLAN_V11_MCP_HANDOFF.md) | Contract and task list for `steam-deck-scripts` to build the MCP performance adapter (PLAN_V11 decision 15): report schema v1, file layout, gates H0–H2, acceptance tests |
+| [PLAN_V11.md](plans/PLAN_V11.md) | External profiler first: artifact separation, reversible wrappers, prior MCP report-format research, bounded reports/tests and overhead validation; instrumented build only as fallback |
 | **log/** | |
 | [PHASE0.md](log/PHASE0.md) | SDK on classic, probe runs: world→map formula, centring formula, `Angle` = yaw°, tick hook |
 | [PHASE1.md](log/PHASE1.md) | `upkpatch.py` (movie swap, export and bulk-offset relocation). **§3's in-game "pass" was invalid** (see below) |

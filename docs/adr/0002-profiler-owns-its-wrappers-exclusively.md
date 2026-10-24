@@ -1,0 +1,3 @@
+# The profiler owns its wrappers exclusively
+
+The profiler add-on promises a clean call path after detach, so it supports only being the last wrapper on each function it measures. If another mod wraps one of those functions afterwards, the profiler's wrapper is trapped in that mod's closure and cannot be removed safely; the profiler reports a detach conflict, stops measuring, and leaves the other mod's replacement untouched instead of claiming full detachment. A hot reload of the core while attached is likewise unsupported: the capture aborts and only still-owned wrappers are removed. We accept losing coexistence with arbitrary third-party wrappers in exchange for an honest zero-overhead detach.

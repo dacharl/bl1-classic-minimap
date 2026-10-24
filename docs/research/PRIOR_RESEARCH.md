@@ -30,6 +30,21 @@ The prior decision chose a Canvas renderer fed by copied snapshots, and it expli
 - Co-op and split-screen. v1 targets player 1 only.
 - Threat selection. This mod uses `Pawn.IsEnemy` + `IsAliveAndWell` + range + the AI rule engine's `IsPawnShownInRadarForCurrentState`; the prior work left threats out of scope.
 
+## MCP/performance report formatting (reviewed 2026-10-24)
+
+PLAN_V11 now incorporates the earlier repository's diagnostic transport patterns. The main references
+are `docs/mcp.md`, the `2026-10-11-bl1-minimap-mcp-evidence` and `2026-10-15-mcp-evidence-summary` specs,
+`src/steam_deck_diagnostics/{minimap_bl1,legacy_bl1,bounded_json}.py`, and the POC's `runtime.py` checkpoint
+writer and `wireframe.py:TerrainTiming`. Reuse bounded/versioned JSON, atomic fixed-name publication,
+small summaries before detail, content-hash revisions and explicit last-known/partial/unknown states.
+Keep UTC identity/checkpoint timestamps separate from monotonic durations and CPU work separate from
+frame intervals/GPU cost. Source code has evolved beyond the older specs' version/size limits.
+
+The current `bl1-minimap` MCP provider is specific to BL1MinimapPOC's report path and allowlisted
+versions; it cannot consume this mod's SDK log or a new performance report without a distinct registered
+provider/adapter. PLAN_V11 proposes a separate optional profiler and its own report identity, while the
+normal minimap artifact contains no telemetry. No reader integration or live transport was verified here.
+
 ## Possible next steps drawn from the prior work
 
 - **Waypoint-slot freshness:** a read-only sampler for `WillowGameReplicationInfo.ActiveWaypointData[8].WaypointLocation/WaypointRadius` (prior status: *possible, layout-backed*), adding slot changes to the rebuild key.
