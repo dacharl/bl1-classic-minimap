@@ -389,7 +389,7 @@ No game runtime code, version, installed file or hash changed. Installed hashes 
 - whether calling the native `UpdateObjects` 20 times a second is cheap enough;
 - how the clip layer behaves when the map rotates.
 
-## 3p. v0.9.0: Enhanced's minimap box and window (PLAN_V09.md)
+## 3t. v0.9.0: Enhanced's minimap box and window (PLAN_V09.md)
 
 **Request:** the Enhanced footage shows a framed box and a taller view. Research how Enhanced draws the box and decides the zoom.
 
@@ -427,3 +427,52 @@ No game runtime code, version, installed file or hash changed. Installed hashes 
 - the view height;
 - edge indicators sitting on the border;
 - "!" and turn-in givers (from v0.8.1).
+
+## 3u. Run 13 (v0.9.0) → PLAN_V10
+
+**Seen** (Enhanced footage vs classic at the Skag Gully sign):
+- The box and window are the same size on screen as in the footage.
+- The map is about 2.5–3× less zoomed than Enhanced.
+- The objective edge diamond overlaps **N** when the objective is due north.
+- An objective just inside the top of the window is mostly clipped.
+
+**Causes** (PLAN_V10 research):
+- **Zoom:** Enhanced's `extInitComplete` calls the native `QuickAccessInit` (`0x14139a970`, found through the native table and the minimap vtable) between `ApplyScale(100)` and `AnalogScale(+8)`.
+  - It fits the player plus `GRI.ActiveWaypointData` into half the window, clamped to 100–400%. 108% is only the no-objective case.
+  - Both editions use the same art, and classic runs at 108% as designed (F7 `themap_w` 841.85).
+- **N overlap:** Enhanced does the same: its objective indicator draws over north, with no avoidance.
+- **Sliver:** Enhanced also clips icons between the window edge (±86.8 in y) and its edge threshold (90); classic hands over at 92.
+
+**No code changed yet.** The v0.10 plan: Enhanced's fit zoom computed in Python, and the objective handed to the edge diamond unless the whole icon is inside the window.
+
+## 3v. v0.10.0: objective-fit zoom and full-icon edge handoff (2026-10-24)
+
+Rebased `worktree-enhanced-minimap-box` onto main (`722be70`), preserving the uncommitted PLAN_V10 handoff with a stash, then restoring it. Read the merged AGENTS.md in full. Main's CI/release entries already used §3p–3r, so the branch's box/run-13 entries are now §3t/3u. The stash remains as a recovery copy.
+
+**Changes:** Python reproduces the recorded `QuickAccessInit` corner projection, half-window fit, 100–400 clamp and +8 step. Collection snapshots the pawn and nonzero waypoint slots, with the native's RadarMgr gate. Capture normalizes the current art scale to 100%, retains the fit across objective refreshes, and refits for new anchors/HUDs and explicit rebuilds (F8, Rebuild now, status-menu close). The existing zoom option multiplies the captured fit. F7 includes `zoom_fit` with points, raw, fitted and final values. The movie shows the objective icon only when its whole extent fits the window; otherwise it shows the edge diamond on the existing box-border path. North overlap remains as in Enhanced. Both version fields are 0.10.0.
+
+**Test-first evidence:** the nearby-objective hook scenario failed at 108 vs 400 before the zoom implementation. The F8 lifecycle test failed at 185.268496 vs 400 before explicit refitting. The diagnostics test failed because `zoom_fit` was absent. The movie's run-13 scenario failed because the icon at y=-80 stayed visible; the new handoff passes. Other scenarios cover the recorded 108/400/185.27/108 examples, zero slots, missing pawn/radar, the 150% option, objective-refresh preservation, anchor changes and horizontal/vertical edge cases at 100/150% icon size.
+
+**Validation:** both suites pass against the real built movie, including attach/fallback paths. The asset-free CI suite, Ruff, repository checks and quality-check tests pass; per-file coverage floors pass (mod: 89.94% lines, 82.84% branches). All 2,895 mutation cases completed: mod 2,164/2,856 killed (75.77%, floor 70%); packager 32/39 killed (82.05%, floor 80%); no timeouts, worker errors or pending cases. Rebase integration fixes restore the AS suite's required `struct` import and add Enhanced's box/window shape IDs to the synthetic fixture. The movie extracted from the new package matches the tested movie by SHA-256. Installed v0.9 hashes were independently checked and are unchanged.
+
+**Built locally (not installed):**
+- `dist/phase2/GfxHUD_Minimap.upk` (fresh GUID): `5bae8e3fadf52711a8b26265b7572b8df8da6a882e89163b4bf740767dfebc29`.
+- `dist/classic_minimap.sdkmod`: `63a57f97d0b5e067dd427c1e3364fd7f944183149d7496258e1dac7817cd6db6`.
+
+Installed files remain v0.9.0 (package `dc1292c5…ab9d`, mod `6df0c878…d7d7`). No installation or new commit was requested. In-game fit parity, icon handoff during rotation, and respawn lifecycle remain unverified. The existing run-13 SDK log was read; it records v0.9.0 at 108% and turn-in giver icons.
+
+## 3w. F7 console confirmation (2026-10-24, unreleased v0.10.0)
+
+**Request:** give in-game console feedback when F7 is pressed. Classic's extracted Engine package confirms `LocalPlayer.ViewportClient`, `GameViewportClient.ViewportConsole`, and `Console.OutputText(Text)` with one string parameter. Its script calls OutputTextLine, which appends to console Scrollback and refreshes ConsoleBufferText.
+
+**Change:** after writing the existing full diagnostic snapshot, F7 sends `[Classic Minimap] Diagnostic snapshot written to Binaries/Plugins/unrealsdk.log.` through the local player's viewport console. A missing player skips feedback; an unavailable console warns once in the SDK log and leaves the snapshot intact. Nothing opens the console automatically. This remains part of the uninstalled v0.10.0 build.
+
+**Tests:** the F7 keybind test first failed because the console received no confirmation. It now checks the exact confirmation plus the full diagnostic log. Further cases verify snapshots survive an absent console (with one warning across repeated presses) and an absent local player. Both real-movie suites, asset-free CI, Ruff, repository checks and coverage gates pass. Mod coverage is 90.00% lines / 84.44% branches. All 2,898 mutations completed: mod 2,171/2,859 killed (75.94%, floor 70%); packager 32/39 (82.05%, floor 80%). No mutant errors, timeouts or pending cases; mutation gates pass. The runner exited 0 but Windows reported temporary-directory cleanup warnings after the test results were complete (FRICTION).
+
+**Rebuilt SDK mod:** `f27f87fceb0458a580929ccf9ffb99845b4bc754ab1ac712584ba2bf2c8a110d` (supersedes §3v's SDK build). The movie package is unchanged. No installation: installed v0.9.0 hashes remain package `dc1292c5…ab9d`, mod `6df0c878…d7d7`. Console appearance is unverified in game.
+
+## 3x. Rebase onto automatic parallel workers (2026-10-24)
+
+At the user's request, rebased `worktree-enhanced-minimap-box` onto main `6f840a6` and restored the uncommitted v0.10/F7 changes from a new recovery stash. Resolved PROGRESS conflicts by retaining both the automatic-worker notes and the feature notes. Read the merged AGENTS.md in full. Main owns §3s, so branch entries now use §3t–3w and references were updated. All feature changes are unstaged; no new feature commit or installation.
+
+Rebuilt the movie from the local inputs: its SHA-256 is unchanged (`b5bafe9e…50d1`). Both real-movie suites pass. The new automatic unit runner passes all 11 cases using eight workers; combined coverage meets all existing floors (mod 90.00% lines / 84.44% branches). Dependency consistency, Ruff, repository checks and actionlint for both workflows pass. All 2,898 mutations complete with eight automatic workers: mod 2,171/2,859 (75.94%, floor 70%), packager 32/39 (82.05%, floor 80%). Both mutation gates pass with no timeouts, worker errors, pending cases or cleanup tracebacks. Main's Python 3.13 shutdown fix resolves the warning recorded in §3w. Runtime source, feature tests and README match the saved pre-rebase versions exactly. The SDK build hash remains `f27f87fc…110d`; installed v0.9 hashes remain as in §3w. In-game validation remains pending.

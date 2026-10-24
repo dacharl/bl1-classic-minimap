@@ -30,7 +30,8 @@ How it works (ENHANCED_NATIVE.md; PLAN_DIRECT.md step B):
     mission title and the checklist move to Enhanced's positions (its p<N>.UpdateEchoPosition);
   * rebuilds (mission/objective/area changes) swap the markers in place, without hiding the map;
   * Enhanced's minimap box: the map clip is laid out like Enhanced's (its box art, its 207.95 x 173.65
-    window), so docking, zoom (108%) and icon size are Enhanced's own values (PLAN_V09);
+    window), so docking and icon size use Enhanced's units (PLAN_V09); zoom fits the player and
+    objectives at capture, as Enhanced's QuickAccessInit does (PLAN_V10);
   * edge indicators for north and off-window
     objectives, and mission givers: "!" where classic's own GetEligibleMissions says a mission can start,
     the turn-in icon where GetRedeemableMissions says one can be handed in (PLAN_V08.md).
@@ -47,7 +48,7 @@ from mods_base import (SETTINGS_DIR, BoolOption, ButtonOption, ObjectFlags, Slid
 from unrealsdk.hooks import Type
 from unrealsdk.unreal import WeakPointer
 
-__version__ = "0.9.0"
+__version__ = "0.10.0"
 
 
 STAGE_W = 1280.0                       # classic HUD stage is 1280x720
@@ -77,10 +78,8 @@ SETTLE_SECONDS = 3.0                   # steam-deck-scripts specs: start after 3
 READY_TIMEOUT = 5.0                    # seconds to wait for the zone frame before re-initialising
 RETRY_INTERVAL = 1.0                   # MinimapCreate retry spacing while the HUD movie comes up
 MAX_ATTEMPTS = 60
-# Enhanced's minimap zoom: extInitComplete picks Scales[3] = 100 then AnalogScale(1.0) adds ZoomSpeedFactor 8
-# (class defaults, tools/upkprops.py) -> its art at 108%. Nothing else sets it (PLAN_V09: the Minimap
-# overrides only re-read ClipSize; no native SetMapScale). The art and the window match Enhanced's, so
-# 108% is "100%".
+# Enhanced's no-objective zoom: ApplyScale(100), QuickAccessInit's optional fit, then AnalogScale(+8).
+# With objectives, fit_zoom reproduces the native's 100..400 clamp (PLAN_V10 research 1).
 ENH_ZOOM = 108.0
 ZOOM_CHOICES = ["50%", "75%", "100%", "125%", "150%", "200%"]
 ANCHOR_RETRY = 1.0                     # no anchor yet (level still streaming): retry spacing...
@@ -178,7 +177,7 @@ class State:
         self.anchor_attempts = 0
         self.shown: Any = None             # last map._visible we set (None = unknown, set next tick)
         self.last_hidden_reason = "start"
-        self.rebuild_pending = False       # F8 / status menu closed: rebuild in place on the next tick
+        self.rebuild_pending = False       # explicit rebuild: refresh the fit and markers on the next tick
         # docking (PLAN_V07 3): layout name when docked, p1 signature it was computed for, HUD column state
         self.dock: Any = None
         self.p1_sig: Any = None
@@ -195,6 +194,11 @@ class State:
         self.cs: tuple[float, float] = (1.0, 1.0)
         self.frame = 0.0
         self.marks: list[tuple[str, str, float, float, float, Any]] = []
+        self.fit = ENH_ZOOM
+        self.fit_raw: Any = None
+        self.fit_points: list[tuple[float, float, float]] = []
+        self.zoom_points: list[tuple[float, float, float]] = []
+        self.fit_anchor: Any = None
 
 
 S = State()
@@ -497,6 +501,11 @@ def collect(pc: Any, movie: Any) -> bool:
             S.phase, S.retry_at = "anchorwait", time.time() + delay
             return False
         S.anchor = anchor_snapshot(anchor)
+        S.zoom_points = [vec3(pc.Pawn.Location)] if pc.Pawn is not None else []
+        gri = pc.WorldInfo.GRI
+        if gri is not None and gri.RadarMgr is not None:
+            S.zoom_points += [p for slot in gri.ActiveWaypointData
+                             if (p := vec3(slot.WaypointLocation)) != (0.0, 0.0, 0.0)]
         S.sources = object_sources(helper)
         S.givers = find_givers() if opt_givers.value else []
         S.sources += [(LANDMARK_CLIP, frame, *loc, False) for _, frame, loc in giver_states(pc)]
@@ -666,6 +675,14 @@ def capture(movie: Any, in_place: bool = False) -> bool:
         warn_once("xf:" + S.anchor.get("name", "?"), f"unusable map anchor {S.anchor.get('name')}: {ex}")
         return False
     S.cs = coord_scale(S.anchor["TextureSize"], w, h)    # ratio only: same at any zoom
+    fit_anchor = {k: v for k, v in S.anchor.items() if k != "fields"}
+    if S.fit_anchor != fit_anchor:
+        scale = get_num(movie, "map.maps.themap._xscale")
+        if not finite_positive(scale):
+            return False
+        S.fit_points = S.zoom_points[:]
+        S.fit_raw, S.fit = fit_zoom(S.fit_points, S.xf, S.cs, w * 100 / scale, h * 100 / scale)
+        S.fit_anchor = fit_anchor
     S.frame = get_num(movie, "map.maps._currentframe")
     S.marks = []
     for clip, frame, x, y, z, waypoint in S.sources:
@@ -683,9 +700,25 @@ def capture(movie: Any, in_place: bool = False) -> bool:
     return True
 
 
+def fit_zoom(points: list[tuple[float, float, float]], xf: tuple[float, ...],
+             cs: tuple[float, float], art_w: float, art_h: float) -> tuple[Any, float]:
+    """QuickAccessInit's world-box corner fit, then AnalogScale(+8) (PLAN_V10 research 1).
+
+    Keep the signed corner projection, including pitch/roll, just as the native does.
+    Zero projected spans impose no limit on that axis.
+    """
+    if len(points) < 2:
+        return None, ENH_ZOOM
+    spans = [max(p[i] for p in points) - min(p[i] for p in points) for i in range(3)]
+    du = sum(spans[i] * xf[i * 4 + 1] for i in range(3)) * cs[0] * art_w / 100
+    dv = -sum(spans[i] * xf[i * 4] for i in range(3)) * cs[1] * art_h / 100
+    raw = 0.5 * min(MASK_W / du if du else math.inf, -MASK_H / dv if dv else math.inf)
+    return raw, min(400.0, max(100.0, raw) + 8.0)
+
+
 def zoom_percent() -> float:
-    """themap scale for the chosen zoom: Enhanced's fixed 108% at 100% (PLAN_V08 1, PLAN_V09)."""
-    return ENH_ZOOM * float(opt_zoom.value.rstrip("%")) / 100.0
+    """Apply the user's multiplier to Enhanced's captured objective fit."""
+    return S.fit * float(opt_zoom.value.rstrip("%")) / 100.0
 
 
 def icon_percent() -> float:
@@ -1081,6 +1114,7 @@ def tick(pc: Any) -> None:
         check_dock(movie)
     if S.rebuild_pending:
         S.rebuild_pending = False
+        S.fit_anchor = None
         rebuild_in_place(pc, movie)
     elif now >= S.next_objective_check:
         S.next_objective_check = now + OBJECTIVE_CHECK_INTERVAL
@@ -1163,6 +1197,7 @@ def on_diag_key() -> None:
                 markers=len(S.marks), tint=S.tint, givers=len(S.givers),
                 giver_icons=[f for _, f, _ in giver_states(pc)] if pc is not None else None,
                 zoom=zoom_percent(), icon_scale=icon_percent(),
+                zoom_fit={"points": S.fit_points, "raw": S.fit_raw, "fitted": S.fit, "final": zoom_percent()},
                 captured_frame=S.frame, CoordScale=S.cs, Transform=S.xf,
                 threat_source=S.threat_source, radar_empty=S.radar_empty, radar_misses=S.radar_misses,
                 position=opt_position.value, dock=S.dock, dock_mode=S.dock_mode, hud_shifted=S.hud_on,
@@ -1180,6 +1215,12 @@ def on_diag_key() -> None:
         info.update(frame=get_num(movie, "map.maps._currentframe"),
                     themap_w=get_num(movie, "map.maps.themap._width"))
     log(f"diagnostics: {info}")
+    if pc is not None:
+        try:
+            pc.Player.ViewportClient.ViewportConsole.OutputText(
+                "[Classic Minimap] Diagnostic snapshot written to Binaries/Plugins/unrealsdk.log.")
+        except Exception as ex:
+            warn_once("diag-console", f"diagnostic console feedback unavailable ({type(ex).__name__}: {ex})")
 
 
 @hook("WillowGame.StatusMenuExGFxMovie:OnClose", Type.POST)

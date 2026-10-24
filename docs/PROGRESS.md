@@ -7,11 +7,14 @@ This page tracks where the project stands: what works, what's installed, how to 
 ## Where it stands
 
 - **Automatic test workers (2026-10-24):** task branch `test/auto-parallel-workers` adds CPU-based defaults for unit and mutation tests, independent unit processes with merged coverage, and clean mutation-worker shutdown on Python 3.13. CI and local commands use the same defaults; see CI.md and PHASE3 §3s. No runtime or installed files change.
+- **Feature worktree rebase:** v0.10/F7 work is rebased onto main `6f840a6`; both real-movie suites, all 11 automatic unit cases, coverage/mutation gates and lint pass. All 2,898 mutations complete without errors, timeouts or cleanup warnings (PHASE3 §3x).
 
 - **Works in game (confirmed through run 12):** zone art, landmarks, player centring, radar enemy dots, the objective turn-in tint, the Enhanced-style dock with the HUD tilt, ECHO/mission text moved aside, no-flicker rebuilds, DLC3 maps, Enhanced zoom and icon size, the north marker, and hiding during the tunnel, menus and death.
-- **Installed, not yet played:** v0.9.0 (branch `worktree-enhanced-minimap-box`).
+- **Run 13 (v0.9.0):** box size matches the footage, but the map is ~2.5–3× less zoomed and objectives near the top edge are clipped (PHASE3 §3u).
+- **Built, not installed:** v0.10.0 implements PLAN_V10's objective-fit zoom and switches to the edge diamond before an icon clips. Objective refreshes retain the fit; new anchors and explicit rebuilds refit. F7 reports the inputs and fitted/final zoom, and confirms the log write in the in-game console. Offline validation is recorded in PHASE3 §3v/3w; in-game checks remain pending.
+- **Installed:** v0.9.0 (branch `worktree-enhanced-minimap-box`).
   - The map clip is now laid out like Enhanced's: its box art, and its 207.95 × 173.65 window instead of v0.8's squeezed 220 × 141.
-  - Docking, zoom (108%) and icon size use Enhanced's own values (PHASE3 §3p).
+  - Docking and icon size use Enhanced's own values; its fixed 108% zoom is corrected in v0.10 (PHASE3 §3t).
   - It includes v0.8.1's fixes: the edge diamond handoff, and the mission-giver calls ("!" and turn-in icons, still unplayed).
 - **Earlier event:** run 11 crashed at startup because drive C: was full, not because of the mod (PHASE3 §3m).
 - **Repository setup (2026-10-24):** Git initialized for a source-only initial commit; AGENTS now requires test-first behavior changes, Conventional Commits and no agent attribution. Build outputs and extracted game packages are ignored (PHASE3 §3o).
@@ -31,7 +34,8 @@ This page tracks where the project stands: what works, what's installed, how to 
 | v0.6 | Transform computed in Python (Step B), radar enemy dots, objective status tint (from the Ghidra decomp) | Run 9: dots, tint and DLC3 confirmed (§3k) |
 | v0.7 | Hidden icon templates, in-place rebuilds, Enhanced dock with the HUD tilt, ECHO/quest/check shift | Run 10: confirmed (§3l) |
 | v0.8 | Enhanced zoom and icon size, north/objective edge indicators, "!"/turn-in mission givers | Run 11: disk-full crash (§3m). Run 12: zoom, icons, tilt and north confirmed; double marker and giver calls fixed in v0.8.1 (§3n) |
-| v0.9 | Enhanced's minimap box: its box art and 207.95 × 173.65 window (E sprite 187), Enhanced's own dock/zoom/icon values, edge indicators on the box border | Not yet played (§3p) |
+| v0.9 | Enhanced's box art and 207.95 × 173.65 window, dock/icon values, edge indicators on the box border | Run 13: box matches; fixed zoom and clipped icons need correction (§3u) |
+| v0.10 | Native-style objective-fit zoom, full-icon edge handoff, F7 zoom diagnostics and console confirmation | Built; not installed or played (§3v/3w) |
 
 ## Doc map
 
@@ -49,12 +53,13 @@ Docs are cited across the code and docs by bare name (e.g. "PHASE3 §3l", "PLAN_
 | [PLAN_DIRECT.md](plans/PLAN_DIRECT.md) | Step A (transient helper; v0.4.0–0.5.1) and Step B (transform in Python; implemented in v0.6.0, PHASE3 §3k) |
 | [PLAN_V07.md](plans/PLAN_V07.md) | Run 9 findings → v0.7: source-clip corner markers, no-flicker rebuild, Enhanced dock with skew, ECHO/quest shift |
 | [PLAN_V08.md](plans/PLAN_V08.md) | v0.8: Enhanced zoom (108% relative to the window), edge indicators, mission givers via classic's IMissionDirector script |
-| [PLAN_V09.md](plans/PLAN_V09.md) | v0.9: how Enhanced draws the minimap box (E sprite 187: box art, clip-layer window) and fixes the zoom (script-only 108%); classic rebuilt to that layout |
+| [PLAN_V09.md](plans/PLAN_V09.md) | v0.9: Enhanced's box and clip-layer window; its fixed-zoom conclusion is superseded by PLAN_V10 |
+| [PLAN_V10.md](plans/PLAN_V10.md) | v0.10: native `QuickAccessInit` objective-fit zoom (108% without objectives), full-icon edge handoff; N overlap matches Enhanced |
 | **log/** | |
 | [PHASE0.md](log/PHASE0.md) | SDK on classic, probe runs: world→map formula, centring formula, `Angle` = yaw°, tick hook |
 | [PHASE1.md](log/PHASE1.md) | `upkpatch.py` (movie swap, export and bulk-offset relocation). **§3's in-game "pass" was invalid** (see below) |
 | [PHASE2.md](log/PHASE2.md) | `swfbuild.py`: the minimap movie (status-menu map tree copied in, root AS functions) |
-| [PHASE3.md](log/PHASE3.md) | The SDK mod and every in-game run (§3b–3p: bugs, causes, fixes, run 11's disk-full crash, repository setup, v0.9 box) |
+| [PHASE3.md](log/PHASE3.md) | SDK mod, in-game runs, CI/release setup and v0.10 offline implementation (§3b–3x) |
 | [FRICTION.md](log/FRICTION.md) | What slowed work down (wrong assumptions, environment, agent shell/tool quirks, process) and ranked improvement suggestions |
 
 ## Installed right now (classic game folder)
@@ -62,7 +67,7 @@ Docs are cited across the code and docs by bare name (e.g. "PHASE3 §3l", "PLAN_
 | File | Version / SHA-256 |
 |---|---|
 | `WillowGame\CookedPC\Packages\Interface\GfxHUD_Minimap.upk` | `dc1292c5…ab9d` (built on the `worktree-enhanced-minimap-box` worktree; Enhanced box and window layout, turnin/newmission/north art, `MinimapEdges` on the box border) |
-| `sdk_mods\classic_minimap.sdkmod` | **v0.9.0** `6df0c878…d7d7`, untested in game (PHASE3 §3p). v0.8.1 backup is in the worktree's `dist\v081\`; older ones are in the main checkout's `dist\v080\`, `dist\v070\`, `dist\v060\`, `dist\v051\` |
+| `sdk_mods\classic_minimap.sdkmod` | **v0.9.0** `6df0c878…d7d7`, played in run 13 (PHASE3 §3u). v0.10.0 is built only. v0.8.1 backup is in the worktree's `dist\v081\`; older backups are in the main checkout's `dist\v080\`, `dist\v070\`, `dist\v060\`, `dist\v051\` |
 | `sdk_mods\minimap_probe.sdkmod` | probe v0.2. Leave it disabled; it's not needed any more |
 | `WillowGame\CookedPC\Packages\Interface\GfxHUD.upk` | **stock** `5c515c3e…3ea88` (backup: `dist\phase1\GfxHUD.orig.upk`) |
 
@@ -125,6 +130,7 @@ That's one zone so far. **The decomp (ENHANCED_NATIVE.md §3) shows that the tru
 
 - Hosted CI verification of automatic workers remains pending; local validation is recorded in PHASE3 §3s.
 
+- **v0.10.0:** install only when requested, with the game closed; compare fitted zoom with Enhanced, verify F8 refits and objective refreshes preserve zoom, check full-icon handoff at normal/enlarged icon sizes and while rotating, and verify F7's confirmation appears in the in-game console. North/objective overlap intentionally remains. No v0.10 in-game verification yet.
 - **v0.9.0 in-game check** (PLAN_V09):
   - The minimap shows Enhanced's framed box (dark background, border) and a taller view.
   - North and objective edge markers sit on the box border.

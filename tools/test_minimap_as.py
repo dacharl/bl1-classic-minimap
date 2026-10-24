@@ -9,6 +9,7 @@ import math
 import os
 from pathlib import Path
 import sys
+import struct
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import as2asm  # noqa: E402
@@ -230,7 +231,7 @@ class VM:
     def __init__(self, root):
         self.root = root
         self.funcs = {}
-        self.globals = {'Math': Obj(cos=math.cos, sin=math.sin, PI=math.pi, abs=lambda v: abs(num(v))),
+        self.globals = {'Math': Obj(cos=math.cos, sin=math.sin, PI=math.pi, abs=lambda v: abs(num(v)), max=max),
                         '_root': root, '_level0': root, 'Object': Obj,
                         'Number': lambda v=UNDEF: num(v), 'Array': lambda *a: ASArray(a), 'Color': self.color,
                         'flash': Obj(geom=Obj(Matrix=make_matrix))}
@@ -590,6 +591,21 @@ def main(path):
     o_out.props['_x'] = tm.get('_x') + 2.5 * tm.get('_width')
     vm.call('MinimapCmd', 'tick~0.5~0.5~0~0~0')
     assert e1.get('_visible') is True and o_out.get('_visible') is False
+    # Run 13: hand over before the objective is partly clipped by the actual window.
+    # Use the measured objective art extent (24.8 units at Icon size 100%).
+    vm.call('MinimapCmd', 'iconscale~100')
+    o_out.base_w = o_out.base_h = 24.8
+    o_out.props['_xscale'] = o_out.props['_yscale'] = 100
+    o_out.props.update(_x=0, _y=-80)
+    vm.call('MinimapCmd', 'tick~0.5~0.5~0~0~0')
+    assert e1.get('_visible') is True and o_out.get('_visible') is False, 'partial icon must become an edge diamond'
+    close(e1.get('_y'), cy - EY, 1e-6)
+    for dx, dy, size, outside in ((0, -70, 100, False), (95, 0, 100, True),
+                                  (90, 0, 100, False), (0, -70, 150, True),
+                                  (0, 80, 100, True), (-95, 0, 100, True)):
+        o_out.props.update(_x=dx, _y=dy, _xscale=size, _yscale=size)
+        vm.call('MinimapCmd', 'tick~0.5~0.5~0~0~0')
+        assert e1.get('_visible') is outside and o_out.get('_visible') is not outside, (dx, dy, size)
     # rotating the map moves north along the edge (Enhanced northMC.gotoAndStop(currentRot))
     vm.call('MinimapCmd', 'tick~0.5~0.5~-90~1~0')            # heading east -> maps rotated +90
     close(ms.get('_rotation'), 90)

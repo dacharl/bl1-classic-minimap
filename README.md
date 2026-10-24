@@ -11,7 +11,7 @@ A minimap for **Borderlands Game of the Year (classic)**, modelled on the one in
 
 The ECHO panel (including the Angel videos), the mission title and the objective checklist move left to make room while the minimap is shown, as they do in Enhanced. The minimap hides itself during the travel tunnel, in menus, in cutscenes and when you're down.
 
-> **Status:** v0.8.0, early. Earlier versions were tested in game (Arid Badlands, Skag Gully, T-Bone Junction); the v0.8 features (zoom, edge arrows, mission givers) haven't been played yet.
+> **Status:** v0.10.0 is built and tested offline; v0.9.0 is installed and was played in run 13. The new objective-fit zoom and full-icon edge handoff still need an in-game check. Earlier runs covered Arid Badlands, Skag Gully and T-Bone Junction.
 
 ## Requirements
 
@@ -46,7 +46,7 @@ Open **MODS → Classic Minimap**:
 | Position | **Docked** (default): where Enhanced puts it, tilted like the HUD, with ECHO and the mission text moved aside. **Custom**: uses the size and margin sliders below, with no tilt and no HUD changes. |
 | Docked size (%) | Size of the docked minimap. |
 | Size (%), Right margin, Top margin | Placement when Position is Custom. |
-| Zoom (vs Enhanced) | 100% matches Enhanced's minimap; lower shows more of the map. |
+| Zoom (vs Enhanced) | 100% uses Enhanced's objective-fit zoom, captured on map initialization or a rebuild; lower shows more of the map. Objective changes keep the fit; F8 recalculates it. |
 | Icon size (%) | Size of landmark, player and enemy icons; 100% matches Enhanced. |
 | Rotate with player | Rotate the map so you always face up (north marker moves around the edge). |
 | Show enemies | Red dots for enemies the radar tracks. |
@@ -55,7 +55,7 @@ Open **MODS → Classic Minimap**:
 | Hide compass | Hide the classic compass strip at the bottom. |
 | Rebuild now | Re-collect landmarks and objectives (same as F8). |
 
-**Keys:** **F8** rebuilds the minimap's markers. **F7** writes a diagnostic snapshot to the SDK log; please include it with bug reports.
+**Keys:** **F8** rebuilds the minimap's markers. **F7** writes a diagnostic snapshot to the SDK log and confirms it in the in-game console; please include the snapshot with bug reports.
 
 ## Troubleshooting
 

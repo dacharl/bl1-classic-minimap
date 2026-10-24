@@ -521,7 +521,7 @@ def main(gfx_path):
         assert abs(got - want) <= 1e-6 * max(1.0, abs(want)) + 1e-9, (got, want)
     close(mod.S.cs[0], COORD_SCALE.X); close(mod.S.cs[1], COORD_SCALE.Y)
     tm = movie.vm.lookup({}, 'map.maps.themap')
-    ENH_ZOOM_PCT = 108.0                                             # Enhanced's themap scale (PLAN_V09)
+    ENH_ZOOM_PCT = 400.0                    # nearby objective fits at Enhanced's maximum (PLAN_V10)
     close(tm.get('_xscale'), ENH_ZOOM_PCT, 1e-4)                    # zoom "100%" = Enhanced, set by the mod
     lm = [c for c in m.get('maps').dynamic() if c.frame == 'transition'][0]
     close(lm.get('_xscale'), 100, 1e-4)                              # icons at Enhanced's size too
@@ -963,17 +963,98 @@ def main(gfx_path):
     # F7 diagnostics: runs against the live state and logs every field (v0.8 added givers/zoom/icon scale)
     import contextlib
     import io as _io
+    console_lines = []
+    pc.Player = Struct(ViewportClient=Struct(ViewportConsole=Struct(OutputText=console_lines.append)))
     buf = _io.StringIO()
     with contextlib.redirect_stdout(buf):
         KEYBINDS['Minimap diagnostics']()
     diag = buf.getvalue()
+    assert console_lines == ['[Classic Minimap] Diagnostic snapshot written to Binaries/Plugins/unrealsdk.log.']
     assert 'diagnostics:' in diag and "'version': '%s'" % mod.__version__ in diag, diag[:300]
     for field in ('dock_mode', 'radar_active', 'givers', 'giver_icons', 'zoom', 'icon_scale', 'echo_x0'):
         assert "'%s'" % field in diag, field
+    # Feedback is optional when there is no viewport console; the diagnostic still reaches the log.
+    console = pc.Player.ViewportClient.ViewportConsole
+    pc.Player.ViewportClient.ViewportConsole = None
+    buf = _io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        KEYBINDS['Minimap diagnostics']()
+        KEYBINDS['Minimap diagnostics']()
+    assert buf.getvalue().count('diagnostics:') == 2
+    assert buf.getvalue().count('diagnostic console feedback unavailable') == 1
+    pc.Player.ViewportClient.ViewportConsole = console
+    get_local_pc = mod.get_pc
+    mod.get_pc = lambda: None
+    try:
+        buf = _io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            KEYBINDS['Minimap diagnostics']()
+        assert 'diagnostics:' in buf.getvalue()
+    finally:
+        mod.get_pc = get_local_pc
     mod.on_disable()
     assert movie2.root.get('map') is UNDEF and p1d.get('bearing').get('_visible') is True
     close(p1d.get('echo').get('_x'), 791.5); close(p1d.get('check1').get('_xscale'), 100.04)
     assert TEMPLATE.MovieInfo is STOCK_INFO, 'disable must restore the stock HUD movie'
+    # PLAN_V10 worked examples through the real tick hook, using recorded Arid geometry.
+    mod.on_enable()
+    mod.opt_zoom.value = '100%'
+    pc.Pawn.Location = vec(0, 0, 0)
+    for slot in slots:
+        slot.WaypointLocation = vec(0, 0, 0)
+    slots[0].WaypointLocation = vec(6000, 9000, 0)
+    pc.myHUD = HUD(Movie(gfx))
+    step(); step()
+    fitted_art = pc.myHUD.movie.vm.lookup({}, 'map.maps.themap')
+    close(fitted_art.get('_xscale'), 185.27, 0.02)
+    # Changing objectives refreshes markers but preserves the HUD's fitted zoom.
+    slots[0].WaypointLocation = vec(2000, 3000, 0)
+    step(0.6)
+    close(fitted_art.get('_xscale'), 185.27, 0.02)
+    KEYBINDS['Rebuild minimap']()
+    step()
+    close(fitted_art.get('_xscale'), 400)
+    for offset, expected in ((None, 108), ((20000, 30000, 0), 108), ((6000, 9000, 0), 185.27)):
+        slots[0].WaypointLocation = vec(*offset) if offset else vec(0, 0, 0)
+        KEYBINDS['Rebuild minimap']()
+        step()
+        close(fitted_art.get('_xscale'), expected, 0.02)
+    # The multiplier changes the displayed zoom without changing the captured fit.
+    mod.opt_zoom.value = '150%'
+    mod.opt_zoom.on_change_while_enabled()
+    step()
+    close(fitted_art.get('_xscale'), 277.9027, 0.02)
+    buf = _io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        KEYBINDS['Minimap diagnostics']()
+    assert "'zoom_fit':" in buf.getvalue(), 'F7 must explain the captured zoom'
+    assert "'fitted': 185.268" in buf.getvalue() and "'final': 277.902" in buf.getvalue()
+    # A different anchor in the same frame also refits (not just a new HUD movie).
+    mod.opt_zoom.value = '100%'
+    slots[0].WaypointLocation = vec(2000, 3000, 0)
+    old_location = FakeAnchor.Location
+    try:
+        FakeAnchor.Location = vec(100, 200, 0)
+        step(0.6)
+        close(fitted_art.get('_xscale'), 400)
+    finally:
+        FakeAnchor.Location = old_location
+    # The native gates waypoint collection on RadarMgr; the pawn alone uses 108%.
+    world.GRI.RadarMgr = None
+    KEYBINDS['Rebuild minimap']()
+    step()
+    close(fitted_art.get('_xscale'), 108)
+    world.GRI.RadarMgr = radar
+    # Collection can run without a pawn; one waypoint is still fewer than two points.
+    pawn = pc.Pawn
+    pc.Pawn = None
+    try:
+        mod.S.fit_anchor = None
+        assert mod.collect(pc, pc.myHUD.movie) and mod.capture(pc.myHUD.movie)
+        close(fitted_art.get('_xscale'), 108)
+    finally:
+        pc.Pawn = pawn
+    mod.on_disable()
     print('all minimap mod integration checks passed')
 
 

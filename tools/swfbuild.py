@@ -356,8 +356,8 @@ def new_functions():
 
     # MinimapEdges(): Enhanced's northMC / currentObjectiveMC (E_HUD Minimap class): an indicator on the window
     # edge in the direction of map north (always shown) and of each objective icon outside the window
-    # (shown only then). Enhanced's 360-frame sprites trace its own 220x180 frame; here the point is the ray
-    # from the mask centre meeting the mask rectangle (inset by half an icon), so it fits our window.
+    # (shown only then). The ray meets Enhanced's box-border rectangle; the visibility handoff uses the
+    # actual window inset by half the icon extent (PLAN_V10).
     a = Fn()
     a.if_not(('!', ('==', 'map', Ellipsis)), 'e_out')
     a.local('mk', ('mem', 'map', 'mask'))
@@ -378,7 +378,7 @@ def new_functions():
     a.local('k', ('/', ('mem', 'ms', '_xscale'), 100))
 
     def edge_point(tag):
-        # t = distance factor along (dx, dy) to the inset rectangle
+        # t = distance factor along (dx, dy) to the box-border rectangle
         a.local('ax', ('call', 'Math', 'abs', 'dx'))
         a.local('ay', ('call', 'Math', 'abs', 'dy'))
         a.local('t', 1000000)
@@ -428,10 +428,10 @@ def new_functions():
     a.label('e_have')
     a.setm('e', '_xscale', ('*', 'isc', OBJECTIVE_SCALE * 100)).setm('e', '_yscale', ('*', 'isc', OBJECTIVE_SCALE * 100))
     edge_point('eo')
-    # Hand the marker over at the inset border: inside, the objective's own icon shows; past it, only the
-    # edge diamond does. Both sit on the same spot at t = 1, so one marker slides onto the edge instead of
-    # a clipped icon plus a diamond (run 12 "double waypoint").
-    a.if_not(('<', 1, 't'), 'e_off')             # t > 1: the icon itself is inside the inset window
+    # PLAN_V10: the whole icon must fit the actual window. Keep the diamond on Enhanced's box path.
+    a.local('r', ('*', ('/', ('call', 'Math', 'max', ('mem', 'o', '_width'), ('mem', 'o', '_height')), 2), 'k'))
+    a.if_not(('!', ('<', ('-', 'hw', 'r'), 'ax')), 'e_off')
+    a.if_not(('!', ('<', ('-', 'hh', 'r'), 'ay')), 'e_off')
     a.setm('e', '_visible', False)
     a.setm('o', '_visible', True)
     a.jump('e_next')

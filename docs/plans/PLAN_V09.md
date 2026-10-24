@@ -1,6 +1,10 @@
 # v0.9 plan: Enhanced's minimap box and window (2026-10-24)
 
-**Implemented as v0.9.0** (PHASE3 §3p).
+**Implemented as v0.9.0** (PHASE3 §3t).
+
+**Zoom correction after run 13:** the fixed-108% conclusion below applies only without objectives.
+`extInitComplete` also calls native `QuickAccessInit`, which fits the player and objectives before the +8 step.
+See PLAN_V10 for the recorded native evidence and v0.10 implementation; the box/window research remains valid.
 
 Run 12 confirmed v0.8's zoom, icons, tilt and north marker. Enhanced footage still looks different: a framed box with a dark background and a taller view. This plan reproduces Enhanced's minimap clip itself instead of approximating it with classic's status-menu mask.
 
@@ -48,7 +52,7 @@ Read with `tools/swftimeline.py` and a direct tag scan (the GFx gradient-image I
    - The VM map clip mirrors the new structure (box, top-left-anchored 207.95 × 173.65 mask, maps).
    - The AS suite checks the box/mask/clip-depth structure in the built movie, edge positions on ±110 × ±92, and the handoff.
    - The mod suite checks the dock matrix (Enhanced's own), zoom 108, icon scale 100, and the custom placement.
-4. **Build, install, docs:** PHASE3 §3p, PROGRESS, commit on the worktree branch.
+4. **Build, install, docs:** PHASE3 §3t, PROGRESS, commit on the worktree branch.
 
 ## Not changed
 

@@ -51,6 +51,14 @@ The suggestions at the end are ranked by how much time they would have saved.
 | Renaming and moving docs touched many references | Bare-name citations across code and docs | Scripted the change; the link checker caught nothing broken (keep running it) |
 | One very long session reached compaction more than once | Many versions and in-game rounds in one conversation | Commit per version on a branch, and start a fresh session per feature (PROGRESS and AGENTS make that cheap) |
 
+## Rebase follow-up (2026-10-24, v0.10)
+
+Rebase follow-up (2026-10-24, v0.10): main removed an unused `struct` import that the box branch's new AS assertions need, and the CI fixture lacked box/window shapes 81/82. The rebase merged cleanly but the real AS suite and asset-free CI suite exposed both issues; restore the import and fixture shapes. Main and the branch also reused PHASE3 §3p/3q, so the branch entries were renumbered §3t/3u. Run both real-movie and source-only suites after rebases, and check log headings for semantic collisions even when Git reports no conflicts.
+
+F7 follow-up mutation run: all 2,898 cases completed and gates passed, but eight workers emitted Windows `WinError 32` when removing temporary workspace directories during shutdown. The runner still wrote complete reports and exited 0. Keep test outcomes separate from cleanup warnings; investigate worker shutdown/temporary-directory ownership before changing the mutation runner. No source behavior was affected.
+
+Second rebase onto automatic workers: PROGRESS had an open-items conflict during both replay and stash restoration. Kept both sides' entries; main's new §3s required shifting branch sections to §3t–3w. This host's Git predates `git restore`; used `git reset HEAD -- .` to unstage restored changes without touching file contents. Automatic-worker shutdown now includes main's Python 3.13 cleanup fix; the full 2,898-case rerun passed without cleanup tracebacks.
+
 ## Suggested improvements (ranked)
 
 1. **Release and install tooling.**
