@@ -388,3 +388,42 @@ No game runtime code, version, installed file or hash changed. Installed hashes 
 - Scaleform `attachMovie` / `getInstanceAtDepth` / drawing API;
 - whether calling the native `UpdateObjects` 20 times a second is cheap enough;
 - how the clip layer behaves when the map rotates.
+
+## 3p. v0.9.0: Enhanced's minimap box and window (PLAN_V09.md)
+
+**Request:** the Enhanced footage shows a framed box and a taller view. Research how Enhanced draws the box and decides the zoom.
+
+**Findings:**
+- **Box:** Enhanced's minimap clip (E sprite 187) is box art (shape 81, 263.4 × 238.5, vector) at depth 3, the window as a clip layer `mask` (sprite 83 → shape 82, **207.95 × 173.65** centred) at depth 4, and `maps` at depth 6. Edge indicators ride ±110 × ±92 on the box border.
+- **Zoom:** a fixed **108%**, set only by script (`extInitComplete`: `Scales[3]` = 100, then `AnalogScale(+1 × 8)`).
+  - The Minimap's `ApplyScale`/`ApplyAnalogScale` overrides only re-read `ClipSize`.
+  - The root and Minimap `SetMapScale` pass the value through to `themap._xscale`.
+  - The decoded Enhanced exe has no `SetMapScale` string.
+  - The art and its placements are identical in both editions.
+- **So:** v0.8's zoom already matched. The view differed because v0.8 squeezed classic's status-menu mask (820.75 × 527) to 220 units wide (**220 × 141** visible, about 20% less height than Enhanced), and there was no box art.
+
+**v0.9.0:**
+- **Movie:** `bl1mm_map` is built like E 187.
+  - Enhanced shapes 81 (box) and 82 (window) are copied as 1307/1308. The window is wrapped in sprite 1309 and placed top-left anchored (−103.95, −86.8) at depth 4 with clip depth 6, so `map.mask` still reports the window rectangle.
+  - Classic's `maps` (1132) sits at depth 6; the status-menu mask (1040) is dropped from the copy.
+  - Edge indicators now sit on Enhanced's path (window half-size + 6 / + 5.15, i.e. ±110 × ±92) instead of inset.
+- **Mod:**
+  - Window constants are Enhanced's.
+  - **Docked:** Enhanced's `p1` matrix as is (scaled only by Docked size).
+  - **Zoom:** 108% × option. **Icons:** 100% × option (no 3.73× compensation).
+  - **Custom:** keeps its meaning (window = 820.75 px × Size%, top-right at the margins).
+
+**Tests:**
+- **AS:** built-movie structure (box at depth 3, clip-layer `mask` at depth 4 masking to 6, `maps` at depth 6); edge positions on ±110 × ±92; handoff unchanged.
+- **Mod:** dock matrix is Enhanced's own; zoom 108; icons 100; Custom geometry; no-transform fallback at 0.698.
+- Both pass.
+
+**Installed:** package `dc1292c5…ab9d`, mod `6df0c878…d7d7`. v0.8.1 is backed up in the worktree's `dist\v081\`; bulk-data check clean.
+
+**Built on branch `worktree-enhanced-minimap-box`.**
+
+**Not verified in game:**
+- the box looks like the footage;
+- the view height;
+- edge indicators sitting on the border;
+- "!" and turn-in givers (from v0.8.1).

@@ -29,7 +29,9 @@ How it works (ENHANCED_NATIVE.md; PLAN_DIRECT.md step B):
     right-column HUD elements (transform.matrix, with an unsheared fallback), and while it shows, ECHO, the
     mission title and the checklist move to Enhanced's positions (its p<N>.UpdateEchoPosition);
   * rebuilds (mission/objective/area changes) swap the markers in place, without hiding the map;
-  * Enhanced's zoom and icon size relative to the window, edge indicators for north and off-window
+  * Enhanced's minimap box: the map clip is laid out like Enhanced's (its box art, its 207.95 x 173.65
+    window), so docking, zoom (108%) and icon size are Enhanced's own values (PLAN_V09);
+  * edge indicators for north and off-window
     objectives, and mission givers: "!" where classic's own GetEligibleMissions says a mission can start,
     the turn-in icon where GetRedeemableMissions says one can be handed in (PLAN_V08.md).
 """
@@ -45,13 +47,16 @@ from mods_base import (SETTINGS_DIR, BoolOption, ButtonOption, ObjectFlags, Slid
 from unrealsdk.hooks import Type
 from unrealsdk.unreal import WeakPointer
 
-__version__ = "0.8.1"
+__version__ = "0.9.0"
 
 
 STAGE_W = 1280.0                       # classic HUD stage is 1280x720
-MASK_RIGHT, MASK_TOP = 885.0, 72.0     # mask's right/top edge in the map clip's local space
-MASK_LEFT, MASK_W, MASK_H = 64.25, 820.75, 527.0   # map.mask in the clip (ViewSize logged by the helper)
-ENH_WINDOW_W = 220.0                   # Enhanced minimap window width in its clip (edge test |x| > 110)
+# The map clip is laid out like Enhanced's minimap clip (E_HUD sprite 187, PLAN_V09): its window (E shape 82,
+# 207.95 x 173.65) centred on the clip origin, its box art behind. Docking, zoom and icons are therefore in
+# Enhanced's own units.
+MASK_LEFT, MASK_TOP, MASK_W, MASK_H = -103.95, -86.8, 207.95, 173.65
+MASK_RIGHT = MASK_LEFT + MASK_W
+CUSTOM_REF_W = 820.75                  # Custom position: window width in px at Size 100% (pre-v0.9 meaning)
 DOCK_CHECK_INTERVAL = 1.0              # re-dock when p1 moves or a layout switch replaces it
 LAYOUT_MATCH = 2.0                     # p1.echo authored _x tolerance for identifying the layout
 CHECK_SCALE = (92.02, 92.0)            # Enhanced check<n> matrix (0.918, 0.064 / 0.920) as _xscale/_yscale
@@ -73,8 +78,9 @@ READY_TIMEOUT = 5.0                    # seconds to wait for the zone frame befo
 RETRY_INTERVAL = 1.0                   # MinimapCreate retry spacing while the HUD movie comes up
 MAX_ATTEMPTS = 60
 # Enhanced's minimap zoom: extInitComplete picks Scales[3] = 100 then AnalogScale(1.0) adds ZoomSpeedFactor 8
-# (class defaults, tools/upkprops.py) -> its art at 108% in a window ENH_WINDOW_W wide. The art is the same
-# size as ours, so relative to our window: 108 * MASK_W / ENH_WINDOW_W (~403%) is "100%".
+# (class defaults, tools/upkprops.py) -> its art at 108%. Nothing else sets it (PLAN_V09: the Minimap
+# overrides only re-read ClipSize; no native SetMapScale). The art and the window match Enhanced's, so
+# 108% is "100%".
 ENH_ZOOM = 108.0
 ZOOM_CHOICES = ["50%", "75%", "100%", "125%", "150%", "200%"]
 ANCHOR_RETRY = 1.0                     # no anchor yet (level still streaming): retry spacing...
@@ -249,15 +255,20 @@ def current_hud_movie(pc: Any) -> Any:
 
 def layout(movie: Any) -> bool:
     """Attach/place the map: docked (Enhanced placement, sheared) or at the custom size and margins."""
-    s = opt_scale.value / 100.0
-    x = STAGE_W - opt_margin_x.value - MASK_RIGHT * s
-    y = opt_margin_y.value - MASK_TOP * s
-    cmd(movie, "create", x, y, float(opt_scale.value))
+    x, y, s = custom_placement()
+    cmd(movie, "create", x, y, s * 100.0)
     v = get_num(movie, "map._x")          # Infinity when _root.map doesn't exist
     if not (isinstance(v, float) and math.isfinite(v)):
         return False
     dock(movie, x, y, s)
     return True
+
+
+def custom_placement() -> tuple[float, float, float]:
+    """Custom position: (x, y, clip scale) putting the window's top-right corner at the margins, the window
+    CUSTOM_REF_W x Size% wide."""
+    s = CUSTOM_REF_W * opt_scale.value / 100.0 / MASK_W
+    return STAGE_W - opt_margin_x.value - MASK_RIGHT * s, opt_margin_y.value - MASK_TOP * s, s
 
 
 def p1_signature(movie: Any) -> Any:
@@ -288,13 +299,12 @@ def current_layout(movie: Any) -> Any:
 
 
 def dock_matrix(lay: dict[str, Any], p1: tuple[float, ...]) -> tuple[float, ...]:
-    """Stage matrix for _root.map: our mask scaled to Enhanced's window, Enhanced's p1-space matrix
-    (shear included) centred on its placement, then p1's own transform (unsheared: x/y + scale)."""
-    a, b, c, d, etx, ety = lay["map"]
-    k = ENH_WINDOW_W / MASK_W * opt_dock_size.value / 100.0
+    """Stage matrix for _root.map: Enhanced's own p1-space placement of its minimap clip (shear included;
+    our clip has the same layout, PLAN_V09), scaled about the clip origin by Docked size, then p1's own
+    transform (unsheared: x/y + scale)."""
+    a, b, c, d, tx, ty = lay["map"]
+    k = opt_dock_size.value / 100.0
     la, lb, lc, ld = k * a, k * b, k * c, k * d
-    cx, cy = MASK_LEFT + MASK_W / 2.0, MASK_TOP + MASK_H / 2.0
-    tx, ty = etx - (la * cx + lc * cy), ety - (lb * cx + ld * cy)
     px, py, sx, sy = p1[0], p1[1], p1[2] / 100.0, p1[3] / 100.0
     return sx * la, sy * lb, sx * lc, sy * ld, sx * tx + px, sy * ty + py
 
@@ -346,8 +356,7 @@ def check_dock(movie: Any) -> None:
     """Re-dock when p1 moved, scaled, or was replaced (resolution or HUD layout change)."""
     sig = p1_signature(movie)
     if sig != S.p1_sig:
-        s = opt_scale.value / 100.0
-        dock(movie, STAGE_W - opt_margin_x.value - MASK_RIGHT * s, opt_margin_y.value - MASK_TOP * s, s)
+        dock(movie, *custom_placement())
 
 
 def teardown(movie: Any = None) -> None:
@@ -675,14 +684,13 @@ def capture(movie: Any, in_place: bool = False) -> bool:
 
 
 def zoom_percent() -> float:
-    """themap scale for the chosen zoom, relative to the window like Enhanced's 108% (PLAN_V08 1)."""
-    return ENH_ZOOM * MASK_W / ENH_WINDOW_W * float(opt_zoom.value.rstrip("%")) / 100.0
+    """themap scale for the chosen zoom: Enhanced's fixed 108% at 100% (PLAN_V08 1, PLAN_V09)."""
+    return ENH_ZOOM * float(opt_zoom.value.rstrip("%")) / 100.0
 
 
 def icon_percent() -> float:
-    """Icon scale: Enhanced draws icons at its map clip's 0.7, i.e. ENH_WINDOW_W units per window; ours sit
-    in the unscaled maps of a MASK_W window."""
-    return MASK_W / ENH_WINDOW_W * opt_icon_size.value
+    """Icon scale: our clip has Enhanced's layout, so its icons are already at Enhanced's size at 100%."""
+    return float(opt_icon_size.value)
 
 
 def place_static(movie: Any) -> None:

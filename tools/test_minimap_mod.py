@@ -488,11 +488,10 @@ def main(gfx_path):
         a, b, c, d, tx, ty = (mt.get(k) for k in ('a', 'b', 'c', 'd', 'tx', 'ty'))
         ea, eb, ec, ed, etx, ety = ENH[lay]['map']
         close(b / a, eb / ea * 100 / p1['sx'], 1e-6)              # the HUD's shear survives the composition
-        k = 220.0 / 820.75 * mod.opt_dock_size.value / 100.0
+        k = mod.opt_dock_size.value / 100.0                         # PLAN_V09: Enhanced's own clip layout
         close(a, p1['sx'] / 100 * ea * k, 1e-9); close(d, ed * k, 1e-9)
-        cx, cy = 64.25 + 820.75 / 2, 72.0 + 527.0 / 2              # mask centre lands on Enhanced's map spot
-        close(a * cx + c * cy + tx, p1['x'] + p1['sx'] / 100 * etx, 1e-4)
-        close(b * cx + d * cy + ty, p1['y'] + ety, 1e-4)
+        close(tx, p1['x'] + p1['sx'] / 100 * etx, 1e-4)             # clip origin (= window centre) lands on
+        close(ty, p1['y'] + ety, 1e-4)                               # Enhanced's map spot in p1
     check_dock(m, '16:9', P1_LAYOUTS['16:9'])
     p1c = movie.root.get('p1')
     close(p1c.get('echo').get('_x'), 791.5)                    # column untouched until the map shows
@@ -522,10 +521,10 @@ def main(gfx_path):
         assert abs(got - want) <= 1e-6 * max(1.0, abs(want)) + 1e-9, (got, want)
     close(mod.S.cs[0], COORD_SCALE.X); close(mod.S.cs[1], COORD_SCALE.Y)
     tm = movie.vm.lookup({}, 'map.maps.themap')
-    ENH_ZOOM_PCT = 108.0 * 820.75 / 220.0                            # Enhanced's 108% relative to the window
+    ENH_ZOOM_PCT = 108.0                                             # Enhanced's themap scale (PLAN_V09)
     close(tm.get('_xscale'), ENH_ZOOM_PCT, 1e-4)                    # zoom "100%" = Enhanced, set by the mod
     lm = [c for c in m.get('maps').dynamic() if c.frame == 'transition'][0]
-    close(lm.get('_xscale'), 820.75 / 220.0 * 100, 1e-4)            # icons at Enhanced's size too
+    close(lm.get('_xscale'), 100, 1e-4)                              # icons at Enhanced's size too
     ms = m.get('maps')
     icons = [c for c in ms.children.values() if c.depth >= 0]
     # landmarks + interactive object + objective slot; zero-vector record, player and co-op buddy skipped
@@ -711,9 +710,12 @@ def main(gfx_path):
     mod.opt_scale.value, mod.opt_zoom.value, mod.opt_hide_compass.value = 40, '150%', True
     mod.mark_layout_dirty()
     step()
-    close(m.get('_xscale'), 40); close(tm.get('_xscale'), ENH_ZOOM_PCT * 1.5, 1e-4)
-    s = mod.opt_scale.value / 100.0
-    close(m.get('_x') + 885.0 * s, 1280.0 - mod.opt_margin_x.value)
+    # Size keeps its pre-v0.9 meaning: the window is 820.75 px x Size% wide; its top-right corner at the margins
+    s = 820.75 * 0.40 / 207.95
+    close(m.get('_xscale'), s * 100, 1e-4); close(tm.get('_xscale'), ENH_ZOOM_PCT * 1.5, 1e-4)
+    close(207.95 * s, 820.75 * 0.40, 1e-6)
+    close(m.get('_x') + 104.0 * s, 1280.0 - mod.opt_margin_x.value, 1e-3)
+    close(m.get('_y') - 86.8 * s, mod.opt_margin_y.value, 1e-3)
     assert m.props['_matrix'].get('b') == 0.0 and mod.S.dock is None
     assert movie.root.get('p1').get('bearing').get('_visible') is False
     close(p1c.get('echo').get('_x'), 791.5); close(p1c.get('quest').get('_x'), 545.0)
@@ -947,8 +949,7 @@ def main(gfx_path):
         assert mod.S.phase == 'running' and movie9.GetVariableString('mmDockMode') == 'plain'
         assert mod.S.dock == '16:9' and mod.S.dock_mode == 'plain'
         m9 = movie9.root.get('map')
-        k = 220.0 / 820.75
-        close(m9.get('_xscale'), 0.698 * k * 100, 1e-6)
+        close(m9.get('_xscale'), 0.698 * 100, 1e-6)               # Enhanced's scale, without the shear
     finally:
         asvm.Clip.transform_works = True
 

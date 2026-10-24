@@ -9,11 +9,11 @@ Takes the stock classic HUD movie (from GfxHUD.upk) and the stock status-menu mo
 menus_ingame_redux.upk), both extracted from the user's own install with tools/upkpatch.py, and writes a
 HUD movie that additionally contains:
 
-  * the status menu's map clip tree - `maps` (sprite 1132, the vector zone art, landmark/player icon
-    clips and the dlcmap loader frame) plus `mask` (sprite 1040) - 92 characters, ids 1039-1132, which
-    the stock HUD (ids 1-764) does not use;
-  * a new sprite MAP_ID holding mask (depth 1, named), mask as clip layer (depth 5, clips to 18) and
-    maps (depth 8), placed exactly as in the status menu's sprite 1154, exported as "bl1mm_map". The SDK
+  * the status menu's `maps` clip tree (sprite 1132: the vector zone art, landmark/player icon clips and
+    the dlcmap loader frame), in ids the stock HUD (ids 1-764) does not use;
+  * a new sprite MAP_ID laid out like Enhanced's minimap clip (E_HUD sprite 187, PLAN_V09): Enhanced's
+    box art (depth 3), its 207.95 x 173.65 window as a clip layer named `mask` (depth 4) and `maps`
+    (depth 6), exported as "bl1mm_map". The SDK
     mod attaches it as _root.map via MinimapCreate(). In case attachMovie doesn't work under the game's
     Scaleform, one instance also sits on the root timeline as `mmfallback` (depth 600, 20000 px
     off-screen), which MinimapCreate renames to `map`. With the mod off, nothing is visible;
@@ -38,9 +38,8 @@ import as2asm  # noqa: E402
 from as2asm import Fn, function  # noqa: E402
 from swfdeps import DEFINES, SHAPES as SHAPE_CODES, Movie, read_tags, shape_bitmaps, skip_rect  # noqa: E402
 
-SOURCE_ROOTS = (1040, 1132)       # mask, maps in status_menu.gfx
-SOURCE_MAP_SPRITE = 1154          # status menu `map`; we copy its mask/maps placements
-KEEP_DEPTHS = (1, 5, 8)           # mask, mask (clip layer), maps
+SOURCE_ROOTS = (1132,)            # maps (zone art, landmark/player icon clips, dlcmap frame) in status_menu.gfx
+MAPS_SPRITE = 1132
 COPIED_FUNCTIONS = ('AddLandmark', 'UpdateLandmark', 'SetMapScale', 'InitDLC', 'SetMarkerColor')
 MAP_ID = 1200
 EXPORT_NAME = 'bl1mm_map'
@@ -50,11 +49,18 @@ FALLBACK_DEPTH = 600              # unused by the stock root timeline (1, 635..1
 FALLBACK_OFFSCREEN = -20000
 LANDMARK_SPRITE = 1066            # status menu landmark icons (frames objective .. questionmark)
 # Vector art copied from the Enhanced HUD movie (E_HUD; PLAN_V08.md): shape id there -> id here. No bitmaps.
-ENH_SHAPES = {108: 1301, 110: 1303, 179: 1305}     # turnin, newmission ("!"), north "N"
+ENH_SHAPES = {108: 1301, 110: 1303, 179: 1305,     # turnin, newmission ("!"), north "N"
+              81: 1307, 82: 1308}                   # minimap box (background + border), window (mask) (PLAN_V09)
 TURNIN_ART, NEWMISSION_ART, NORTH_ART = 1302, 1304, 1306   # one-frame wrapper sprites (as E 109, 111, 180)
+WINDOW_ART = 1309                 # wrapper placing the window shape top-left anchored (see map_sprite)
+# Enhanced's window (E shape 82, centred) and where its sprite 187 places things
+WINDOW_LEFT, WINDOW_TOP, WINDOW_W, WINDOW_H = -103.95, -86.8, 207.95, 173.65
+BOX_DEPTH, MASK_DEPTH, MAPS_DEPTH = 3, 4, 6
 OBJECTIVE_ART = 1050              # classic objective diamond sprite (placed at 0.55 in the landmark frames)
 EDGE_DEPTH = 100                  # north indicator; objective edge icons at EDGE_DEPTH + 1 + i
-EDGE_INSET = 12.0                 # icon half-size (icon units) kept inside the window edge
+# Enhanced's edge-indicator path is the rectangle +-110 x +-92 around the window centre: on the box border,
+# just outside the 207.95 x 173.65 window (E sprites 182/186 frame positions + their (0, -55) placement)
+EDGE_OUT_X, EDGE_OUT_Y = 110.0 - WINDOW_W / 2, 92.0 - WINDOW_H / 2
 OBJECTIVE_SCALE = 0.55
 SOURCE_CLIPS = ('landmarks', 'players', 'enemy')   # maps' icon templates that AddLandmark duplicates
 HUD_CLIPS = ('echo', 'quest', 'check1', 'check2', 'check3', 'check4', 'check5')   # p1 column we shift
@@ -364,8 +370,8 @@ def new_functions():
     a.local('hh', ('/', ('mem', 'mk', '_height'), 2))
     a.local('cx', ('+', ('mem', 'mk', '_x'), 'hw'))
     a.local('cy', ('+', ('mem', 'mk', '_y'), 'hh'))
-    a.local('ex', ('-', 'hw', ('*', EDGE_INSET, 'isc')))
-    a.local('ey', ('-', 'hh', ('*', EDGE_INSET, 'isc')))
+    a.local('ex', ('+', 'hw', EDGE_OUT_X))      # Enhanced's path: on the box border, around the window
+    a.local('ey', ('+', 'hh', EDGE_OUT_Y))
     a.local('R', ('*', ('mem', 'ms', '_rotation'), 0.017453292519943295))
     a.local('c', ('call', 'Math', 'cos', 'R'))
     a.local('s', ('call', 'Math', 'sin', 'R'))
@@ -562,17 +568,27 @@ def new_functions():
     return fns
 
 
-def map_sprite(status_menu_movie):
-    """New sprite: the status menu map's mask/maps placements (same tag bytes), one frame."""
-    body = status_menu_movie.defs[SOURCE_MAP_SPRITE][1]
-    kept = []
-    for code, tb in read_tags(body, 4, len(body)):
-        if code == 26 and tb[0] & 0x02 and struct.unpack_from('<H', tb, 1)[0] in KEEP_DEPTHS:
-            kept.append(tag(26, tb))
-    if len(kept) != len(KEEP_DEPTHS):
-        raise SystemExit('expected %d placements in sprite %d, found %d' % (len(KEEP_DEPTHS), SOURCE_MAP_SPRITE, len(kept)))
-    sprite = struct.pack('<HH', MAP_ID, 1) + b''.join(kept) + tag(1, b'') + tag(0, b'')
+def map_sprite():
+    """bl1mm_map, laid out like Enhanced's minimap clip (E_HUD sprite 187, PLAN_V09): the box art behind,
+    the window as a clip layer masking the zone art, classic's maps on top of the box. The window sprite is
+    anchored at its top-left corner, so map.mask._x/_y/_width/_height give the window rectangle the
+    centring and edge code use; the window itself is centred on the clip origin, as in Enhanced."""
+    box = tag(26, bytes([0x02]) + struct.pack('<HH', BOX_DEPTH, ENH_SHAPES[81]))
+    # PlaceObject2 field order: depth, character, matrix, name, clip depth
+    mask = tag(26, bytes([0x40 | 0x20 | 0x04 | 0x02]) + struct.pack('<HH', MASK_DEPTH, WINDOW_ART)
+               + translate_matrix(WINDOW_LEFT, WINDOW_TOP) + b'mask\0' + struct.pack('<H', MAPS_DEPTH))
+    maps = tag(26, bytes([0x20 | 0x02]) + struct.pack('<HH', MAPS_DEPTH, MAPS_SPRITE) + b'maps\0')
+    sprite = struct.pack('<HH', MAP_ID, 1) + box + mask + maps + tag(1, b'') + tag(0, b'')
     return tag(39, sprite)
+
+
+def translate_matrix(tx, ty):
+    """SWF MATRIX with only a translation (pixels)."""
+    a, b = int(round(tx * 20)), int(round(ty * 20))
+    n = max(a.bit_length(), b.bit_length(), (-a).bit_length(), (-b).bit_length()) + 1
+    bits = '0' + '0' + format(n, '05b') + format(sb(a, n), '0%db' % n) + format(sb(b, n), '0%db' % n)
+    bits += '0' * (-len(bits) % 8)
+    return int(bits, 2).to_bytes(len(bits) // 8, 'big')
 
 
 def sb(v, nbits):
@@ -581,12 +597,8 @@ def sb(v, nbits):
 
 def place_fallback():
     """PlaceObject2: MAP_ID as FALLBACK_NAME at FALLBACK_DEPTH, translated off-screen."""
-    tw = FALLBACK_OFFSCREEN * 20                     # twips
-    n = max(tw.bit_length() + 1, 2)
-    bits = '0' + '0' + format(n, '05b') + format(sb(tw, n), '0%db' % n) + format(sb(tw, n), '0%db' % n)
-    bits += '0' * (-len(bits) % 8)
-    matrix = int(bits, 2).to_bytes(len(bits) // 8, 'big')
-    body = bytes([0x26]) + struct.pack('<HH', FALLBACK_DEPTH, MAP_ID) + matrix + FALLBACK_NAME.encode() + b'\0'
+    body = (bytes([0x26]) + struct.pack('<HH', FALLBACK_DEPTH, MAP_ID)
+            + translate_matrix(FALLBACK_OFFSCREEN, FALLBACK_OFFSCREEN) + FALLBACK_NAME.encode() + b'\0')
     return tag(26, body)
 
 
@@ -623,6 +635,11 @@ def enhanced_art(enhanced):
         out.append(tag(code, struct.pack('<H', new) + body[2:]))
     out += [wrapper_sprite(TURNIN_ART, ENH_SHAPES[108]), wrapper_sprite(NEWMISSION_ART, ENH_SHAPES[110]),
             wrapper_sprite(NORTH_ART, ENH_SHAPES[179])]
+    # the window shape is centred; its wrapper shifts it so the sprite's origin is the window's top-left
+    out.append(tag(39, struct.pack('<HH', WINDOW_ART, 1)
+                   + tag(26, bytes([0x06]) + struct.pack('<HH', 1, ENH_SHAPES[82])
+                         + translate_matrix(-WINDOW_LEFT, -WINDOW_TOP))
+                   + tag(1, b'') + tag(0, b'')))
     return out
 
 
@@ -657,7 +674,7 @@ def build(hud, status_menu, enhanced):
     defs = [raw for code, body, raw in top_level(status_menu)
             if code in DEFINES and len(body) >= 2 and struct.unpack_from('<H', body, 0)[0] in ids]
     assert len(defs) == len(ids), (len(defs), len(ids))
-    new_ids = set(ENH_SHAPES.values()) | {TURNIN_ART, NEWMISSION_ART, NORTH_ART}
+    new_ids = set(ENH_SHAPES.values()) | {TURNIN_ART, NEWMISSION_ART, NORTH_ART, WINDOW_ART}
     if new_ids & (set(ids) | set(hud_movie.defs) | {MAP_ID}):
         raise SystemExit('character id clash for Enhanced art: %s' % sorted(new_ids & (set(ids) | set(hud_movie.defs))))
     li = [i for i, raw in enumerate(defs) if raw_id(raw) == LANDMARK_SPRITE]
@@ -672,7 +689,7 @@ def build(hud, status_menu, enhanced):
     export = tag(56, struct.pack('<H', 3) + b''.join(struct.pack('<H', cid) + name.encode() + b'\0' for cid, name in
                                                      ((MAP_ID, EXPORT_NAME), (NORTH_ART, 'bl1mm_north'),
                                                       (OBJECTIVE_ART, 'bl1mm_objective'))))
-    added = b''.join(defs) + map_sprite(sm_movie) + export + place_fallback() + do_action
+    added = b''.join(defs) + map_sprite() + export + place_fallback() + do_action
 
     root = top_level(hud)
     first_show = next(i for i, (c, _, _) in enumerate(root) if c == 1)

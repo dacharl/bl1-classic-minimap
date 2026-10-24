@@ -116,10 +116,13 @@ class Clip:
 
 
 def build_map_clip(name, depth):
-    """The bl1mm_map sprite: mask, maps{themap, landmarks, players} with the status menu's placements."""
+    """The bl1mm_map sprite as swfbuild lays it out (Enhanced's sprite 187, PLAN_V09): box art, the
+    207.95 x 173.65 window `mask` anchored at its top-left (-103.95, -86.8), maps{themap, landmarks,
+    players} at the clip origin."""
     m = Clip(name, None, depth)
-    mask = m.add(Clip('mask', None, -16383, 820.75, 527.0)); mask.props.update(_x=64.25, _y=72.0)
-    maps = m.add(Clip('maps', None, -16376)); maps.props.update(_x=414.25, _y=250.5)
+    m.add(Clip('box', None, -16381, 263.4, 238.5))
+    mask = m.add(Clip('mask', None, -16380, 207.95, 173.65)); mask.props.update(_x=-103.95, _y=-86.8)
+    maps = m.add(Clip('maps', None, -16378))
     maps.add(Clip('themap', None, -16383, 779.5, 352.2))   # 3118 x 1408.8 at 400%
     maps.add(Clip('landmarks', None, -16378))
     maps.add(Clip('players', None, -16375))
@@ -538,6 +541,15 @@ def main(path):
     assert {1306: 'bl1mm_north', 1050: 'bl1mm_objective', 1200: 'bl1mm_map'}.items() <= mv.exports.items()
     labels = [b.split(b'\0')[0].decode() for c, b in read_tags(mv.defs[1066][1], 4, len(mv.defs[1066][1])) if c == 43]
     assert labels[-3:] == ['questionmark', 'turnin', 'newmission'], labels
+    # PLAN_V09: bl1mm_map is Enhanced's minimap clip layout: box art at depth 3, the window as a clip layer
+    # named mask at depth 4 masking through depth 6, maps at depth 6
+    places = [b for c, b in read_tags(mv.defs[1200][1], 4, len(mv.defs[1200][1])) if c == 26]
+    by_depth = {struct.unpack_from('<H', b, 1)[0]: b for b in places}
+    assert sorted(by_depth) == [3, 4, 6], sorted(by_depth)
+    assert struct.unpack_from('<H', by_depth[3], 3)[0] == 1307                       # Enhanced box (E shape 81)
+    m4 = by_depth[4]
+    assert m4[0] & 0x40 and m4.endswith(b'mask\0' + struct.pack('<H', 6)), m4.hex()  # clip layer to depth 6
+    assert by_depth[6].endswith(b'maps\0') and struct.unpack_from('<H', by_depth[6], 3)[0] == 1132
 
     # icon scale (Enhanced draws icons at its map clip's 0.7; ours are scaled up to match)
     vm.call('MinimapCmd', 'clear')
@@ -555,9 +567,9 @@ def main(path):
     north = m.get('mmNorth')
     mk = m.get('mask')
     cx, cy = mk.get('_x') + mk.get('_width') / 2, mk.get('_y') + mk.get('_height') / 2
-    inset = 12.0 * 3.73
+    EX, EY = 110.0, 92.0                               # Enhanced's edge path (E sprites 182/186), on the box border
     assert isinstance(north, Clip) and north.frame == 'bl1mm_north'
-    close(north.get('_x'), cx, 1e-6); close(north.get('_y'), cy - (mk.get('_height') / 2 - inset), 1e-6)
+    close(north.get('_x'), cx, 1e-6); close(north.get('_y'), cy - EY, 1e-6)
     vm.call('MinimapCmd', 'add~map.maps.landmarks~0.52~0.5~0~objective')          # just right of the player
     vm.call('MinimapCmd', 'add~map.maps.landmarks~2.5~0.5~0~objective~16761888')  # far east, off the window
     assert len(root.get('mmObjectives')) == 2
@@ -565,7 +577,7 @@ def main(path):
     e0, e1 = m.get('mmEdge0'), m.get('mmEdge1')
     assert e0.get('_visible') is False, 'an objective inside the window gets no edge indicator'
     assert e1.get('_visible') is True and e1.frame == 'bl1mm_objective'
-    close(e1.get('_x'), cx + (mk.get('_width') / 2 - inset), 1e-6); close(e1.get('_y'), cy, 1e-3)
+    close(e1.get('_x'), cx + EX, 1e-6); close(e1.get('_y'), cy, 1e-3)
     close(e1.get('_xscale'), 373 * 0.55, 1e-6); assert e1.props.get('_rgb') == 16761888
     # run 12 "double waypoint": while the edge diamond shows, the objective's own icon (partly clipped at the
     # window border) is hidden; the inside one keeps its icon. At the switch point both sit at the same
@@ -581,7 +593,7 @@ def main(path):
     # rotating the map moves north along the edge (Enhanced northMC.gotoAndStop(currentRot))
     vm.call('MinimapCmd', 'tick~0.5~0.5~-90~1~0')            # heading east -> maps rotated +90
     close(ms.get('_rotation'), 90)
-    close(north.get('_x'), cx + (mk.get('_width') / 2 - inset), 1e-6); close(north.get('_y'), cy, 1e-6)
+    close(north.get('_x'), cx + EX, 1e-6); close(north.get('_y'), cy, 1e-6)
     vm.call('MinimapCmd', 'clear')
     assert root.get('mmObjectives') is UNDEF and root.get('mmEdges') is UNDEF and m.get('mmEdge1') is UNDEF
     vm.call('MinimapCmd', 'tick~0.5~0.5~0~0~0')
