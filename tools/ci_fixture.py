@@ -56,6 +56,12 @@ def native_contract():
     return functions
 
 
+def willow_body_font(fid=119):
+    """An empty DefineFont3 named WillowBody, shaped like the stock HUD's record (its glyphs come from the font
+    library at runtime)."""
+    return tag(75, struct.pack('<HBBB', fid, 0x04, 1, 11) + b'WillowBody\0' + b'\x00\x00\x02\x00')
+
+
 def fixture_inputs():
     status = movie([
         sprite(1040), sprite(1050), sprite(1066, [(1, 1050)], ['questionmark']),
@@ -64,9 +70,11 @@ def fixture_inputs():
     ])
     enhanced = movie([tag(2, struct.pack('<H', sid) + b'\x08\x00\x00\x00\x00\x00')
                       for sid in (81, 82, 108, 110, 127, 179)])
-    return movie([]), status, enhanced
+    return movie([willow_body_font()]), status, enhanced
 
 
-def build_fixture():
-    data, _ = build(*fixture_inputs())
+def build_fixture(original=False):
+    """The synthetic movie; original=True builds it without the Enhanced movie (original art, PLAN_V13)."""
+    hud, status, enhanced = fixture_inputs()
+    data, _ = build(hud, status, None if original else enhanced)
     return data

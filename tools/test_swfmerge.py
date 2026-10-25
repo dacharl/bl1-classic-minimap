@@ -287,7 +287,7 @@ class MergeTests(unittest.TestCase):
             self.merged(foreign_movie([gradient_image(5)]))
 
     def test_manifest_version_mismatch_is_refused(self):
-        with self.assertRaisesRegex(MergeRefused, 'reinstall GfxHUD_Minimap.upk'):
+        with self.assertRaisesRegex(MergeRefused, 'built for mod .*use Rebuild HUD movie'):
             swfmerge.merge(foreign_movie(), self.ours, '1.0.0')
 
     def test_compressed_movie_is_refused(self):

@@ -2,11 +2,11 @@
 
 **Status: H0 done (2026-10-24, PHASE3 §3z).** The schema is frozen in
 [PERF_REPORT_V1.md](../research/PERF_REPORT_V1.md), which supersedes section 4's draft where they differ,
-and the fixtures are in `tools/fixtures/perf_reports/` (5 valid, 16 invalid), produced by profiler 0.1.3
-(0.1.1 and 0.1.2 only add cores 0.10.1 and 0.10.2 to its allowlist; the schema is unchanged, so the provider should
-allow 0.1.0, 0.1.1, 0.1.2 and 0.1.3).
+and the fixtures are in `tools/fixtures/perf_reports/` (5 valid, 16 invalid), produced by profiler 0.1.4
+(0.1.1 to 0.1.4 only add cores 0.10.1, 0.10.2, 0.12.0 and 0.13.0 to its allowlist; the schema is unchanged, so the provider should
+allow 0.1.0, 0.1.1, 0.1.2, 0.1.3 and 0.1.4).
 The section 9 items are settled: the metric list is the 24 names in PERF_REPORT_V1, and the profiler's
-first version is `0.1.0` (current `0.1.3`). H1 and H2 are pending.
+first version is `0.1.0` (current `0.1.4`). H1 and H2 are pending.
 
 This document is the contract between the two repositories for PLAN_V11 decision 15.
 This repository (`bl1-classic-minimap`) builds the profiler add-on and owns the report format.

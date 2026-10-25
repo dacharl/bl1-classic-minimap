@@ -11,13 +11,18 @@ The hosted jobs need no game installation or credentials. Reports are retained f
 | File | Minimum line coverage | Minimum branch coverage | Minimum mutation score |
 |---|---:|---:|---:|
 | `sdk_mods/classic_minimap/__init__.py` | 89% | 81% | 70% |
-| `tools/as2asm.py` | 81% | 76% | Not gated |
-| `tools/swfbuild.py` | 97% | 78% | Not gated |
+| `sdk_mods/classic_minimap/swfmerge.py` | 90% | 80% | 70% (not yet measured) |
+| `sdk_mods/classic_minimap/hudmovie.py` | 90% | 85% | 70% (not yet measured) |
+| `sdk_mods/classic_minimap/swfbuild.py` | 97% | 78% | 70% (not yet measured) |
+| `sdk_mods/classic_minimap/as2asm.py` | 81% | 76% | 70% (not yet measured) |
+| `sdk_mods/classic_minimap/upk.py` | 88% | 70% | 70% (not yet measured) |
+| `sdk_mods/classic_minimap/swfdeps.py` | 60% | 45% | 70% (not yet measured) |
 | `tools/build_sdkmod.py` | 94% | 83% | 80% |
+| `tools/land_branch.py` | 92% | 85% | Not gated |
 | `sdk_mods/classic_minimap_profiler/__init__.py` | 95% | 95% | 85% |
 | `sdk_mods/classic_minimap_profiler/profiler.py` | 95% | 88% | 78% |
 
-The floors are configured in `pyproject.toml` and applied separately to each file. Missing reports or missing files fail. Coverage counts Python execution of the builder and assembler; it does not measure AS2 instruction coverage or actual game engine behavior.
+The builder moved into the mod in v0.13 (PLAN_V13 decision 16), so its files are shipped mod files and need both floors; the `tools/` files of the same names are wrappers and aren't gated. The mutation floors marked "not yet measured" are configured, but those files aren't in `cosmic-ray.toml`'s module list yet. The floors are configured in `pyproject.toml` and applied separately to each file. Missing reports or missing files fail. Coverage counts Python execution of the builder and assembler; it does not measure AS2 instruction coverage or actual game engine behavior.
 
 Mutation gates cover the shipped Python mod and SDK packager, configured in `cosmic-ray.toml` and `pyproject.toml`. The runner executes every default Cosmic Ray mutant in these files, including uncovered code. A passing original suite is required first. Each worker mutates an isolated source copy. Every mutant remains in the denominator: only a normal worker with a failing test earns a kill; timeouts count as undetected, and tool errors or incomplete results fail the gate. Survivor diffs are uploaded for investigation. This is mutation detection, not an assertion that all surviving mutations are bugs; equivalent mutants can survive.
 

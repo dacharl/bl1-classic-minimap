@@ -14,51 +14,9 @@ import struct
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from upk import Pkg  # noqa: E402
+from upk import Pkg, extract, find_export, raw_data_span, walk_tags  # noqa: E402,F401  (the reader lives in the mod)
 
 TAG = 0x9E2A83C1
-
-
-def find_export(pk, path):
-    for i, e in enumerate(pk.exports, 1):
-        if pk.path(i) == path:
-            return i, e
-    raise SystemExit('export %r not found' % path)
-
-
-def walk_tags(pk, b, p):
-    """Yield (name, type, tag_pos, data_pos, size) for a serialized property list until None."""
-    while True:
-        name = pk.fname(*struct.unpack_from('<ii', b, p))
-        if name == 'None':
-            return
-        typ = pk.fname(*struct.unpack_from('<ii', b, p + 8))
-        size = struct.unpack_from('<i', b, p + 16)[0]
-        q = p + 24
-        if typ == 'StructProperty':
-            q += 8
-        elif typ == 'BoolProperty':
-            q += 4  # v584/v594 store the bool value as an int32 after a size-0 tag
-        yield name, typ, p, q, size
-        p = q + size
-
-
-def raw_data_span(pk, export):
-    """(tag_pos, data_pos, size) of the RawData ArrayProperty, relative to the export start."""
-    b = pk.d[export['off']:export['off'] + export['size']]
-    for name, typ, tp, dp, size in walk_tags(pk, b, 4):  # skip NetIndex
-        if name == 'RawData' and typ == 'ArrayProperty':
-            return tp, dp, size
-    raise SystemExit('RawData not found in export')
-
-
-def extract(pk, path):
-    _, e = find_export(pk, path)
-    tp, dp, size = raw_data_span(pk, e)
-    base = e['off'] + dp
-    count = struct.unpack_from('<i', pk.d, base)[0]
-    assert count == size - 4, (count, size)
-    return pk.d[base + 4:base + 4 + count]
 
 
 def bulk_offset_fields(data, old_off):
@@ -125,14 +83,7 @@ def check_package(data, movie_path, expect_gfx=None):
 
 
 def _pkg_from_bytes(b):
-    import tempfile
-    fd, name = tempfile.mkstemp(suffix='.upk')
-    try:
-        os.write(fd, b)
-        os.close(fd)
-        return Pkg(name)
-    finally:
-        os.unlink(name)
+    return Pkg(data=bytes(b))
 
 
 def bulk_fields_by_export(pk):

@@ -8,8 +8,8 @@ select = ["F", "E9"]
 
 [tool.coverage.run]
 branch = true
-include = ["sdk_mods/classic_minimap/*", "sdk_mods/classic_minimap_profiler/*", "tools/as2asm.py",
-           "tools/swfbuild.py", "tools/build_sdkmod.py", "tools/land_branch.py"]
+include = ["sdk_mods/classic_minimap/*", "sdk_mods/classic_minimap_profiler/*", "tools/build_sdkmod.py",
+           "tools/land_branch.py"]
 data_file = "dist/ci/.coverage"
 
 [tool.coverage.report]
@@ -39,17 +39,29 @@ branch = 95
 line = 95
 branch = 88
 
-[tool.quality.coverage."tools/as2asm.py"]
+[tool.quality.coverage."sdk_mods/classic_minimap/as2asm.py"]
 line = 81
 branch = 76
 
-[tool.quality.coverage."tools/swfbuild.py"]
+[tool.quality.coverage."sdk_mods/classic_minimap/swfbuild.py"]
 line = 97
 branch = 78
 
 [tool.quality.coverage."tools/build_sdkmod.py"]
 line = 94
 branch = 83
+
+[tool.quality.coverage."sdk_mods/classic_minimap/hudmovie.py"]
+line = 90
+branch = 85
+
+[tool.quality.coverage."sdk_mods/classic_minimap/upk.py"]
+line = 88
+branch = 70
+
+[tool.quality.coverage."sdk_mods/classic_minimap/swfdeps.py"]
+line = 60
+branch = 45
 
 [tool.quality.coverage."tools/land_branch.py"]
 line = 92
@@ -58,6 +70,12 @@ branch = 85
 [tool.quality.mutation]
 "sdk_mods/classic_minimap/__init__.py" = 70
 "sdk_mods/classic_minimap/swfmerge.py" = 70
+# PLAN_V13 moved the builder into the mod; these floors are configured but not yet measured
+"sdk_mods/classic_minimap/hudmovie.py" = 70
+"sdk_mods/classic_minimap/swfbuild.py" = 70
+"sdk_mods/classic_minimap/as2asm.py" = 70
+"sdk_mods/classic_minimap/swfdeps.py" = 70
+"sdk_mods/classic_minimap/upk.py" = 70
 "tools/build_sdkmod.py" = 80
 # From the 2026-10-24 run (3,850/3,866 complete): __init__ 31/34 (91.2%); profiler 759/926 (82.0%; 80.6%
 # if its 16 unfinished mutants count as undetected)

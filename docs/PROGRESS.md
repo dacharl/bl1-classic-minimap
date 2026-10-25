@@ -6,7 +6,9 @@ This page tracks where the project stands: what works, what's installed, how to 
 
 ## Where it stands
 
-- **Runtime HUD merge (PLAN_V12, v0.12.0 + profiler 0.1.3, built offline, installed and played on the PC and the Steam Deck 2026-10-25, with and without Extended UI: works; the merge costs 3.4 s (PC) / 4.4 s (Deck) once per session):** `swfmerge.py` splices our block into another mod's HUD movie (Extended UI) when it takes the template, with status in the log, console and MODS menu; a refused movie keeps its template. Unit and real-movie suites pass. The PC spike passed (a constructed `GFxMovieInfo` is loaded by GFx); the Deck run is still to do. PHASE3 §3ai.
+- **One-file install (PLAN_V13, v0.13.0 + profiler 0.1.4, built and tested offline 2026-10-25, not installed or played):** the mod builds its HUD movie on enable from the player's own `GfxHUD.upk` and `menus_ingame_redux.upk`, plus Enhanced's `GfxHUD.upk` when found, and caches it under `sdk_mods/settings/`; there is no `GfxHUD_Minimap.upk` any more. Without Enhanced it uses original art: game-font glyphs "X", "!", "N" and our own box, window and diamond. The in-mod build from the real installed files matches the tested movies byte for byte for both art variants. The release bundle is the `.sdkmod` files only. Next: in-game runs on the PC and the Deck (both art variants, plus Extended UI), then PLAN_V14 tuning, then the 1.0.0 public release. PHASE3 §3aj.
+
+- **Runtime HUD merge (PLAN_V12, v0.12.0 + profiler 0.1.3, installed and played on the PC and the Steam Deck 2026-10-25, with and without Extended UI: works; the merge costs 3.4 s (PC) / 4.4 s (Deck) once per session):** `swfmerge.py` splices our block into another mod's HUD movie (Extended UI) when it takes the template, with status in the log, console and MODS menu; a refused movie keeps its template. The PC spike (run 18), the PC run (run 19) and the Deck run (run 20) all passed. PHASE3 §3ai.
 
 - **Release and diagnostic tooling (2026-10-25):** `bump_version.py`, `release.py`, `install.py` and `diag.py` implement FRICTION's first three suggestions. CLI scenarios use temporary repositories/logs/game folders. A release built from the local game inputs passes both movie suites; no real installation or runtime version bump was performed. See [TOOLS.md](TOOLS.md), PLAN_RELEASE_TOOLS and PHASE3 §3ah.
 
@@ -50,7 +52,8 @@ This page tracks where the project stands: what works, what's installed, how to 
 | v0.8 | Enhanced zoom and icon size, north/objective edge indicators, "!"/turn-in mission givers | Run 11: disk-full crash (§3m). Run 12: zoom, icons, tilt and north confirmed; double marker and giver calls fixed in v0.8.1 (§3n) |
 | v0.9 | Enhanced's box art and 207.95 × 173.65 window, dock/icon values, edge indicators on the box border | Run 13: box matches; fixed zoom and clipped icons need correction (§3u) |
 | v0.10 | Native-style objective-fit zoom, full-icon edge handoff, F7 zoom diagnostics and console confirmation | Built; not installed or played (§3v/3w) |
-| v0.12 | Runtime merge into other HUD mods' movies (`swfmerge.py`, block manifest), merge status messages | Built offline; spike and Deck run pending (§3ai) |
+| v0.12 | Runtime merge into other HUD mods' movies (`swfmerge.py`, block manifest), merge status messages | Runs 18–20: spike, PC and Deck with Extended UI work (§3ai) |
+| v0.13 | Player-built movie: one-file install, movie cache, Enhanced discovery, original art, builder moved into the mod | Built offline; in-mod build verified against the real files; not played (§3aj) |
 | v0.11 | Separate optional profiler add-on 0.1.0, telemetry-free core artifact, frozen report contract, overhead benchmark | Built offline; not installed (§3z). Adapter in `steam-deck-scripts` pending |
 
 ## Doc map
@@ -74,6 +77,7 @@ Docs are cited across the code and docs by bare name (e.g. "PHASE3 §3l", "PLAN_
 | [PLAN_V09.md](plans/PLAN_V09.md) | v0.9: Enhanced's box and clip-layer window; its fixed-zoom conclusion is superseded by PLAN_V10 |
 | [PLAN_V10.md](plans/PLAN_V10.md) | v0.10: native `QuickAccessInit` objective-fit zoom (108% without objectives), full-icon edge handoff; N overlap matches Enhanced |
 | [PLAN_V12.md](plans/PLAN_V12.md) | Coexisting with other HUD mods (Extended UI): research and a runtime merge of our minimap block into whichever HUD movie is installed |
+| [PLAN_V13.md](plans/PLAN_V13.md) | One-file install: the mod builds the HUD movie from the player's own files (movie cache, Enhanced discovery, original art when Enhanced is missing); the path to the 1.0.0 public release |
 | [PLAN_V11_MCP_HANDOFF.md](plans/PLAN_V11_MCP_HANDOFF.md) | Contract and task list for `steam-deck-scripts` to build the MCP performance adapter (PLAN_V11 decision 15): report schema v1, file layout, gates H0–H2, acceptance tests |
 | [PLAN_V11.md](plans/PLAN_V11.md) | External profiler first: artifact separation, reversible wrappers, prior MCP report-format research, bounded reports/tests and overhead validation; instrumented build only as fallback |
 | **log/** | |
@@ -112,15 +116,20 @@ python -I tools/uedis.py C '^WillowGFxHelperMap\.'
 python -I tools/upkpatch.py extract "<Borderlands>/WillowGame/CookedPC/Packages/Interface/GfxHUD.upk" FlashMovie.HUD dist/phase2/HUD_classic.gfx
 python -I tools/upkpatch.py extract "<Borderlands>/WillowGame/CookedPC/Packages/Interface/menus_ingame_redux.upk" FlashMovies.status_menu dist/phase2/status_menu.gfx
 python -I tools/upkpatch.py extract "<BorderlandsGOTYEnhanced>/WillowGame/CookedPC/Packages/Interface/GfxHUD.upk" FlashMovie.HUD dist/phase2/HUD_enhanced.gfx
+# both art variants (PLAN_V13): with Enhanced's movie, and without it (original art)
 python -I tools/swfbuild.py dist/phase2/HUD_classic.gfx dist/phase2/status_menu.gfx dist/phase2/HUD_minimap.gfx dist/phase2/HUD_enhanced.gfx
+python -I tools/swfbuild.py dist/phase2/HUD_classic.gfx dist/phase2/status_menu.gfx dist/phase2/HUD_minimap_original.gfx
 python -I tools/test_minimap_as.py dist/phase2/HUD_minimap.gfx
-python -I tools/upkpatch.py replace dist/phase1/GfxHUD.orig.upk FlashMovie.HUD dist/phase2/HUD_minimap.gfx dist/phase2/GfxHUD_Minimap.upk --new-guid
+python -I tools/test_minimap_as.py dist/phase2/HUD_minimap_original.gfx
 # mod
 python -I tools/test_minimap_mod.py dist/phase2/HUD_minimap.gfx
+python -I tools/test_minimap_mod.py dist/phase2/HUD_minimap_original.gfx
 python -I tools/build_sdkmod.py sdk_mods/classic_minimap dist
 ```
 
-The test suites are an AS2 interpreter running the built movie's bytecode, and the real mod against stub `unrealsdk`/`mods_base`, with the native helper emulated from measured behaviour. Both must pass before installing. Close the game before copying files. Bump `__version__` and `pyproject.toml` together.
+The test suites are an AS2 interpreter running the built movie's bytecode, and the real mod against stub `unrealsdk`/`mods_base`, with the native helper emulated from measured behaviour. Both must pass on both variants before installing; `tools/release.py` runs all of this, and with `--game`/`--enhanced` checks the mod's in-game build against the installed packages. Close the game before copying files. Bump versions with `tools/bump_version.py`.
+
+Since v0.13 nothing but the `.sdkmod` is installed: the mod builds the movie in game from the player's own files (PLAN_V13). `upkpatch.py replace` is no longer part of a release.
 
 ## Hard-won facts (each one cost a debugging round)
 
@@ -155,12 +164,14 @@ That's one zone so far. **The decomp (ENHANCED_NATIVE.md §3) shows that the tru
 - **Maintenance tooling:** a real installation through `install.py` remains unverified; install only when requested. Optional Deck deployment over SSH is deferred. Runtime foreign-HUD console feedback remains separate from `diag.py`'s saved-log detection.
 
 - Hosted CI verification of automatic workers remains pending; local validation is recorded in PHASE3 §3s.
-- **Runtime HUD merge (PLAN_V12, implemented offline in v0.12.0; in-game spike, Deck run and PC regression pending):** Extended UI's HUD movie shares stock's prefix, gradients and images with no id or name clashes; our block spliced into it passes both suites offline. Plan: merge into whatever HUD movie another mod installs, at runtime.
-- **HUD mod conflicts (run 17):**
-  - **Extended UI:** Extended Item Cards ("Extended UI") ships its own replacement HUD movie (`GfxHUD_MOD`) and wins the `hud_instance` template when it loads after us. Options: build our package on top of its HUD movie (needs its package), or detect the foreign movie and say so.
-  - **Misleading message:** the current message ("load a save or change area") is wrong in this case.
+- **v0.13.0 in game (PLAN_V13 step 6; the 1.0.0 gate's first part, decision 21):**
+  - PC and Deck, each with Enhanced art and with original art (switch "Use Enhanced artwork" off, then load a save), plus Extended UI on the Deck.
+  - Check: the first enable builds once (time in the log) and later sessions read the cache; the glyphs show (the copied empty `WillowBody` record must resolve from the font library) and are centred; the Deck finds the inputs through Proton paths and Enhanced through `libraryfolders.vdf`; "Rebuild HUD movie" works; the old `GfxHUD_Minimap.upk` note appears.
+  - Before playing, install with `tools/install.py dist/releases/0.13.0` (it leaves the old package alone).
+- **Path to 1.0.0 (PLAN_V13 decisions 20–23):** PLAN_V14 for tuning (grilled after v0.13 is played); v0.14.x private builds; one pre-release through the release workflow's new `prerelease` input; then 1.0.0, the first public release.
+- **Mutation floors for the moved builder files** (`hudmovie`, `swfbuild`, `as2asm`, `swfdeps`, `upk`) are configured at 70 but not measured; add them to `cosmic-ray.toml` and measure on demand.
 - **Tuning pass (later, not game-breaking):**
-  - **Runtime merge cost and level-change delay (run 19, PHASE3 §3ai):** the first merge took 3.4 s on the PC and 4.4 s on the Deck (2 x 0.7 s `RawData` reads, about 1.6 s of Python, 0.2 s write); ideas: read only the block's byte range of our movie, speed up the bit reader in `swfmerge.walk_shape`, cache the merged bytes on disk keyed by the foreign movie's hash. Separately, after a level change the minimap came up about 10 s after the HUD (anchor wait 7.6 s plus the 3 s settle); compare with and without Extended UI before changing the settle rule.
+  - **Runtime merge cost and level-change delay (run 19, PHASE3 §3ai):** the first merge took 3.4 s on the PC and 4.4 s on the Deck (2 x 0.7 s `RawData` reads, about 1.6 s of Python, 0.2 s write). v0.13 removes the read of our own movie (the merge uses the cached bytes); remaining ideas: speed up the bit reader in `swfmerge.walk_shape`, cache the merged bytes on disk keyed by the foreign movie's hash. Separately, after a level change the minimap came up about 10 s after the HUD (anchor wait 7.6 s plus the 3 s settle); compare with and without Extended UI before changing the settle rule.
   - **Zoom without a nearby objective (2026-10-25 screenshots):** in Skag Gully with "Roadkill" tracked the map sat at the 108% floor, which doesn't match what Enhanced shows there. After a mission turn-in the zoom changed (fit to the new objective). Compare our fit against Enhanced's `QuickAccessInit` for far objectives and the no-objective case before changing anything (PLAN_V10).
 - **Threat markers (installed, not yet played):** Enhanced's diamond (E shape 127, copied as 1310) replaces the drawn square; it counter-rotates with the map (PHASE3 §3ad). Check its size against Enhanced and with "Rotate with player".
 - **Profiler 0.1.0 (v0.11):**

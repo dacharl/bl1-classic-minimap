@@ -160,3 +160,12 @@ is deferred. Item 4 is now the highest-ranked pending tool.
 | Both real-movie suites failed on the primary checkout's existing output before any source changes | The ignored `HUD_minimap.gfx` was older than the current source (old threats/tint behavior) | Rebuilt in the task worktree from the explicitly selected local inputs; both suites passed | Build and test a fresh movie in `release.py`; never treat an existing ignored artifact as current |
 | Baseline Git tests and the install test's process check failed inside the sandbox | Temporary Git repository creation and `tasklist` needed access beyond the initial tool sandbox | Reran those tests with the required access; they passed | Distinguish environment refusals from behavior failures; process-query errors must still refuse installation |
 | An initial contract-version edit replaced a historical producer version in the allowlist | Broad replacement in the introduction changed both the current producer and history | A CLI scenario caught the missing old version before completion | Edit the current-version fields separately and extend, rather than replace, the documented producer list |
+
+## Player-built movie implementation (2026-10-25, PLAN_V13)
+
+| What happened | Cause | Workaround | Fix |
+|---|---|---|---|
+| Writing to a freshly created `.worktrees/<task>` worktree was refused | The session was isolated to its own `.claude/worktrees/...` worktree | Removed the empty worktree; branched the task from `main` inside the session's worktree | In an isolated session, create the task branch in the session's own worktree |
+| The check script reported "FAILED: build" although the build succeeded | `Select-Object -First 1` after a native command makes PowerShell report exit 255 (a known quirk) | Captured output with `Out-String` and printed its first line | Never pipe a native command into `Select-Object -First` when its exit code matters |
+| A mod-suite edit raised `UnboundLocalError` for `contextlib` | A later `import contextlib` inside `main()` made the name local to the whole function | Moved the imports to the module top | Import at module level in the long scenario functions |
+| A workflow test pinned the current profiler version (`... and 0.1.3`) and failed after the bump | The bump scenario reused the live version numbers | Read the current version from the source and bump to versions above it | Version-independent bump scenarios |

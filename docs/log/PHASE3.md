@@ -874,3 +874,76 @@ hitch: 4.4 s on the Deck, once per session.
 speed and typing in pyunrealsdk; `template_obj` copying their texture references); the merge against the real
 Extended UI HUD (its package was not at hand, so only the synthetic fixture and the stock HUD were tested); the Deck
 run (plan step 4). If the spike fails, switch the install to the package fallback (decision 9).
+
+## 3aj. PLAN_V13: the player-built movie, one-file install → core v0.13.0, profiler 0.1.4 (2026-10-25, offline only)
+
+**Built and tested offline, not installed, not played.** Branch `feat/player-built-movie`.
+
+What changed:
+- **Builder in the mod (decision 16):** `swfbuild.py`, `as2asm.py`, `swfdeps.py` and `upk.py` moved into
+  `sdk_mods/classic_minimap/` (relative imports inside the package, plain imports for the offline tools). The
+  `tools/` files of those names are wrappers loading the mod's copies (`tools/mod_source.py`). `upk.Pkg` takes
+  bytes, and `upk.movie()` extracts a package's movie; `upkpatch.py` keeps only the repack and imports the rest.
+- **Original art (decisions 5, 12–15):** `swfbuild.build(hud, status_menu, enhanced=None, version=None)`. Without
+  the Enhanced movie, it writes:
+  - "X" (turn-in, gold `FFC420`), "!" (gold `FFCC00`) and "N" (white) as `DefineEditText` glyphs (ids 1312–1317),
+    each over four black copies offset by 1 px, inside sprites 1301/1303/1305;
+  - a copy of the HUD's own empty `WillowBody` font record (id 1318), because the HUD's font 119 is defined
+    after the block's insertion point;
+  - our own `DefineShape3` box, window and threat diamond at Enhanced's bounds (1307, 1308, 1310).
+
+  Classic's objective diamond is unchanged.
+- **`hudmovie.py` (the in-game build):**
+  - finds the inputs: classic's `GfxHUD.upk` and `menus_ingame_redux.upk`, and Enhanced next to classic, through
+    Steam's `libraryfolders.vdf` (Wine's `Z:` for POSIX paths), or the hidden `Enhanced folder` setting;
+  - keeps the movie cache (`classic_minimap_hud.gfx` and `.json`) keyed on every input's SHA-256, the art choice
+    and the version;
+  - falls back to original art when Enhanced can't be used, and fails as `BuildFailed` when a classic input can't
+    be used;
+  - keeps the movie in memory when the cache can't be written;
+  - checks the inputs against `KNOWN_INPUTS` (see PLAN_V13 "As implemented").
+- **Mod:**
+  - on enable it builds or reads the movie, constructs `MinimapHUD` (`KEEP_ALIVE`, `template_obj` = the stock
+    movie) and points the template at it, with no package load;
+  - the PLAN_V12 merge splices the cached bytes, so it no longer reads our movie's `RawData`;
+  - new options: "Use Enhanced artwork", "Rebuild HUD movie" and the hidden "Enhanced folder";
+  - F7 gains `hud_movie` (art, cache, timing, inputs, Enhanced folder, recognised, notes);
+  - the build notes become the status line;
+  - an old `GfxHUD_Minimap.upk` is logged as no longer used.
+- **Tools:**
+  - `release.py` builds both art variants outside the bundle, runs both real-movie suites on each, and bundles
+    only the `.sdkmod` files (`release.json` schema 2 records the movies' hashes); `--game`/`--enhanced` check
+    the in-mod build against real folders;
+  - `install.py` installs `.sdkmod` files only and points out an old package;
+  - the release workflow's notes say one-file install, and it gains a `prerelease` input.
+- Versions bumped with `bump_version.py 0.13.0 --profiler-version 0.1.4`.
+
+Evidence:
+- **Real game files, `release.py --game ... --enhanced ... --profiler`:** both real-movie suites pass on both
+  variants, and the mod's own build from the installed packages matches byte for byte. Enhanced art
+  `5e0975c0…bbc5`, original art `267b2259…ed15`.
+- **Enhanced-art movie:** 618,106 bytes, unchanged in size from v0.12.0 (the manifest version differs).
+- **Original-art movie:** 617,792 bytes.
+- **Release bundle `dist/releases/0.13.0`:** `classic_minimap.sdkmod` `4181461e…c013`,
+  `classic_minimap_profiler.sdkmod` `370e2658…a0bd`.
+
+Tests:
+- **New:** `test_hudmovie.py` (17 cases, synthetic v584 packages); three `test_ci` original-art cases (both
+  suites on the original-art fixture, the art's structure, a missing font).
+- **Updated:**
+  - mod-suite scenarios: a build failure leaves the minimap idle with status; the first enable builds and caches;
+    a same-session re-enable reuses the movie; the next session reads the cache; the art switch and "Rebuild HUD
+    movie" re-point the template; the old-package note; F7's `hud_movie`; the version-mismatch wording;
+  - release and install workflow scenarios for the bundle without the package.
+- **Test order:** the `test_ci`, mod-suite and workflow tests failed first for the expected reasons. The
+  `hudmovie` tests were written before the module but not run red separately.
+- **Results:** 128 unit tests, both real-movie suites on both variants, Ruff, actionlint and the coverage and
+  repository gates all pass. Mutation testing was not run; the floors for the moved or new files are configured
+  but not yet measured.
+
+Still unverified (in game):
+- that GFx resolves the copied empty `WillowBody` record from the font library by name, as stock's font 119 is;
+- the glyphs' size and vertical centring;
+- the in-game build time, especially on the Deck (desktop CPython: about 1.2 s);
+- Proton paths and the Steam library discovery on the Deck;
+- the art switch and rebuild in a real session.

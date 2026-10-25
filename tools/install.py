@@ -1,7 +1,9 @@
 """Install a validated local release with dated backups and SHA-256 verification.
 
 The game must be closed. --dry-run validates and prints the plan without writing anything.
-The optional profiler add-on is copied only with --profiler. No stock files are modified.
+The optional profiler add-on is copied only with --profiler. Only .sdkmod files are installed: the mod builds
+its HUD movie from the game's own files (PLAN_V13), so no game file is modified, and an old
+GfxHUD_Minimap.upk is pointed out, not deleted.
 """
 import argparse
 import csv
@@ -19,12 +21,12 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
-from release import sha256, validate_package  # noqa: E402
+from release import sha256  # noqa: E402
 
 GAME = Path('C:/Program Files (x86)/Steam/steamapps/common/Borderlands')
 INTERFACE = Path('WillowGame/CookedPC/Packages/Interface')
-DESTINATIONS = {'GfxHUD_Minimap.upk': INTERFACE / 'GfxHUD_Minimap.upk',
-                'classic_minimap.sdkmod': Path('sdk_mods/classic_minimap.sdkmod'),
+OLD_PACKAGE = INTERFACE / 'GfxHUD_Minimap.upk'
+DESTINATIONS = {'classic_minimap.sdkmod': Path('sdk_mods/classic_minimap.sdkmod'),
                 'classic_minimap_profiler.sdkmod': Path('sdk_mods/classic_minimap_profiler.sdkmod')}
 
 
@@ -45,21 +47,18 @@ def archive_version(path, name):
         return tomllib.loads(archive.read(f'{name}/pyproject.toml').decode('utf-8'))['project']['version']
 
 
-def validated_bundle(bundle, stock, profiler):
+def validated_bundle(bundle, profiler):
     manifest = json.loads((bundle / 'release.json').read_bytes())
-    if manifest.get('schema_version') != 1:
-        raise ValueError('unsupported release manifest schema')
     files = manifest.get('files', {})
-    required = {'GfxHUD_Minimap.upk', 'classic_minimap.sdkmod', 'HUD_minimap.gfx'}
+    required = {'classic_minimap.sdkmod'}
     allowed = required | {'classic_minimap_profiler.sdkmod'}
     if not isinstance(files, dict) or not required <= files.keys() or files.keys() - allowed:
         raise ValueError('release manifest contains missing or unexpected files')
+    if manifest.get('schema_version') != 2:
+        raise ValueError('unsupported release manifest schema (rebuild the release with release.py)')
     for name, digest in files.items():
         if sha256(bundle / name) != digest:
             raise ValueError(f'SHA-256 mismatch: {name}')
-    if sha256(stock) != manifest.get('stock_sha256'):
-        raise ValueError('original package SHA-256 differs from release input')
-    validate_package(stock, bundle / 'GfxHUD_Minimap.upk', bundle / 'HUD_minimap.gfx')
     if archive_version(bundle / 'classic_minimap.sdkmod', 'classic_minimap') != manifest.get('core_version'):
         raise ValueError('core archive version differs from manifest')
     if profiler:
@@ -71,11 +70,8 @@ def validated_bundle(bundle, stock, profiler):
 
 
 def install(args):
-    bundle, stock, game = args.release.resolve(), args.stock_package.resolve(), args.game.resolve()
-    manifest = validated_bundle(bundle, stock, args.profiler)
-    installed_stock = game / INTERFACE / 'GfxHUD.upk'
-    if sha256(installed_stock) != manifest['stock_sha256']:
-        raise ValueError('installed stock GfxHUD.upk differs from the original; refusing installation')
+    bundle, game = args.release.resolve(), args.game.resolve()
+    manifest = validated_bundle(bundle, args.profiler)
     selected = {name: game / relative for name, relative in DESTINATIONS.items()
                 if args.profiler or name != 'classic_minimap_profiler.sdkmod'}
     for target in selected.values():
@@ -136,9 +132,6 @@ def install(args):
             changed.append(name)
             if sha256(target) != manifest['files'][name]:
                 raise ValueError(f'installed SHA-256 mismatch: {name}')
-        validate_package(installed_stock, selected['GfxHUD_Minimap.upk'], bundle / 'HUD_minimap.gfx')
-        if sha256(installed_stock) != manifest['stock_sha256']:
-            raise ValueError('stock package changed during installation')
         record['status'] = 'installed'
     except BaseException:
         for name in reversed(changed):
@@ -155,6 +148,9 @@ def install(args):
             temporary.unlink(missing_ok=True)
         record_path.write_bytes((json.dumps(record, indent=2) + '\n').encode('utf-8'))
     print(f'Backup: {backup}')
+    if (game / OLD_PACKAGE).exists():
+        print(f'GfxHUD_Minimap.upk is no longer used (the mod builds its HUD movie itself); '
+              f'delete {game / OLD_PACKAGE} when you like.')
     print('\nPROGRESS rows (SHA-256 verified):\n')
     print('| File | Version / SHA-256 |\n|---|---|')
     for name, target in selected.items():
@@ -166,7 +162,6 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('release', type=Path, help='directory produced by release.py')
     parser.add_argument('--game', type=Path, default=GAME)
-    parser.add_argument('--stock-package', type=Path, default=ROOT / 'dist/phase1/GfxHUD.orig.upk')
     parser.add_argument('--backups', type=Path, default=ROOT / 'dist')
     parser.add_argument('--profiler', action='store_true')
     parser.add_argument('--dry-run', action='store_true')

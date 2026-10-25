@@ -5,37 +5,43 @@ A minimap for **Borderlands Game of the Year (classic)**, modelled on the one in
 - the current zone's map art, scrolling and centred on you (optionally rotating with you);
 - landmarks: New-U and fast-travel stations, vendors, Catch-A-Ride, bounty boards and area exits;
 - your current objective, tinted **gold** when the mission is ready to hand in;
-- **"!"** where a new mission can be picked up and a turn-in icon where a finished one can be handed in;
+- **"!"** where a new mission can be picked up and a turn-in mark where a finished one can be handed in;
 - a north marker and edge arrows pointing to objectives that are off the map window;
 - enemies as red dots, taken from the same radar the compass uses.
 
 The ECHO panel (including the Angel videos), the mission title and the objective checklist move left to make room while the minimap is shown, as they do in Enhanced. The minimap hides itself during the travel tunnel, in menus, in cutscenes and when you're down.
 
-> **Status:** v0.10.0 is built and tested offline; v0.9.0 is installed and was played in run 13. The new objective-fit zoom and full-icon edge handoff still need an in-game check. Earlier runs covered Arid Badlands, Skag Gully and T-Bone Junction.
+> **Status:** v0.13.0 is a private test build: one-file install, with the HUD movie built from your own game files. It is tested offline; in-game checks on PC and Steam Deck are next. The first public release will be 1.0.0.
 
 ## Requirements
 
-- Borderlands GOTY (classic) on Steam, the 32-bit `Borderlands.exe`, not GOTY Enhanced.
+- Borderlands GOTY (classic) on Steam, the 32-bit `Borderlands.exe`.
 - The **willow1 PythonSDK** for Borderlands installed and working (you should see a **MODS** entry in the main menu).
+- Optional: **Borderlands GOTY Enhanced** installed. If it is, the minimap uses Enhanced's box, marks and enemy diamond; if not, it uses its own art (see [Art](#art)).
 - About 1 MB of disk space, plus free space on the system drive for the game itself. The game can crash at startup if the disk is full.
 
 ## Install
 
-You need two files: `GfxHUD_Minimap.upk` (the minimap's HUD artwork and code) and `classic_minimap.sdkmod` (the mod).
-
 1. Close Borderlands.
-2. Copy `GfxHUD_Minimap.upk` into
-   `…\steamapps\common\Borderlands\WillowGame\CookedPC\Packages\Interface\`
-3. Copy `classic_minimap.sdkmod` into
+2. Copy `classic_minimap.sdkmod` into
    `…\steamapps\common\Borderlands\sdk_mods\`
-4. Start the game, open **MODS** and make sure **Classic Minimap** is enabled.
-5. Load a character. If you enabled the mod after a save was already loaded, change area or reload once for the minimap to appear.
+3. Start the game, open **MODS** and make sure **Classic Minimap** is enabled. The first time, the mod builds its HUD movie from your game files, which takes a few seconds; later sessions reuse it.
+4. Load a character. If you enabled the mod after a save was already loaded, change area or reload once for the minimap to appear.
 
-Your original game files are not modified; the mod loads its own package next to them.
+That's the whole install. **Upgrading from v0.12 or earlier:** delete `GfxHUD_Minimap.upk` from `…\Borderlands\WillowGame\CookedPC\Packages\Interface\`. It is no longer used.
+
+## What the mod reads from your game
+
+To build its HUD movie, the mod reads:
+
+- classic's `GfxHUD.upk` and `menus_ingame_redux.upk` (the HUD and the status-menu map);
+- GOTY Enhanced's `GfxHUD.upk`, if Enhanced is installed (its minimap artwork).
+
+It looks for Enhanced next to classic, then in every Steam library. It writes only its settings and the built movie (`classic_minimap_hud.gfx`, the movie cache) under `…\Borderlands\sdk_mods\settings\`. It never changes your game files, and the mod download contains no game files.
 
 ## Uninstall
 
-Delete the two files you copied. Nothing else needs restoring.
+Delete `classic_minimap.sdkmod`. Optionally delete `classic_minimap*` from `sdk_mods\settings\`. Nothing else needs restoring.
 
 ## Options
 
@@ -51,26 +57,39 @@ Open **MODS → Classic Minimap**:
 | Rotate with player | Rotate the map so you always face up (north marker moves around the edge). |
 | Show enemies | Red dots for enemies the radar tracks. |
 | Enemy range (m) | Only show enemies this close; 0 = no limit (like Enhanced). |
-| Show mission givers | "!" and turn-in icons at mission givers. |
+| Show mission givers | "!" and turn-in marks at mission givers. |
 | Hide compass | Hide the classic compass strip at the bottom. |
+| Use Enhanced artwork | On (default): Enhanced's artwork when Enhanced is installed. Off: the mod's own art. Takes effect from the next level load. |
 | Rebuild now | Re-collect landmarks and objectives (same as F8). |
+| Rebuild HUD movie | Build the HUD movie from your game files again, for example after installing Enhanced. Takes effect from the next level load. |
 
-**Keys:** **F8** rebuilds the minimap's markers. **F7** writes a diagnostic snapshot to the SDK log and confirms it in the in-game console; please include the snapshot with bug reports.
+**Keys:** **F8** rebuilds the minimap's markers. **F7** writes a diagnostic snapshot to the SDK log and confirms it in the in-game console; it includes which art is in use and which game files the movie was built from. Please include the snapshot with bug reports.
+
+**Enhanced installed somewhere unusual?** Set `"Enhanced folder"` in `…\sdk_mods\settings\classic_minimap.json` to Enhanced's game folder, then press **Rebuild HUD movie**.
+
+## Art
+
+With Enhanced installed, the minimap uses Enhanced's own box, window, turn-in and "!" marks, north "N" and enemy diamond. Without it, the mod draws its own:
+
+- "N", "!" and a gold "X" (turn-in), drawn in the game's own HUD font with a dark outline;
+- a dark box, a window and a red enemy diamond of the same sizes.
+
+The zone maps, landmark icons and objective diamond always come from classic itself.
 
 ## Troubleshooting
 
 - **No minimap after enabling the mod:** load a save or change area. The minimap attaches to the HUD the game creates on the next level load.
+- **"Can't build the minimap's HUD movie":** the mod couldn't read classic's `GfxHUD.upk` or `menus_ingame_redux.upk`. The message names the file. Check that the game is installed completely (Steam: **Verify integrity of game files**), and that no other mod replaced those files.
 - **Markers look stale:** press **F8**. Markers also refresh on their own when your mission, objectives or area change.
 - **Something looks wrong:** press **F7** where it happens, then send
   `…\Borderlands\Binaries\Plugins\unrealsdk.log` (and a screenshot).
-- **No minimap with Extended UI (Extended Item Cards) installed:** that mod also replaces the HUD movie, and only one replacement can be active. Disable Extended UI to use the minimap; compatibility is being looked at.
+- **Extended UI (Extended Item Cards) installed:** both mods replace the HUD movie, so the minimap merges itself into Extended UI's movie at startup, adding a pause of a few seconds once per session. The MODS description and the console say "Merged into …". The minimap appears from the next level load. If a HUD mod's movie can't be merged safely, it keeps the HUD, and the minimap stays idle and says why.
 - **The game crashes at startup** with "memory could not be written": check free space on your system drive first. A full disk caused exactly this crash during testing.
 
 ## Known limitations
 
 - Single player only so far: in co-op, other players aren't shown as markers, and split-screen layouts fall back to the Custom position.
 - The classic game has no player-placed map waypoint, so Enhanced's waypoint marker has no equivalent.
-- The turn-in and "!" icons and the north marker reuse artwork from the Enhanced edition. Building the package therefore needs both editions installed. Playing needs only classic plus the built files.
 
 ## Optional performance profiler (for investigation only)
 
@@ -84,19 +103,18 @@ Open **MODS → Classic Minimap**:
 
 ## Building from source
 
-The package and mod are built from your own game files: the classic HUD and status-menu movies, plus three small vector icons from the Enhanced HUD.
+The mod ships its builder (`sdk_mods/classic_minimap/swfbuild.py` and friends); `tools/` has wrappers for offline builds and the test suites. Offline builds use movies extracted from your own installs. Never commit or redistribute a built movie or package: they contain game assets.
 
-- **Do not redistribute** the built `GfxHUD_Minimap.upk`: it contains game assets.
 - **Project progress, build commands, offline test suites and design notes:** [docs/PROGRESS.md](docs/PROGRESS.md).
 - **Contributing as or with an agent:** read [AGENTS.md](AGENTS.md).
 
 ## Creating a GitHub release
 
-The [Release SDK mod workflow](.github/workflows/release.yml) runs on demand. Once it is on the GitHub repository's default branch (`main`), open **Actions → Release SDK mod → Run workflow** and select the branch or tag to package.
+The [Release SDK mod workflow](.github/workflows/release.yml) runs on demand. Once it is on the GitHub repository's default branch (`main`), open **Actions → Release SDK mod → Run workflow**, select the branch or tag to package, and tick **prerelease** for a pre-release.
 
 It checks that `__version__` and `pyproject.toml` agree, builds and verifies `classic_minimap.sdkmod`, then publishes a release tagged `v<version>` at the selected commit with that file attached. Bump both version fields before the next release: an existing tag causes the workflow to fail rather than replace a release. It uses the repository's built-in token; no personal access token is needed.
 
-The release contains the Python mod source only. Build `GfxHUD_Minimap.upk` locally from your own game files using the commands in PROGRESS. The game-dependent offline suites must also be run locally before releasing; the hosted workflow checks source syntax and archive integrity without game assets.
+The release is the whole install: players build the HUD movie from their own game files. Run the game-dependent checks locally first: `tools/release.py` builds both art variants, runs both real-movie suites on each, and with `--game` checks the mod's in-game build against a game folder. The hosted workflow checks source syntax and archive integrity without game assets.
 
 ## Continuous integration
 

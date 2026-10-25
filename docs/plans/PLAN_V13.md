@@ -1,6 +1,8 @@
 # v0.13 plan: players build the HUD movie from their own game files (2026-10-25)
 
-**Planned; grilled in six rounds (decisions 1–23, 2026-10-25). Not implemented.**
+**Implemented offline as v0.13.0 (2026-10-25, PHASE3 §3aj); not yet played.** Grilled in six rounds (decisions 1–23).
+
+**As implemented:** decision 11's expected hashes are kept as **known input hashes** (`hudmovie.KNOWN_INPUTS`: classic's two packages and Enhanced's `GfxHUD.upk`). The built movie's hash changes with every mod version (the block manifest carries it), but the build is deterministic, so recognised inputs mean the expected movie. `tools/release.py` records each version's movie hashes and checks the in-mod build against the real game folders.
 
 The MVP must be installable by other players. Today a player needs `GfxHUD_Minimap.upk`, which we can't
 redistribute: it contains game assets. The GitHub release ships only `classic_minimap.sdkmod`, and building the

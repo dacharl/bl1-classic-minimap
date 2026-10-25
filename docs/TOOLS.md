@@ -21,18 +21,22 @@ maintainer's decision; it does not prove a new core is safe to profile. Run the 
 ## Build a release
 
 ```powershell
-python -I tools/release.py --inputs C:/Users/Charles/Dev/bl1-classic-minimap/dist/phase2 --stock-package C:/Users/Charles/Dev/bl1-classic-minimap/dist/phase1/GfxHUD.orig.upk --output dist/releases/0.10.2
+python -I tools/release.py --inputs C:/Users/Charles/Dev/bl1-classic-minimap/dist/phase2 --game "C:/Program Files (x86)/Steam/steamapps/common/Borderlands" --enhanced "C:/Program Files (x86)/Steam/steamapps/common/BorderlandsGOTYEnhanced" --output dist/releases/0.13.0 --profiler
 ```
 
-Default inputs are this worktree's `dist/phase2/{HUD_classic,status_menu,HUD_enhanced}.gfx` and
-`dist/phase1/GfxHUD.orig.upk`. `--inputs` and `--stock-package` make reuse from another checkout
-explicit. The classic movie must match the original package. The output directory must not exist.
+Default inputs are this worktree's `dist/phase2/{HUD_classic,status_menu,HUD_enhanced}.gfx`;
+`--inputs` makes reuse from another checkout explicit. The output directory must not exist.
 
-The tool builds `HUD_minimap.gfx`, runs both real-movie suites, repacks `GfxHUD_Minimap.upk` with a
-new GUID, verifies all package bytes against stock reconstruction (including relocated bulk data),
-and builds `classic_minimap.sdkmod`. `release.json` records versions, input hashes and artifact
-SHA-256 hashes. The completed directory appears only after success; failed stages are cleaned up.
+Since v0.13 players build the HUD movie themselves (PLAN_V13), so the bundle holds only
+`classic_minimap.sdkmod` (plus the profiler with `--profiler`) and `release.json`. The tool builds both art
+variants, `HUD_minimap.gfx` with the Enhanced movie and `HUD_minimap_original.gfx` without it, in a temporary
+folder outside the bundle, and runs both real-movie suites on each. `release.json` records versions, input
+hashes, both movies' SHA-256 (the expected hashes for these inputs) and the bundle's hashes. The completed
+directory appears only after success; failed stages are cleaned up.
 
+- `--game PATH` runs the mod's own in-game build (`hudmovie.build_movie`) on that folder's `GfxHUD.upk` and
+  `menus_ingame_redux.upk`, plus `--enhanced PATH`'s `GfxHUD.upk` when given, and fails unless it gives the
+  tested movie byte for byte. Run it once with `--enhanced` and once without.
 - `--profiler` also builds the separate `classic_minimap_profiler.sdkmod`.
 - `--version 0.10.3 --profiler-version 0.1.3` explicitly runs the bump first. These source edits remain
   if a subsequent build fails, so they can be inspected and fixed; no release directory is published.
@@ -44,9 +48,9 @@ the release tool does not replace them or run the hour-long mutation campaign.
 ## Install a release
 
 ```powershell
-python -I tools/install.py dist/releases/0.10.2 --stock-package C:/Users/Charles/Dev/bl1-classic-minimap/dist/phase1/GfxHUD.orig.upk --dry-run
+python -I tools/install.py dist/releases/0.13.0 --dry-run
 # Only when installation is wanted, with the game closed:
-python -I tools/install.py dist/releases/0.10.2 --stock-package C:/Users/Charles/Dev/bl1-classic-minimap/dist/phase1/GfxHUD.orig.upk
+python -I tools/install.py dist/releases/0.13.0
 ```
 
 The default game is the Steam classic install recorded in PROGRESS.md. Use `--game PATH` for another
@@ -54,12 +58,13 @@ local install and `--backups PATH` to override this worktree's `dist/`. Backups 
 game and release directories. Windows uses `tasklist`; POSIX uses `ps`. Process-query failures refuse
 installation. The process check runs before backup and again immediately before replacing files.
 
-The installer verifies every manifest hash, archive versions, package relocation and the installed
-stock HUD hash before copying. It backs up every selected installed file into
+The installer verifies every manifest hash and the archive versions before copying, and installs only
+`.sdkmod` files: no game file is read or written. An old `GfxHUD_Minimap.upk` is pointed out, not deleted.
+It backs up every selected installed file into
 `dist/v<replaced-core-version>-<UTC timestamp>/`, verifying each backup. Missing previous files and
 all hashes are recorded in `install.json`. Copies are staged beside their targets, replaced, and
 verified again. A copy/verification failure restores replaced files; a restore failure names the
-backup for manual recovery. `GfxHUD.upk` is checked but never written. Linked destination paths are
+backup for manual recovery. Linked destination paths are
 refused. Successful output includes PROGRESS table rows with full SHA-256 hashes.
 
 Use `--profiler` explicitly to install the add-on from a bundle built with `--profiler`. Otherwise any

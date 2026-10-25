@@ -20,10 +20,10 @@ from ci_fixture import build_fixture  # noqa: E402
 
 
 class SourceChecks(unittest.TestCase):
-    def check_movie(self, check):
+    def check_movie(self, check, original=False):
         with tempfile.TemporaryDirectory() as directory:
             movie = Path(directory) / 'synthetic.gfx'
-            movie.write_bytes(build_fixture())
+            movie.write_bytes(build_fixture(original))
             # Both suites retain their assertions; only the input movie is synthetic.
             with contextlib.redirect_stdout(io.StringIO()):
                 check(str(movie))
@@ -33,6 +33,52 @@ class SourceChecks(unittest.TestCase):
 
     def test_mod_without_game_assets(self):
         self.check_movie(test_minimap_mod.main)
+
+    def test_original_art_movie_passes_both_suites(self):
+        """Without the Enhanced movie the build uses original art (PLAN_V13 decision 2); the minimap's AS
+        entry points and the mod behave exactly as with Enhanced's art."""
+        self.check_movie(test_minimap_as.main, original=True)
+        self.check_movie(test_minimap_mod.main, original=True)
+
+    def test_original_art_is_glyphs_and_our_own_shapes(self):
+        """Decisions 5, 12-15: the turn-in "X", new-mission "!" and north "N" are glyphs in a copy of the HUD's
+        empty WillowBody font record, each over four black outline copies; the box, window and threat diamond
+        are our own shapes at Enhanced's sizes. Classic's objective diamond is untouched."""
+        import struct
+        from swfdeps import Movie, read_tags
+        from swfmerge import walk_shape
+        built = build_fixture(original=True)
+        movie = Movie(data=built)
+        code, font = movie.defs[1318]
+        self.assertEqual((code, font[5:5 + font[4]]), (75, b'WillowBody\0'))
+        texts = {}
+        for tid in range(1312, 1318):
+            code, body = movie.defs[tid]
+            self.assertEqual(code, 37)
+            tail = body.split(b'\0')
+            texts[tid] = (tail[-2].decode()[-1], body[-len(tail[-2]) - 3 - 4 - 9:-len(tail[-2]) - 2 - 9])
+            p = 2 + (5 + 4 * (body[2] >> 3) + 7) // 8
+            self.assertEqual(struct.unpack_from('<H', body, p + 2)[0], 1318)
+        self.assertEqual([texts[t][0] for t in sorted(texts)], ['X', 'X', '!', '!', 'N', 'N'])
+        for sid, outline in ((1301, 1312), (1303, 1314), (1305, 1316)):
+            code, body = movie.defs[sid]
+            placed = [struct.unpack_from('<HH', b, 1) for c, b in read_tags(body, 4, len(body)) if c == 26]
+            self.assertEqual((code, placed), (39, [(1, outline), (2, outline), (3, outline), (4, outline),
+                                                    (5, outline + 1)]))
+        for sid in (1307, 1308, 1310):
+            code, body = movie.defs[sid]
+            self.assertEqual(code, 32)
+            walk_shape(code, body)              # parses to the end record
+        self.assertNotIn(1050, {1307, 1308, 1310})
+        self.assertIn(1050, movie.defs)
+
+    def test_original_art_needs_the_hud_font(self):
+        from ci_fixture import fixture_inputs, movie
+        from swfbuild import build
+        _, status, _ = fixture_inputs()
+        with self.assertRaises(SystemExit) as raised:
+            build(movie([]), status, None)
+        self.assertIn('no WillowBody font', str(raised.exception))
 
     def test_classic_gradients_keep_their_external_images(self):
         """GFx numbers gradient fills in file order and DefineExternalGradient (1003) records are keyed by that

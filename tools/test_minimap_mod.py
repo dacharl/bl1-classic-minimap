@@ -8,6 +8,8 @@ measured in game (PHASE0 2d) and decompiled (ENHANCED_NATIVE.md): Init builds Ma
 the real field names, InitMapFrame picks the zone frame. The expected Transform/CoordScale are the helper's
 own values logged in game for the Arid anchor; the mod must reproduce them from the anchor's fields.
 """
+import contextlib
+import io
 import json
 import math
 import os
@@ -124,6 +126,7 @@ def install_stubs(helper_factory, get_pc):
         if cls == 'GFxMovieInfo':
             obj = Struct(**vars(template_obj))      # properties come from the template, like the engine's archetype
             obj.ObjectFlags, obj.Name, obj.RawData = flags, name, []
+            obj.name = "GFxMovieInfo'%s.%s'" % (outer, name)       # its own path, not the template's
             MOVIE_INFOS.append(obj)
             return obj
         CONSTRUCTED.append((cls, outer))
@@ -142,7 +145,9 @@ def install_stubs(helper_factory, get_pc):
     mb.ObjectFlags = types.SimpleNamespace(KEEP_ALIVE=KEEP_ALIVE)
     import tempfile
     from pathlib import Path
-    mb.SETTINGS_DIR = Path(tempfile.mkdtemp(prefix='mm_settings_'))
+    # <Borderlands>/sdk_mods/settings: the mod finds the game folder (and its HUD packages) from here (PLAN_V13)
+    mb.SETTINGS_DIR = Path(tempfile.mkdtemp(prefix='mm_game_')) / 'Borderlands' / 'sdk_mods' / 'settings'
+    mb.SETTINGS_DIR.mkdir(parents=True)
 
     class Opt:
         def __init__(self, identifier, value=None, *a, **kw):
@@ -151,7 +156,7 @@ def install_stubs(helper_factory, get_pc):
             for k, v in kw.items():
                 setattr(self, k, v)
 
-    for n in ('BoolOption', 'SliderOption', 'SpinnerOption', 'ButtonOption'):
+    for n in ('BoolOption', 'SliderOption', 'SpinnerOption', 'ButtonOption', 'HiddenOption'):
         setattr(mb, n, type(n, (Opt,), {}))
 
     def hook(name, typ='PRE', **kw):
@@ -433,6 +438,7 @@ def foreign_from(gfx, extra_id=5000, prefix_tag=False):
 def main(gfx_path, on_import=None):
     """on_import(mod), if given, runs right after the real mod is imported (the profiler add-on's tests
     attach a capture there and expect every assertion below to hold unchanged)."""
+    global MINIMAP_INFO         # becomes the GFxMovieInfo the mod constructs from the player-built movie (0c)
     gfx = Path(gfx_path).read_bytes()
     MINIMAP_INFO.RawData = gfx
     clock = [1000.0]
@@ -505,15 +511,59 @@ def main(gfx_path, on_import=None):
     step(); step()
     assert mod.S.phase == 'stockhud' and CONSTRUCTED == [] and stock_movie.invokes == []
 
-    # 0b. GfxHUD_Minimap.upk missing: redirect fails, template untouched
-    assert mod.redirect() is False and TEMPLATE.MovieInfo is STOCK_INFO and LOADED == ['GfxHUD_Minimap']
+    # The player-built movie (PLAN_V13): the mod builds our movie from the game folder's own HUD packages. The
+    # builder itself is covered by test_hudmovie/test_ci; here it returns the movie under test, and Steam's
+    # library list is empty, so Enhanced is not found (original art).
+    builds = []
 
-    # 0c. package present: on_enable loads it and points the template at its movie
-    PACKAGES['GfxHUD_Minimap'] = {'GfxHUD_Minimap.FlashMovie.HUD': MINIMAP_INFO}
+    def build_movie(hud_package, menus_package, enhanced_package, version):
+        builds.append((hud_package, menus_package, enhanced_package, version))
+        return gfx, 'enhanced' if enhanced_package else 'original', []
+    mod.hudmovie.build_movie = build_movie
+    mod.hudmovie.default_vdfs = lambda game: []
+    interface = mod.hudmovie.game_dir(mod.SETTINGS_DIR) / mod.hudmovie.INTERFACE
+
+    # 0b. the game's HUD packages missing: redirect fails with a status line, template untouched, no package load
+    assert mod.redirect() is False and TEMPLATE.MovieInfo is STOCK_INFO and LOADED == [] and builds == []
+    assert "Can't build the minimap's HUD movie" in mod.Redirect.status and 'stays idle' in mod.Redirect.status
+
+    # 0c. packages present: on_enable builds the movie once, caches it, and points the template at a GFxMovieInfo
+    # constructed from it (KEEP_ALIVE, properties copied from the stock movie, so its textures resolve)
+    interface.mkdir(parents=True)
+    (interface / 'GfxHUD.upk').write_bytes(b'classic hud package')
+    (interface / 'menus_ingame_redux.upk').write_bytes(b'classic menus package')
+    (interface / 'GfxHUD_Minimap.upk').write_bytes(b'an old v0.12 package')
+    out0 = io.StringIO()
+    with contextlib.redirect_stdout(out0):
+        mod.on_enable()
+    info = TEMPLATE.MovieInfo
+    assert info is MOVIE_INFOS[-1] and info is not STOCK_INFO and bytes(info.RawData) == gfx
+    assert info.ObjectFlags & KEEP_ALIVE and info.Name == 'MinimapHUD' and LOADED == []
+    assert len(builds) == 1 and builds[0][2] is None and builds[0][3] == mod.__version__
+    assert (mod.SETTINGS_DIR / mod.hudmovie.CACHE_NAME).read_bytes() == gfx
+    assert 'original art' in mod.Redirect.status, mod.Redirect.status
+    assert 'GfxHUD_Minimap.upk is no longer used' in out0.getvalue(), 'the old package is pointed out'
+    MINIMAP_INFO = info
+    constructed = len(MOVIE_INFOS)
+    mod.on_enable()                                    # same session: no rebuild, no second object
+    assert TEMPLATE.MovieInfo is MINIMAP_INFO and len(builds) == 1 and len(MOVIE_INFOS) == constructed
+    assert mod.Redirect.original is STOCK_INFO
+    # the next session reads the movie cache instead of building (and constructs its own object)
+    mod.on_disable()
+    mod.Redirect.result = None
     mod.on_enable()
-    assert TEMPLATE.MovieInfo is MINIMAP_INFO and LOADED == ['GfxHUD_Minimap', 'GfxHUD_Minimap']
-    mod.on_enable()                                    # already loaded: no second load, still redirected
-    assert LOADED == ['GfxHUD_Minimap', 'GfxHUD_Minimap'] and mod.Redirect.original is STOCK_INFO
+    assert len(builds) == 1 and bytes(TEMPLATE.MovieInfo.RawData) == gfx and mod.Redirect.result.cached
+    MINIMAP_INFO = TEMPLATE.MovieInfo
+    # "Use Enhanced artwork" off, then "Rebuild HUD movie": each builds a new movie and re-points the template
+    mod.opt_enhanced_art.on_change_while_enabled(mod.opt_enhanced_art, False)
+    mod.opt_enhanced_art.value = False
+    assert len(builds) == 2 and TEMPLATE.MovieInfo is MOVIE_INFOS[-1] and TEMPLATE.MovieInfo is not MINIMAP_INFO
+    mod.opt_rebuild_movie.on_press(mod.opt_rebuild_movie)
+    assert len(builds) == 3 and TEMPLATE.MovieInfo is MOVIE_INFOS[-1] and mod.Redirect.original is STOCK_INFO
+    mod.opt_enhanced_art.on_change_while_enabled(mod.opt_enhanced_art, True)
+    mod.opt_enhanced_art.value = True
+    MINIMAP_INFO = TEMPLATE.MovieInfo
+    movie.MovieInfo = MINIMAP_INFO                     # spawned from the template after the redirect
 
     # next level load spawns a HUD from the redirected template
     pc.myHUD = HUD(movie)
@@ -1006,8 +1056,7 @@ def main(gfx_path, on_import=None):
     assert movie2.root.get('map').get('_visible') is True
     close(p1d.get('echo').get('_x'), ENH['16:9']['echo'][0])
     # F7 diagnostics: runs against the live state and logs every field (v0.8 added givers/zoom/icon scale)
-    import contextlib
-    import io as _io
+    _io = io
     console_lines = []
     pc.Player = Struct(ViewportClient=Struct(ViewportConsole=Struct(OutputText=console_lines.append)))
     buf = _io.StringIO()
@@ -1016,8 +1065,10 @@ def main(gfx_path, on_import=None):
     diag = buf.getvalue()
     assert console_lines == ['[Classic Minimap] Diagnostic snapshot written to Binaries/Plugins/unrealsdk.log.']
     assert 'diagnostics:' in diag and "'version': '%s'" % mod.__version__ in diag, diag[:300]
-    for field in ('dock_mode', 'radar_active', 'givers', 'giver_icons', 'zoom', 'icon_scale', 'echo_x0'):
+    for field in ('dock_mode', 'radar_active', 'givers', 'giver_icons', 'zoom', 'icon_scale', 'echo_x0', 'hud_movie'):
         assert "'%s'" % field in diag, field
+    # PLAN_V13 decision 8: F7 says which art is in use and where the inputs came from
+    assert "'art': 'original'" in diag and 'GfxHUD.upk' in diag and "'enhanced_folder': None" in diag, diag[-600:]
     # Feedback is optional when there is no viewport console; the diagnostic still reaches the log.
     console = pc.Player.ViewportClient.ViewportConsole
     pc.Player.ViewportClient.ViewportConsole = None
@@ -1249,13 +1300,13 @@ def main(gfx_path, on_import=None):
         step(); step()
         assert mod.S.phase == 'stockhud'
 
-        # 8. the package built for another mod version is a refusal that says to reinstall it
+        # 8. a movie built for another mod version is a refusal that says to rebuild it
         TEMPLATE.MovieInfo = foreign
         real_version = mod.__version__
         mod.__version__ = '0.0.1'
         try:
             mod.on_enable()
-            assert TEMPLATE.MovieInfo is foreign and 'reinstall GfxHUD_Minimap.upk' in mod.Redirect.status
+            assert TEMPLATE.MovieInfo is foreign and 'Rebuild HUD movie' in mod.Redirect.status, mod.Redirect.status
         finally:
             mod.__version__ = real_version
         mod.on_disable()

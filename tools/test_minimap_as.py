@@ -569,9 +569,9 @@ def main(path):
     mv = Movie(data=d)
     assert {1306: 'bl1mm_north', 1050: 'bl1mm_objective', 1200: 'bl1mm_map', 1311: 'bl1mm_enemy'}.items() \
         <= mv.exports.items()
-    # threat art: a one-frame wrapper around Enhanced's shape 127, copied as 1310
+    # threat art: a one-frame wrapper around shape 1310 (Enhanced's shape 127, or the original art's diamond)
     enemy = [(c, b) for c, b in read_tags(mv.defs[1311][1], 4, len(mv.defs[1311][1])) if c in (26, 70)]
-    assert len(enemy) == 1 and struct.unpack_from('<H', enemy[0][1], 3)[0] == 1310 and mv.defs[1310][0] == 2
+    assert len(enemy) == 1 and struct.unpack_from('<H', enemy[0][1], 3)[0] == 1310 and mv.defs[1310][0] in (2, 32)
     labels = [b.split(b'\0')[0].decode() for c, b in read_tags(mv.defs[1066][1], 4, len(mv.defs[1066][1])) if c == 43]
     assert labels[-3:] == ['questionmark', 'turnin', 'newmission'], labels
     # PLAN_V09: bl1mm_map is Enhanced's minimap clip layout: box art at depth 3, the window as a clip layer

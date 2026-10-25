@@ -57,26 +57,31 @@ class WorkflowChecks(unittest.TestCase):
             shutil.copytree(ROOT / folder, repo / folder, ignore=shutil.ignore_patterns('__pycache__', 'pk'))
         return repo
 
-    def bundle(self, profiler=True):
+    def inputs(self):
         from ci_fixture import fixture_inputs
         inputs = self.root / 'inputs'
         inputs.mkdir()
         hud, status, enhanced = fixture_inputs()
         for name, data in zip(('HUD_classic.gfx', 'status_menu.gfx', 'HUD_enhanced.gfx'), (hud, status, enhanced)):
             (inputs / name).write_bytes(data)
-        stock = self.root / 'stock.upk'
-        stock.write_bytes(stock_package(hud))
-        output = self.root / 'release'
-        args = ['--inputs', inputs, '--stock-package', stock, '--output', output]
-        result = self.cli('release.py', *args, *(['--profiler'] if profiler else []))
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        return output, stock
+        return inputs
 
-    def fake_game(self, stock):
+    def bundle(self, profiler=True):
+        output = self.root / 'release'
+        result = self.cli('release.py', '--inputs', self.inputs(), '--output', output,
+                          *(['--profiler'] if profiler else []))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        return output
+
+    def fake_game(self):
+        from ci_fixture import fixture_inputs
+        from test_hudmovie import package
+        hud, status, _ = fixture_inputs()
         game = self.root / 'Borderlands'
         interface = game / 'WillowGame/CookedPC/Packages/Interface'
         interface.mkdir(parents=True)
-        shutil.copy2(stock, interface / 'GfxHUD.upk')
+        (interface / 'GfxHUD.upk').write_bytes(stock_package(hud))
+        (interface / 'menus_ingame_redux.upk').write_bytes(package('FlashMovies.status_menu', status))
         (interface / 'GfxHUD_Minimap.upk').write_bytes(b'old-package')
         mods = game / 'sdk_mods'
         mods.mkdir()
@@ -108,11 +113,13 @@ class WorkflowChecks(unittest.TestCase):
 
     def test_bump_keeps_previous_profiler_versions_documented_and_is_repeatable(self):
         repo = self.repo()
-        args = ['0.10.3', '--profiler-version', '0.1.3', '--repo', repo]
+        source = (repo / 'sdk_mods/classic_minimap_profiler/profiler.py').read_text(encoding='utf-8')
+        current = re.search(r'PROFILER_VERSION = "([^"]+)"', source)[1]
+        args = ['0.99.0', '--profiler-version', '0.9.0', '--repo', repo]
         result = self.cli('bump_version.py', *args)
         self.assertEqual(result.returncode, 0, result.stderr)
         handoff = (repo / 'docs/plans/PLAN_V11_MCP_HANDOFF.md').read_text(encoding='utf-8')
-        self.assertIn('allow 0.1.0, 0.1.1, 0.1.2 and 0.1.3', handoff)
+        self.assertRegex(handoff, r'allow 0\.1\.0, [0-9., ]*%s and 0\.9\.0' % re.escape(current))
         result = self.cli('bump_version.py', *args)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual((repo / 'docs/plans/PLAN_V11_MCP_HANDOFF.md').read_text(encoding='utf-8'), handoff)
@@ -180,41 +187,51 @@ class WorkflowChecks(unittest.TestCase):
         self.assertIn('Phase: running', result.stdout)
 
     def test_release_builds_tested_bundle_with_optional_profiler_and_hash_manifest(self):
+        """PLAN_V13: the bundle is the .sdkmod files only (no movie, no package: players build their own); both
+        art variants are built and pass both suites, and their hashes are recorded."""
         from ci_fixture import fixture_inputs
+        from swfbuild import build
         import hashlib
-        inputs = self.root / 'inputs'
-        inputs.mkdir()
-        hud, status, enhanced = fixture_inputs()
-        for name, data in zip(('HUD_classic.gfx', 'status_menu.gfx', 'HUD_enhanced.gfx'), (hud, status, enhanced)):
-            (inputs / name).write_bytes(data)
-        stock = self.root / 'stock.upk'
-        stock.write_bytes(stock_package(hud))
+        inputs = self.inputs()
         output = self.root / 'release'
-        result = self.cli('release.py', '--inputs', inputs, '--stock-package', stock, '--output', output, '--profiler')
+        result = self.cli('release.py', '--inputs', inputs, '--output', output, '--profiler')
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         manifest = json.loads((output / 'release.json').read_bytes())
         profiler_source = (ROOT / 'sdk_mods/classic_minimap_profiler/profiler.py').read_text(encoding='utf-8')
         self.assertEqual(manifest['core_version'], core_version())
         self.assertEqual(manifest['profiler_version'], re.search(r'PROFILER_VERSION = "([^"]+)"', profiler_source)[1])
-        for name in ('GfxHUD_Minimap.upk', 'classic_minimap.sdkmod', 'classic_minimap_profiler.sdkmod', 'HUD_minimap.gfx'):
+        self.assertEqual(sorted(p.name for p in output.iterdir()),
+                         ['classic_minimap.sdkmod', 'classic_minimap_profiler.sdkmod', 'release.json'])
+        for name in ('classic_minimap.sdkmod', 'classic_minimap_profiler.sdkmod'):
             self.assertEqual(manifest['files'][name], hashlib.sha256((output / name).read_bytes()).hexdigest())
-        self.assertEqual(manifest['stock_sha256'], hashlib.sha256(stock.read_bytes()).hexdigest())
-        self.assertIn('all minimap AS checks passed', result.stdout)
-        self.assertIn('all minimap mod integration checks passed', result.stdout)
-        result = self.cli('release.py', '--inputs', inputs, '--stock-package', stock, '--output', output)
+        hud, status, enhanced = fixture_inputs()
+        for art, enh in (('enhanced', enhanced), ('original', None)):
+            expected = build(hud, status, enh, manifest['core_version'])[0]
+            self.assertEqual(manifest['movies'][art], hashlib.sha256(expected).hexdigest(), art)
+        self.assertEqual(result.stdout.count('all minimap AS checks passed'), 2)
+        self.assertEqual(result.stdout.count('all minimap mod integration checks passed'), 2)
+        result = self.cli('release.py', '--inputs', inputs, '--output', output)
         self.assertNotEqual(result.returncode, 0, 'an existing release must never be overwritten')
 
+    def test_release_checks_the_in_mod_build_against_a_game_folder(self):
+        """--game runs the mod's own build (hudmovie) on the game folder's packages; it must give the movie the
+        release tested, byte for byte (decision 11's determinism)."""
+        inputs = self.inputs()
+        game, interface, _ = self.fake_game()
+        result = self.cli('release.py', '--inputs', inputs, '--game', game, '--output', self.root / 'ok')
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('in-mod build matches (original art)', result.stdout)
+        from ci_fixture import movie
+        from test_hudmovie import package
+        (interface / 'menus_ingame_redux.upk').write_bytes(package('FlashMovies.status_menu', movie([])))
+        result = self.cli('release.py', '--inputs', inputs, '--game', game, '--output', self.root / 'bad')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse((self.root / 'bad').exists())
+
     def test_release_preview_and_failed_build_do_not_publish_partial_outputs(self):
-        from ci_fixture import fixture_inputs
-        inputs = self.root / 'inputs'
-        inputs.mkdir()
-        hud, status, enhanced = fixture_inputs()
-        for name, data in zip(('HUD_classic.gfx', 'status_menu.gfx', 'HUD_enhanced.gfx'), (hud, status, enhanced)):
-            (inputs / name).write_bytes(data)
-        stock = self.root / 'stock.upk'
-        stock.write_bytes(stock_package(hud))
+        inputs = self.inputs()
         output = self.root / 'release'
-        args = ['--inputs', inputs, '--stock-package', stock, '--output', output]
+        args = ['--inputs', inputs, '--output', output]
         result = self.cli('release.py', *args, '--dry-run')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertFalse(output.exists())
@@ -225,18 +242,11 @@ class WorkflowChecks(unittest.TestCase):
         self.assertFalse(list(self.root.glob('.release-*')))
 
     def test_release_can_bump_both_versions_before_building(self):
-        from ci_fixture import fixture_inputs
         repo = self.repo()
-        inputs = self.root / 'inputs'
-        inputs.mkdir()
-        hud, status, enhanced = fixture_inputs()
-        for name, data in zip(('HUD_classic.gfx', 'status_menu.gfx', 'HUD_enhanced.gfx'), (hud, status, enhanced)):
-            (inputs / name).write_bytes(data)
-        stock = self.root / 'stock.upk'
-        stock.write_bytes(stock_package(hud))
+        inputs = self.inputs()
         output = self.root / 'release'
         result = subprocess.run([sys.executable, '-B', '-I', str(repo / 'tools/release.py'),
-                                 '--inputs', str(inputs), '--stock-package', str(stock), '--output', str(output),
+                                 '--inputs', str(inputs), '--output', str(output),
                                  '--version', '0.10.3', '--profiler-version', '0.1.3', '--profiler'],
                                 capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -244,64 +254,63 @@ class WorkflowChecks(unittest.TestCase):
         self.assertEqual((manifest['core_version'], manifest['profiler_version']), ('0.10.3', '0.1.3'))
 
     def test_install_backs_up_replaced_version_verifies_copies_and_keeps_profiler_opt_in(self):
-        output, stock = self.bundle()
-        game, interface, mods = self.fake_game(stock)
+        """PLAN_V13: only the .sdkmod files are installed; an old GfxHUD_Minimap.upk is left alone and pointed
+        out (decision 7), and no game file is touched."""
+        output = self.bundle()
+        game, interface, mods = self.fake_game()
+        stock = (interface / 'GfxHUD.upk').read_bytes()
         backups = self.root / 'backups'
-        result = self.cli('install.py', output, '--game', game, '--stock-package', stock, '--backups', backups)
+        result = self.cli('install.py', output, '--game', game, '--backups', backups)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertEqual((interface / 'GfxHUD.upk').read_bytes(), stock.read_bytes())
-        self.assertEqual((interface / 'GfxHUD_Minimap.upk').read_bytes(), (output / 'GfxHUD_Minimap.upk').read_bytes())
+        self.assertEqual((interface / 'GfxHUD.upk').read_bytes(), stock)
+        self.assertEqual((interface / 'GfxHUD_Minimap.upk').read_bytes(), b'old-package')
+        self.assertIn('GfxHUD_Minimap.upk is no longer used', result.stdout)
         self.assertEqual((mods / 'classic_minimap.sdkmod').read_bytes(), (output / 'classic_minimap.sdkmod').read_bytes())
         self.assertEqual((mods / 'classic_minimap_profiler.sdkmod').read_bytes(), b'keep-profiler')
         folders = list(backups.glob('v0.9.0-*'))
         self.assertEqual(len(folders), 1)
-        self.assertEqual((folders[0] / 'GfxHUD_Minimap.upk').read_bytes(), b'old-package')
-        self.assertTrue((folders[0] / 'install.json').exists())
+        self.assertEqual(sorted(p.name for p in folders[0].iterdir()), ['classic_minimap.sdkmod', 'install.json'])
         self.assertIn('| `sdk_mods/classic_minimap.sdkmod` |', result.stdout)
         self.assertIn('SHA-256', result.stdout)
-        result = self.cli('install.py', output, '--game', game, '--stock-package', stock,
-                          '--backups', backups, '--profiler')
+        result = self.cli('install.py', output, '--game', game, '--backups', backups, '--profiler')
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual((mods / 'classic_minimap_profiler.sdkmod').read_bytes(),
                          (output / 'classic_minimap_profiler.sdkmod').read_bytes())
 
     def test_install_dry_run_and_tampered_bundle_never_change_game_files(self):
-        output, stock = self.bundle(profiler=False)
-        game, interface, mods = self.fake_game(stock)
+        output = self.bundle(profiler=False)
+        game, interface, mods = self.fake_game()
         backups = self.root / 'backups'
-        args = [output, '--game', game, '--stock-package', stock, '--backups', backups]
+        args = [output, '--game', game, '--backups', backups]
+        old_core = (mods / 'classic_minimap.sdkmod').read_bytes()
         result = self.cli('install.py', *args, '--dry-run')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertFalse(backups.exists())
-        self.assertEqual((interface / 'GfxHUD_Minimap.upk').read_bytes(), b'old-package')
         result = self.cli('install.py', *args, '--profiler')
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('does not include the profiler', result.stderr)
-        package = output / 'GfxHUD_Minimap.upk'
-        data = package.read_bytes()
-        package.write_bytes(data[:-1] + b'?')  # damage the texture payload, not the movie
+        core = output / 'classic_minimap.sdkmod'
+        core.write_bytes(core.read_bytes() + b'?')
         result = self.cli('install.py', *args)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('SHA-256 mismatch', result.stderr)
-        # Even a refreshed manifest cannot hide broken bulk-data/export preservation.
-        import hashlib
-        manifest = json.loads((output / 'release.json').read_bytes())
-        manifest['files'][package.name] = hashlib.sha256(package.read_bytes()).hexdigest()
-        (output / 'release.json').write_text(json.dumps(manifest), encoding='utf-8')
+        self.assertFalse(backups.exists())
+        self.assertEqual((mods / 'classic_minimap.sdkmod').read_bytes(), old_core)
+        self.assertEqual((mods / 'classic_minimap_profiler.sdkmod').read_bytes(), b'keep-profiler')
+        (output / 'release.json').write_text(json.dumps({'schema_version': 1, 'files': {
+            'classic_minimap.sdkmod': 'x', 'GfxHUD_Minimap.upk': 'y'}}), encoding='utf-8')
         result = self.cli('install.py', *args)
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn('bulk-data relocation', result.stderr)
-        self.assertFalse(backups.exists())
-        self.assertEqual((interface / 'GfxHUD_Minimap.upk').read_bytes(), b'old-package')
-        self.assertEqual((mods / 'classic_minimap_profiler.sdkmod').read_bytes(), b'keep-profiler')
+        self.assertIn('missing or unexpected files', result.stderr)
 
     def test_install_refuses_running_game_and_rolls_back_on_copy_failure(self):
         # Inject only OS process enumeration and file replacement failures at the CLI boundary.
         import install
-        output, stock = self.bundle()
-        game, interface, mods = self.fake_game(stock)
+        output = self.bundle()
+        game, interface, mods = self.fake_game()
+        stock = (interface / 'GfxHUD.upk').read_bytes()
         backups = self.root / 'backups'
-        args = list(map(str, [output, '--game', game, '--stock-package', stock, '--backups', backups]))
+        args = list(map(str, [output, '--game', game, '--backups', backups, '--profiler']))
         old_core = (mods / 'classic_minimap.sdkmod').read_bytes()
         running = '"Borderlands.exe","1234","Console","1","123 K"\n' if sys.platform == 'win32' else 'Borderlands.exe\n'
         with patch('subprocess.run', return_value=subprocess.CompletedProcess([], 0, running, '')):
@@ -322,7 +331,8 @@ class WorkflowChecks(unittest.TestCase):
                     install.main(args)
         self.assertEqual((interface / 'GfxHUD_Minimap.upk').read_bytes(), b'old-package')
         self.assertEqual((mods / 'classic_minimap.sdkmod').read_bytes(), old_core)
-        self.assertEqual((interface / 'GfxHUD.upk').read_bytes(), stock.read_bytes())
+        self.assertEqual((mods / 'classic_minimap_profiler.sdkmod').read_bytes(), b'keep-profiler')
+        self.assertEqual((interface / 'GfxHUD.upk').read_bytes(), stock)
         record = json.loads(next(backups.glob('*/install.json')).read_bytes())
         self.assertEqual(record['status'], 'rolled_back')
         self.assertFalse(list(game.rglob('.minimap-*')))

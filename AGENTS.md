@@ -4,12 +4,13 @@ Instructions for coding agents working in this repository. Read this file in ful
 
 ## What this project is
 
-This project is an Enhanced-edition-style minimap for **Borderlands GOTY classic** (Steam app 8980, 32-bit, UE3). It has two parts that ship together:
+This project is an Enhanced-edition-style minimap for **Borderlands GOTY classic** (Steam app 8980, 32-bit, UE3). Since v0.13 it ships as **one file**:
 
 | Part | Source | Built artifact | Installed to |
 |---|---|---|---|
-| HUD movie package | `tools/swfbuild.py` + `tools/upkpatch.py` | `dist/phase2/GfxHUD_Minimap.upk` | `<Borderlands>\WillowGame\CookedPC\Packages\Interface\` |
 | PythonSDK mod (willow1 SDK) | `sdk_mods/classic_minimap/` | `dist/classic_minimap.sdkmod` | `<Borderlands>\sdk_mods\` |
+
+The mod builds its HUD movie (the player-built movie) on the player's machine from their own `GfxHUD.upk` and `menus_ingame_redux.upk`, plus Enhanced's `GfxHUD.upk` when installed, and caches it under `sdk_mods\settings\` (PLAN_V13, ADR 0004). The builder (`swfbuild.py`, `as2asm.py`, `swfdeps.py`, `upk.py`, `swfmerge.py`, `hudmovie.py`) lives in the mod folder; the `tools/` files of the same names are wrappers. `GfxHUD_Minimap.upk` (v0.12 and earlier) is no longer built or installed.
 
 `<Borderlands>` is `C:\Program Files (x86)\Steam\steamapps\common\Borderlands`.
 
@@ -69,14 +70,13 @@ Code comments cite docs by bare name and section, e.g. "PHASE3 3f", "PLAN_V08 3"
    python -I tools/test_minimap_mod.py dist/phase2/HUD_minimap.gfx
    ```
    - Also run the source-only CI checks relevant to the change (see [docs/CI.md](docs/CI.md)). Coverage and mutation floors are in `pyproject.toml`; do not lower them or omit files to make a regression pass. Lint and unit tests with coverage are the continuous, blocking checks; mutation testing runs only on demand (it takes over an hour), so run it when the user asks or before raising floors. Hosted fixture tests supplement the real-movie suites above.
-4. **Build** with the commands in PROGRESS:
-   - The movie build needs the classic HUD, the status-menu movie, and the Enhanced HUD movie, all extracted from the user's own installs.
-   - Repack the package with `--new-guid`.
-   - Bump `__version__` in `__init__.py` and `version` in `pyproject.toml` together.
+4. **Build** with the commands in PROGRESS (or `tools/release.py`, see [docs/TOOLS.md](docs/TOOLS.md)):
+   - Offline movie builds use the classic HUD, the status-menu movie, and (for Enhanced art) the Enhanced HUD movie, all extracted from the user's own installs. Build and test both art variants: with the Enhanced movie and without it (original art).
+   - `tools/release.py --game <Borderlands> --enhanced <Enhanced>` also checks that the mod's in-game build gives the same bytes from the installed packages.
+   - Bump versions with `tools/bump_version.py` (it keeps `__version__`, both `pyproject.toml` files and the profiler allowlist in step).
 5. **Install** only when the user wants it installed, and only with the game closed. Check with `tasklist /FI "IMAGENAME eq Borderlands.exe"`.
-   - Copy the currently installed files into `dist/vNNN/` first.
-   - Install the new files, then verify the SHA-256 of the installed copies against the builds.
-   - Never modify the stock `GfxHUD.upk` (the original is backed up at `dist/phase1/GfxHUD.orig.upk`).
+   - Use `tools/install.py`: it backs up the installed `.sdkmod` files into `dist/` first, installs, and verifies SHA-256.
+   - Never modify the game's own files. The mod only reads `GfxHUD.upk`, `menus_ingame_redux.upk` and Enhanced's `GfxHUD.upk`.
 6. **Record it.**
    - Add a `docs/log/PHASE3.md` entry for the change or in-game run: what happened, the cause, the fix, the tests, the installed hashes, and what is unverified.
    - Update PROGRESS: "Where it stands", the milestone row for the version, the "Installed right now" table and the open items.
@@ -144,7 +144,7 @@ Write commit messages and PR descriptions in plain language: what changed and wh
 
 ## Data and distribution
 
-- **Game files stay local.** The movie package, the extracted `.gfx` movies, the decoded executables and `dist/` contain or derive from game files in the user's own installs. Don't upload, publish or commit them to a public remote.
+- **Game files stay local.** Built movies and packages, the extracted `.gfx` movies, the movie cache, the decoded executables and `dist/` contain or derive from game files in the user's own installs. Don't upload, publish or commit them to a public remote. The `.sdkmod` must contain only our source and our own art (ADR 0004).
   - Source is `sdk_mods/`, `tools/` and `docs/`.
   - `dist/` is build output.
   - Keep `dist/`, decompressed package scratchpads (`tools/pk/`, `pk/`), extracted movies (`swf/`) and Python caches ignored by Git. Never force-add these outputs to a commit.

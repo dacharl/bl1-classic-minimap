@@ -3,13 +3,15 @@
 Doc citations below (PHASE3 3f, PLAN_V08 3, ENHANCED_NATIVE.md 4, ...) refer to files under docs/; start at
 docs/PROGRESS.md.
 
-Needs GfxHUD_Minimap.upk (built by tools/swfbuild.py + tools/upkpatch.py) in WillowGame/CookedPC: the
-stock HUD movie plus the `bl1mm_map` clip and the root functions this mod calls.
+The HUD movie is player-built (PLAN_V13, ADR 0004): on enable, hudmovie.py builds the stock HUD movie plus
+the `bl1mm_map` clip and the root functions this mod calls from the player's own GfxHUD.upk and
+menus_ingame_redux.upk (and Enhanced's GfxHUD.upk for its art, when installed), or reads it from the movie
+cache. No game files ship with the mod.
 
-Why a separate package: classic WillowGame.u carries its own cooked copy of GfxHUD.FlashMovie.HUD and the
-hud_instance template, loaded at startup, so GfxHUD.upk on disk is never read. On enable the mod loads
-GfxHUD_Minimap and points the template's MovieInfo at its movie; HUDs spawned afterwards (any level load)
-use it. Disable restores the original (PHASE3.md 3d).
+Why the template: classic WillowGame.u carries its own cooked copy of GfxHUD.FlashMovie.HUD and the
+hud_instance template, loaded at startup, so GfxHUD.upk on disk is never read (PHASE3.md 3d). On enable the
+mod constructs a GFxMovieInfo holding the built movie and points the template's MovieInfo at it; HUDs
+spawned afterwards (any level load) use it. Disable restores the original.
 
 How it works (ENHANCED_NATIVE.md; PLAN_DIRECT.md step B):
   * per HUD / mission / area: a WillowGFxHelperMap is constructed and released within one call. Init runs
@@ -43,15 +45,16 @@ from pathlib import Path
 from typing import Any
 
 import unrealsdk
-from mods_base import (SETTINGS_DIR, BoolOption, ButtonOption, ObjectFlags, SliderOption, SpinnerOption, build_mod,
-                       get_pc, hook, keybind)
+from mods_base import (SETTINGS_DIR, BoolOption, ButtonOption, HiddenOption, ObjectFlags, SliderOption, SpinnerOption,
+                       build_mod, get_pc, hook, keybind)
 from unrealsdk.hooks import Type
 from unrealsdk.unreal import WeakPointer
 
+from . import hudmovie
 from .swfmerge import MergeRefused
 from .swfmerge import merge as merge_movie
 
-__version__ = "0.12.0"
+__version__ = "0.13.0"
 
 
 STAGE_W = 1280.0                       # classic HUD stage is 1280x720
@@ -98,8 +101,8 @@ LANDMARK_CLIP = "map.maps.landmarks"   # icon template clip (frames objective ..
 RECORD_KINDS = {"FloatProperty", "IntProperty", "BoolProperty", "ByteProperty", "StrProperty", "NameProperty",
                 "StructProperty", "ObjectProperty"}
 ANCHOR_LOG: Path = SETTINGS_DIR / "classic_minimap_anchors.jsonl"
-MOVIE_PACKAGE = "GfxHUD_Minimap"
-MOVIE_PATH = "GfxHUD_Minimap.FlashMovie.HUD"
+MOVIE_NAME = "MinimapHUD"              # the GFxMovieInfo constructed from the player-built movie
+OLD_PACKAGE = "GfxHUD_Minimap.upk"     # v0.12 and earlier; no longer used (PLAN_V13 decision 7)
 STOCK_PATH = "GfxHUD.FlashMovie.HUD"
 TEMPLATE_PATH = "GfxHUD.FlashInstances.hud_instance"   # GFxMovieDefinition.Movie for the HUD
 
@@ -124,6 +127,14 @@ opt_threats = BoolOption("Show enemies", True, description="Show enemies the com
 opt_threat_range = SliderOption("Enemy range (m)", 0, 0, 200,
                                 description="Only show enemies this close. 0 = no limit, like Enhanced.")
 opt_hide_compass = BoolOption("Hide compass", False, description="Hide the classic compass strip.")
+# PLAN_V13 decision 8: the art choice, a manual Enhanced folder (edit classic_minimap.json; the SDK has no
+# text-entry option) and a rebuild; both rebuild the HUD movie, used from the next level load
+opt_enhanced_art = BoolOption("Use Enhanced artwork", True,
+                              description="Use GOTY Enhanced's minimap artwork when it is installed; off uses the "
+                                          "mod's own art. Takes effect from the next level load.",
+                              on_change_while_enabled=lambda _, value: remake_movie(use_enhanced=value))
+opt_enhanced_folder = HiddenOption("Enhanced folder", "",
+                                   description="GOTY Enhanced's game folder, if the mod doesn't find it itself.")
 
 
 def release(obj: Any) -> None:
@@ -410,7 +421,9 @@ def describe(movie: Any) -> dict[str, Any]:
 class Redirect:
     template: Any = None
     original: Any = None          # what disable restores: the stock movie, or the other mod's movie when merged
-    movie_info: Any = None        # our own movie (GfxHUD_Minimap)
+    movie_info: Any = None        # the GFxMovieInfo constructed from the player-built movie (PLAN_V13)
+    movie_data: Any = None        # the bytes `movie_info` holds; a new build means a new object
+    result: Any = None            # hudmovie.Result: the player-built movie and how it was made
     merged: Any = None            # our block spliced into another mod's movie (PLAN_V12)
     merged_from: Any = None       # the foreign movie `merged` was built from; reused while it is unchanged
     merged_active: bool = False   # the template points at `merged` because of us
@@ -459,22 +472,66 @@ def is_stock(info: Any) -> bool:
     return STOCK_PATH in str(info)
 
 
-def load_movie_info() -> Any:
-    """Our movie, loading GfxHUD_Minimap if needed."""
-    info = find("GFxMovieInfo", MOVIE_PATH)
-    if info is None:
-        try:
-            unrealsdk.load_package(MOVIE_PACKAGE)
-        except Exception as ex:
-            log(f"couldn't load {MOVIE_PACKAGE}.upk ({type(ex).__name__}: {ex})")
-        info = find("GFxMovieInfo", MOVIE_PATH)
-    if info is None:
-        log(f"{MOVIE_PACKAGE}.upk not found in WillowGame/CookedPC; minimap idle")
+def player_movie(rebuild: bool = False, use_enhanced: Any = None) -> Any:
+    """The player-built movie's bytes (PLAN_V13): built from the game files, or read from the movie cache.
+
+    None, with a status line, when classic's files can't be built from (decision 17)."""
+    if Redirect.result is not None and not rebuild and use_enhanced is None:
+        return Redirect.result.data
+    settings = Path(SETTINGS_DIR)
+    try:
+        result = hudmovie.provide(hudmovie.game_dir(settings), settings, __version__,
+                                  bool(opt_enhanced_art.value if use_enhanced is None else use_enhanced),
+                                  str(opt_enhanced_folder.value or ""), rebuild)
+    except Exception as ex:  # BuildFailed, or anything unexpected: never break enabling the mod
+        why = str(ex) if isinstance(ex, hudmovie.BuildFailed) else f"{type(ex).__name__}: {ex}"
+        set_status(f"Can't build the minimap's HUD movie: {why}. The minimap stays idle.")
+        return None
+    Redirect.result = result
+    how = "read from the movie cache" if result.cached else f"built from your game files in {result.seconds:.2f}s"
+    log(f"HUD movie {how} ({len(result.data)} bytes, {result.art} art; inputs "
+        f"{', '.join(str(p) for p in result.inputs.values())})")
+    for note in result.notes:
+        log(note)
+    if not result.cached:
+        console_line("Built the minimap's HUD movie from your game files; later sessions reuse it.")
+    old = hudmovie.game_dir(settings) / hudmovie.INTERFACE / OLD_PACKAGE
+    if old.exists():
+        log(f"{OLD_PACKAGE} is no longer used (the mod builds its HUD movie itself): you can delete {old}")
+    return result.data
+
+
+def own_movie_info(source: Any) -> Any:
+    """A GFxMovieInfo holding the player-built movie, its properties (texture references) copied from `source`,
+    the stock movie. Constructed once per build and reused (PLAN_V12 spike: GFx loads such objects)."""
+    data = player_movie()
+    if data is None:
+        return None
+    if Redirect.movie_info is not None and Redirect.movie_data is data:
+        return Redirect.movie_info
+    try:
+        info = unrealsdk.construct_object("GFxMovieInfo", getattr(source, "Outer", None), MOVIE_NAME,
+                                          int(ObjectFlags.KEEP_ALIVE), source)
+        info.RawData = list(data)
+    except Exception as ex:
+        set_status(f"Couldn't install the minimap's HUD movie ({type(ex).__name__}: {ex}). The minimap stays idle.")
+        return None
+    release(Redirect.movie_info)
+    Redirect.movie_info, Redirect.movie_data = info, data
     return info
 
 
+def build_status() -> None:
+    """The movie's notes (original art, an unrecognised game file, ...) as the status line; nothing when clean."""
+    notes = Redirect.result.notes if Redirect.result is not None else []
+    if notes:
+        set_status(" ".join(notes))
+    else:
+        clear_status()
+
+
 def redirect() -> bool:
-    """Point the HUD movie template at GfxHUD_Minimap's movie, or merge into another mod's movie (PLAN_V12)."""
+    """Point the HUD movie template at the player-built movie, or merge into another mod's movie (PLAN_V12)."""
     tmpl = find("WillowHUDGFxMovie", TEMPLATE_PATH)
     if tmpl is None:
         log(f"HUD template {TEMPLATE_PATH} not found; minimap idle")
@@ -482,16 +539,30 @@ def redirect() -> bool:
     current = tmpl.MovieInfo
     if not is_stock(current) and current != Redirect.movie_info and current != Redirect.merged:
         return merge_into(tmpl, current)
-    info = load_movie_info()
+    info = own_movie_info(current)
     if info is None:
         return False
     if Redirect.template is None:
         Redirect.original = tmpl.MovieInfo
-    Redirect.template, Redirect.movie_info = tmpl, info
+    Redirect.template = tmpl
     tmpl.MovieInfo = info
-    clear_status()
-    log(f"HUD template now uses {MOVIE_PATH} (was {Redirect.original})")
+    build_status()
+    log(f"HUD template now uses the player-built movie ({len(Redirect.movie_data)} bytes, "
+        f"{Redirect.result.art} art; was {Redirect.original})")
     return True
+
+
+def remake_movie(rebuild: bool = False, use_enhanced: Any = None) -> None:
+    """"Use Enhanced artwork" or "Rebuild HUD movie": build again, then re-point the template (or re-merge into
+    the other mod's movie). HUDs already up keep their movie; the next level load uses the new one."""
+    tmpl = Redirect.template
+    if Redirect.merged_active and tmpl is not None and tmpl.MovieInfo == Redirect.merged:
+        tmpl.MovieInfo = Redirect.original
+    release(Redirect.merged)
+    Redirect.merged = Redirect.merged_from = None
+    Redirect.merged_active = False
+    if player_movie(rebuild=rebuild, use_enhanced=use_enhanced) is not None and Redirect.enabled:
+        redirect()
 
 
 def merge_into(tmpl: Any, foreign: Any) -> bool:
@@ -500,16 +571,15 @@ def merge_into(tmpl: Any, foreign: Any) -> bool:
     Never overrides (ADR 0003): a movie that fails the checks stays in place and the minimap stays idle."""
     if foreign == Redirect.refused:
         return False
-    ours = load_movie_info()
+    ours = player_movie()
     if ours is None:
         return False
-    Redirect.movie_info = ours
     if Redirect.merged is not None and Redirect.merged_from == foreign:
         info = Redirect.merged                               # decision 7: unchanged foreign movie, reuse
     else:
         started = time.time()
         try:
-            data = merge_movie(bytes(foreign.RawData), bytes(ours.RawData), __version__)
+            data = merge_movie(bytes(foreign.RawData), ours, __version__)
             info = unrealsdk.construct_object("GFxMovieInfo", getattr(foreign, "Outer", None), "MinimapMergedHUD",
                                               int(ObjectFlags.KEEP_ALIVE), foreign)
             info.RawData = list(data)
@@ -552,13 +622,14 @@ def unredirect() -> None:
             tmpl.MovieInfo = Redirect.original
         else:
             log("the HUD template changed after the merge: left the template alone")
-    Redirect.template = Redirect.original = Redirect.movie_info = Redirect.refused = None
+    # movie_info stays: re-enabling in the same session reuses it while the build is unchanged
+    Redirect.template = Redirect.original = Redirect.refused = None
     Redirect.merged_active = False
 
 
 def uses_minimap_movie(movie: Any) -> bool:
     try:
-        return Redirect.movie_info is not None and movie.MovieInfo in (Redirect.movie_info, Redirect.merged)
+        return any(info is not None and movie.MovieInfo == info for info in (Redirect.movie_info, Redirect.merged))
     except Exception:
         return False
 
@@ -572,7 +643,7 @@ def start(pc: Any, movie: Any) -> None:
         if Redirect.refused is not None:
             warn_once("stockhud", f"current HUD uses {movie.MovieInfo}; {Redirect.status}")
         else:
-            warn_once("stockhud", f"current HUD uses {movie.MovieInfo}, not {MOVIE_PATH}: "
+            warn_once("stockhud", f"current HUD uses {movie.MovieInfo}, not the minimap's HUD movie: "
                                   "load a save or change area for the minimap to appear")
         return
     if not layout(movie):
@@ -1343,6 +1414,11 @@ def on_diag_key() -> None:
                             "template.MovieInfo": str(Redirect.template.MovieInfo) if Redirect.template else None,
                             "hud_merge": Redirect.status or None,
                             "hud.MovieInfo": str(movie.MovieInfo) if movie is not None else None}
+    r = Redirect.result
+    info["hud_movie"] = None if r is None else {
+        "art": r.art, "cached": r.cached, "seconds": round(r.seconds, 2), "bytes": len(r.data),
+        "inputs": {name: str(path) for name, path in r.inputs.items()},
+        "enhanced_folder": str(r.enhanced) if r.enhanced else None, "recognised": r.recognised, "notes": r.notes}
     if movie is not None:
         info.update(describe(movie))
     info.update(anchor=S.anchor.get("name"), map_frame=S.anchor.get("MapFrame"), anchor_attempts=S.anchor_attempts,
@@ -1398,6 +1474,10 @@ opt_givers.on_change_while_enabled = lambda *_: rebuild()
 
 opt_rebuild = ButtonOption("Rebuild now", on_press=lambda _: rebuild(),
                            description="Re-collect landmarks and objectives.")
+opt_rebuild_movie = ButtonOption("Rebuild HUD movie", on_press=lambda _: remake_movie(rebuild=True),
+                                 description="Build the minimap's HUD movie from your game files again (for "
+                                             "example after installing GOTY Enhanced). Takes effect from the next "
+                                             "level load.")
 
 
 @hook("Engine.WorldInfo:IsMenuLevel", Type.POST)
@@ -1425,5 +1505,5 @@ def on_disable() -> None:
 
 mod = build_mod(options=[opt_position, opt_dock_size, opt_scale, opt_margin_x, opt_margin_y, opt_zoom, opt_icon_size,
                          opt_rotate, opt_rotation_offset, opt_threats, opt_threat_range, opt_givers, opt_hide_compass,
-                         opt_rebuild])
+                         opt_enhanced_art, opt_rebuild, opt_rebuild_movie, opt_enhanced_folder])
 BASE_DESCRIPTION = getattr(mod, "description", "") or ""

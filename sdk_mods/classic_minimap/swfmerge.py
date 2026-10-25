@@ -314,7 +314,7 @@ def read_block(ours):
             if len(block) != info["tags"]:
                 raise MergeRefused("block manifest does not match the minimap movie")
             return info, b"".join(raw for _, _, raw in block)
-    raise MergeRefused("the minimap movie has no block manifest: reinstall GfxHUD_Minimap.upk")
+    raise MergeRefused("the minimap movie has no block manifest: use Rebuild HUD movie")
 
 
 def shift_gradients(root, before, count):
@@ -356,7 +356,7 @@ def merge(foreign, ours, version):
     """Our block spliced into `foreign` (a HUD movie's bytes), using the manifest in `ours`."""
     info, block = read_block(ours)
     if info["version"] != version:
-        raise MergeRefused("GfxHUD_Minimap.upk is for mod %s, not %s: reinstall GfxHUD_Minimap.upk"
+        raise MergeRefused("the minimap's HUD movie was built for mod %s, not %s: use Rebuild HUD movie"
                            % (info["version"], version))
     head, root, trailing = split(foreign)
     try:
