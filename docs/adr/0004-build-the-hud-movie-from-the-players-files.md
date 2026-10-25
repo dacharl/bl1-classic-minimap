@@ -1,0 +1,3 @@
+# Build the HUD movie from the player's own files
+
+The minimap's HUD movie contains game assets (the stock HUD, the status menu's zone art and functions, and optionally Enhanced's vector shapes), so we never distribute it or a package holding it. Instead the `.sdkmod` ships our builder, our own art and expected hashes, and builds the movie in memory on the player's machine from their installed game files, caching the result under `sdk_mods/settings/` and installing it as a constructed `GFxMovieInfo`. This makes one file the whole install on PC and Deck, at the cost of a first-run build, input discovery across Steam libraries, a cache to keep valid, and our own fallback art for players without Enhanced.
