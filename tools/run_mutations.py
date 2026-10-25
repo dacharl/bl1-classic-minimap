@@ -60,10 +60,20 @@ def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--workers', type=worker_count, default='auto',
                         help='auto (available CPUs) or a positive integer')
+    parser.add_argument('--modules', nargs='+', default=[],
+                        help='run only these configured module paths (local measurement; CI runs all)')
     args = parser.parse_args(argv)
     if sys.platform == 'win32' and args.workers > 61:
         args.workers = 61  # ProcessPoolExecutor's Windows handle limit.
     return args
+
+
+def selected_modules(configured, wanted):
+    """The configured module paths, optionally narrowed to `wanted` (configured order kept)."""
+    unknown = set(wanted) - set(configured)
+    if unknown:
+        raise SystemExit(f'Not in cosmic-ray.toml module-path: {", ".join(sorted(unknown))}')
+    return [path for path in configured if not wanted or path in wanted]
 
 
 def main():
@@ -82,7 +92,7 @@ def main():
     counts = {}
     survivors = []
     with use_db(str(output / 'mutations.sqlite'), WorkDB.Mode.create) as db:
-        paths = [Path(path) for path in config['module-path']]
+        paths = [Path(path) for path in selected_modules(list(config['module-path']), args.modules)]
         init(paths, db, config.operators_config)
         items = list(db.pending_work_items)
         for path in paths:

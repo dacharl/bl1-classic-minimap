@@ -1,8 +1,9 @@
 [cosmic-ray]
-module-path = ["sdk_mods/classic_minimap/__init__.py", "tools/build_sdkmod.py"]
-timeout = 10.0
+module-path = ["sdk_mods/classic_minimap/__init__.py", "tools/build_sdkmod.py",
+               "sdk_mods/classic_minimap_profiler/__init__.py", "sdk_mods/classic_minimap_profiler/profiler.py"]
+timeout = 20.0
 excluded-modules = []
-test-command = "python -B -I tools/test_ci.py"
+test-command = "python -B -I tools/test_mutants.py"
 
 [cosmic-ray.distributor]
 name = "local"

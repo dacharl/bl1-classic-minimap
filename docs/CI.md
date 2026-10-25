@@ -1,6 +1,10 @@
 # CI checks
 
-`.github/workflows/ci.yml` runs on pushes to `main` (including merged PRs), PRs targeting `main`, merge-queue events and manual dispatch. The hosted jobs need no game installation or credentials. Reports are retained for 14 days.
+**Continuous, blocking checks:** `.github/workflows/ci.yml` runs on pushes to `main` (including merged PRs), PRs targeting `main`, merge-queue events and manual dispatch. It has two jobs: **lint** (Ruff, dependency consistency, repository checks, actionlint) and **unit tests with per-file line and branch coverage floors**. These are the only checks that run continuously; configure them as required status checks.
+
+**On demand:** mutation testing runs only when started by hand: **Actions → Mutation testing → Run workflow** (`.github/workflows/mutation.yml`), or locally with `tools/run_mutations.py`. A full run takes over an hour, so it is not part of continuous CI and does not block merges. Run it before raising floors, after changing the shipped mods or the packager in ways the unit tests may not catch, and before a release when practical.
+
+The hosted jobs need no game installation or credentials. Reports are retained for 14 days.
 
 ## Gates
 
@@ -10,6 +14,8 @@
 | `tools/as2asm.py` | 81% | 76% | Not gated |
 | `tools/swfbuild.py` | 97% | 78% | Not gated |
 | `tools/build_sdkmod.py` | 94% | 83% | 80% |
+| `sdk_mods/classic_minimap_profiler/__init__.py` | 95% | 95% | 85% |
+| `sdk_mods/classic_minimap_profiler/profiler.py` | 95% | 88% | 78% |
 
 The floors are configured in `pyproject.toml` and applied separately to each file. Missing reports or missing files fail. Coverage counts Python execution of the builder and assembler; it does not measure AS2 instruction coverage or actual game engine behavior.
 
@@ -17,7 +23,7 @@ Mutation gates cover the shipped Python mod and SDK packager, configured in `cos
 
 Initial Windows/Python 3.11 baseline: the mod killed 2,059 of 2,767 mutants (74.41%); the packager killed 32 of 39 (82.05%). There were no mutant timeouts or worker errors. Packager survivors include untested CLI argument handling and destination-parent creation. These remain in the denominator; strengthen those tests before raising the floor.
 
-Ruff `F`/`E9` checks run over both mods and all Python tools. Additional checks validate workflow syntax with actionlint, Python syntax, matching version fields, dependency consistency, SDK archive structure/content/cache exclusion, the absence of tracked game/build binaries, the ban on unsafe `.Invoke` calls, and thresholds for every shipped mod Python file. These checks run before the slower mutation job.
+Ruff `F`/`E9` checks run over both mods and all Python tools. Additional checks validate workflow syntax with actionlint, Python syntax, matching version fields, dependency consistency, SDK archive structure/content/cache exclusion, the absence of tracked game/build binaries, the ban on unsafe `.Invoke` calls, and coverage and mutation thresholds being configured for every shipped mod Python file. These run in the continuous lint job; the mutation scores themselves are checked only by on-demand mutation runs.
 
 ## Parallel workers
 
@@ -27,7 +33,16 @@ Both `tools/run_tests.py` and `tools/run_mutations.py` default to `--workers aut
 
 The unit runner starts each test case in a separate Python process, including the movie, mod, archive, quality-gate and runner regression tests. `--coverage` erases stale coverage, writes separate child data files and combines them before the existing per-file gates run. Coverage runs should not share an output directory concurrently. Optional positional unittest IDs select a subset of tests.
 
-Mutation workers retain isolated source copies and run `test_ci.py` serially inside each worker, avoiding nested CPU pools. Their Windows cleanup has one finalizer that leaves the temporary working directory before removing it, including on Python 3.13. Mutation scope, score denominators and coverage floors are unchanged.
+Mutation workers retain isolated source copies and run `tools/test_mutants.py` serially inside each worker, avoiding nested CPU pools. It runs `test_ci.py` and then `test_profiler.py`, each in its own process, because both import the real core with stubbed SDK modules (once per process). With two suites per mutant the per-mutant timeout is 20 s. Hang safety: on timeout Cosmic Ray kills the test command (its process group on POSIX, only the direct process on Windows) and then waits for the output pipe. A suite that outlives the command keeps that pipe open and stalls the worker permanently. This happened twice:
+- **At 1,200 of 3,866:** the suites survived the killed venv launcher.
+- **At 3,850:** a mutant spun inside one C call, holding the GIL, so the in-process watchdog never ran.
+
+`test_mutants.py` therefore makes the operating system clean up:
+- **POSIX:** suites stay in the command's process group, which `killpg` covers.
+- **Windows:** suites run on the base interpreter inside a kill-on-close job object, so they die when the command dies, however it dies.
+- **Extra layers:** a 25 s budget kills a suite's tree while the command is alive, and `tools/watchdog_run.py` ends suites stuck in Python code.
+
+Cosmic Ray still records such mutants as timeouts (undetected). The Windows path is verified locally with Cosmic Ray's own kill function; the POSIX path runs in CI's Ubuntu jobs. `run_mutations.py --modules <paths>` limits a local run to some configured files (for measuring one file; CI always runs all of them, and the gate then sees only the selected files). Their Windows cleanup has one finalizer that leaves the temporary working directory before removing it, including on Python 3.13. Mutation scope, score denominators and coverage floors are unchanged.
 
 ## Local commands
 
@@ -43,6 +58,7 @@ python -I -m venv .venv
 .venv/Scripts/python.exe -I -m coverage report
 .venv/Scripts/python.exe -I -m coverage json
 .venv/Scripts/python.exe -I tools/quality_checks.py coverage
+# On demand (over an hour):
 .venv/Scripts/python.exe -B -I tools/run_mutations.py
 .venv/Scripts/python.exe -I tools/quality_checks.py mutation
 ```
