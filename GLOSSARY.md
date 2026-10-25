@@ -1,6 +1,6 @@
 # Classic minimap diagnostics
 
-Language for the playable minimap and its optional performance investigation tools.
+Language for the playable minimap, how it coexists with other HUD mods, and its optional performance investigation tools.
 
 ## Language
 
@@ -39,6 +39,30 @@ _Avoid_: Crash, reset
 **Report contract**:
 The frozen performance report schema plus fixture reports that this repository publishes and the MCP performance adapter is built against.
 _Avoid_: API, interface (unqualified)
+
+**Foreign HUD movie**:
+A HUD movie that another mod has put into the HUD movie template, neither the stock HUD nor ours.
+_Avoid_: Modded HUD, other HUD (unqualified)
+
+**Minimap block**:
+The tags our build inserts before stock's first `ShowFrame`: the minimap's characters, exports and root functions.
+_Avoid_: Patch, diff
+
+**Block manifest**:
+The facts shipped with the minimap block that a merge checks: stock's prefix tag codes, our gradient count and our character id range.
+_Avoid_: Metadata (unqualified)
+
+**Stock prefix**:
+The top-level tags before the first `ShowFrame` in the stock classic HUD movie; a foreign HUD movie must have the same tag codes there to be merged.
+_Avoid_: Header
+
+**Merged HUD movie**:
+A foreign HUD movie with the minimap block spliced in at runtime, installed as a new movie object the template points at.
+_Avoid_: Combined build, patched HUD
+
+**Merge refusal**:
+The outcome when a foreign HUD movie fails a structural check: the other mod keeps the template and the minimap stays idle with a message.
+_Avoid_: Merge failure, conflict
 
 **MCP performance adapter**:
 The diagnostic reader that turns a saved minimap performance report into validated, inspectable evidence.

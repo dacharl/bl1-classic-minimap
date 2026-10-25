@@ -1,0 +1,3 @@
+# Merge into foreign HUD movies; never override them
+
+When another mod has replaced the HUD movie template, the minimap merges its prebuilt block into that foreign HUD movie at runtime, and when the structural checks refuse the merge it stays idle with a visible message instead of taking the template back. Overriding would silently break the other mod (Extended UI drives paths only its movie has), and a per-mod build or known-hash allowlist would leave players idle after every update of the other mod. The cost is a runtime splice inside the mod and a minimap that is sometimes unavailable alongside HUD mods we can't merge safely.
