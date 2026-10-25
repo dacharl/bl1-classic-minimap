@@ -862,7 +862,15 @@ before the minimap. Log: hidden "loading movie" 19:47:42.2, map ready 19:47:49.8
 3 s, so a delay existed before the merge; the transitions differ, so whether Extended UI adds to it is not
 established. Both are tuning-pass items (PROGRESS).
 
-**Still unverified:** the Deck run with Extended UI, the Deck run, and (a constructed `GFxMovieInfo` honoured by GFx; `bytes(RawData)` / `RawData = list(...)`
+**Steam Deck run with Extended UI 1.3.2 (run 20, 2026-10-25 20:18, v0.12.0, user-supplied log): works.** Extended UI
+loaded at 20:19:03; the first `IsMenuLevel` merged at 20:19:50 (`merged in 4.36s (840389 bytes)`, 3.40 s on the PC);
+the next HUD attached the map at once, "Merged into … HUD movie" shows in the F7 snapshot (`hud_merge`,
+`template.MovieInfo` = `GfxHUD_MOD.FlashMovie.MinimapMergedHUD`), Arid showed 24 markers and the 108% zoom, and a
+trip to the DLC2 lobby (`dlcmap1`, frame 31) rebuilt in place in 3.6 s with the map shown 3.5 s later. No "Refused" or
+error line from our mods (the `ERR` lines are other mods' invalid `.sdkmod` files). The merge is the one visible
+hitch: 4.4 s on the Deck, once per session.
+
+**Still unverified:** (the Deck run with Extended UI is done, see above) the Deck run, and (a constructed `GFxMovieInfo` honoured by GFx; `bytes(RawData)` / `RawData = list(...)`
 speed and typing in pyunrealsdk; `template_obj` copying their texture references); the merge against the real
 Extended UI HUD (its package was not at hand, so only the synthetic fixture and the stock HUD were tested); the Deck
 run (plan step 4). If the spike fails, switch the install to the package fallback (decision 9).
