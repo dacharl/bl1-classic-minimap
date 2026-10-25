@@ -1,10 +1,12 @@
-# Classic Minimap: progress (updated 2026-10-24)
+# Classic Minimap: progress (updated 2026-10-25)
 
 An Enhanced-style minimap for **Borderlands GOTY classic** (Steam app 8980, x86, v1.5.0.0), using the willow1 PythonSDK plus a separately shipped HUD movie package.
 
 This page tracks where the project stands: what works, what's installed, how to build and test, and what's left. Agents start at [AGENTS.md](../AGENTS.md) and players read the [README](../README.md). Keep this page current: update the milestones, "Installed right now" and "Open items" with every release and in-game run. The details of each run go in [PHASE3](log/PHASE3.md).
 
 ## Where it stands
+
+- **Release and diagnostic tooling (2026-10-25):** `bump_version.py`, `release.py`, `install.py` and `diag.py` implement FRICTION's first three suggestions. CLI scenarios use temporary repositories/logs/game folders. A release built from the local game inputs passes both movie suites; no real installation or runtime version bump was performed. See [TOOLS.md](TOOLS.md), PLAN_RELEASE_TOOLS and PHASE3 §3ah.
 
 - **Profiler add-on 0.1.0 (PLAN_V11, built offline, not installed):** `sdk_mods/classic_minimap_profiler/` attaches reversible wrappers to the core only during a capture, saves schema-v1 reports with an 8-slot archive, and leaves the core artifact byte-identical. The report contract is frozen (PERF_REPORT_V1 + fixtures, handoff H0 done); `steam-deck-scripts` owns the adapter (H1). Memory requirement met; the 0.05 ms p95 requirement is unresolved on the stub harness (wrapper cost ≈ 0.020 ms per admitted update). PHASE3 §3z.
 - **Automatic test workers (2026-10-24):** task branch `test/auto-parallel-workers` adds CPU-based defaults for unit and mutation tests, independent unit processes with merged coverage, and clean mutation-worker shutdown on Python 3.13. CI and local commands use the same defaults; see CI.md and PHASE3 §3s. No runtime or installed files change.
@@ -36,6 +38,7 @@ This page tracks where the project stands: what works, what's installed, how to 
 | Version | What it delivered | In game |
 |---|---|---|
 | CI tooling | Automatic parallel unit/mutation workers with numeric overrides and combined unit coverage | Source-only; no installation |
+| Maintenance tooling | Synchronized version/fixture edits, tested release bundles, verified installation/backups, log diagnostics | Offline and fake-install validation; no real installation (§3ah) |
 | Phases 0–2 | SDK confirmed on classic (probe); `upkpatch.py` movie swap; `swfbuild.py` minimap movie | Probe runs 1–2 |
 | v0.1–v0.2 | First mod; `SingleArgInvokeS` instead of `Invoke`; separate `GfxHUD_Minimap.upk` + template redirect | Runs 1–5: nothing shown, then GC crashes (§3b–3f) |
 | v0.3–v0.4 | `KEEP_ALIVE` helper; objective refresh; transient helper gated on the zone anchor (Step A) | Run 6–7: working map (§3g–3h) |
@@ -61,6 +64,7 @@ Docs are cited across the code and docs by bare name (e.g. "PHASE3 §3l", "PLAN_
 | [evidence/](research/evidence/) | Script/Flash disassembly and native exec tables cited by REPORT |
 | **plans/** | |
 | [CI.md](CI.md) / [PLAN_CI.md](plans/PLAN_CI.md) | CI gates, scope, local commands and source-only fixture research |
+| [TOOLS.md](TOOLS.md) / [PLAN_RELEASE_TOOLS.md](plans/PLAN_RELEASE_TOOLS.md) | Release/install, version synchronization and log diagnostics commands and design |
 | [PLAN_DIRECT.md](plans/PLAN_DIRECT.md) | Step A (transient helper; v0.4.0–0.5.1) and Step B (transform in Python; implemented in v0.6.0, PHASE3 §3k) |
 | [PLAN_V07.md](plans/PLAN_V07.md) | Run 9 findings → v0.7: source-clip corner markers, no-flicker rebuild, Enhanced dock with skew, ECHO/quest shift |
 | [PLAN_V08.md](plans/PLAN_V08.md) | v0.8: Enhanced zoom (108% relative to the window), edge indicators, mission givers via classic's IMissionDirector script |
@@ -90,9 +94,11 @@ Saved option gotcha: your `sdk_mods\settings\classic_minimap.json` has **Top mar
 
 **Uninstall:** delete `sdk_mods\classic_minimap.sdkmod` and `GfxHUD_Minimap.upk`.
 
-The automatic-worker tooling changes are source-only; installed versions and hashes above are unchanged.
+The automatic-worker and maintenance tooling changes are source-only; installed versions and hashes above are unchanged.
 
 ## Build and test
+
+For automated release builds, version bumps, installation and saved-log summaries, see [TOOLS.md](TOOLS.md).
 
 ```bash
 # script disassembly: uedis.py reads decompressed packages from tools/pk/ (C_ = classic, E_ = Enhanced;
@@ -142,6 +148,8 @@ CoordScale.X = 1, CoordScale.Y = (ClipW/ClipH)/(TextureSizeX/TextureSizeY)   # C
 That's one zone so far. **The decomp (ENHANCED_NATIVE.md §3) shows that the true matrix also multiplies both extents by `DrawScale` and includes pitch/roll.** v0.6.0 builds that full matrix (`anchor_transform`) and reproduces the logged Arid helper Transform within 6.5e-8 relative error.
 
 ## Open items
+
+- **Maintenance tooling:** a real installation through `install.py` remains unverified; install only when requested. Optional Deck deployment over SSH is deferred. Runtime foreign-HUD console feedback remains separate from `diag.py`'s saved-log detection.
 
 - Hosted CI verification of automatic workers remains pending; local validation is recorded in PHASE3 §3s.
 - **Runtime HUD merge (PLAN_V12, planned):** Extended UI's HUD movie shares stock's prefix, gradients and images with no id or name clashes; our block spliced into it passes both suites offline. Plan: merge into whatever HUD movie another mod installs, at runtime.

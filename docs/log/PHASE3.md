@@ -742,3 +742,50 @@ These floors are now in `pyproject.toml` and CI.md. A complete run with the fixe
 **Open:**
 1. Compatibility with Extended UI. Building our package on top of its HUD movie, instead of the stock one, would let both work; that needs its package from the Deck.
 2. Diagnostics should name a foreign HUD movie ("another mod replaced the HUD: GfxHUD_MOD") instead of the generic hint.
+
+## 3ah. Release/install, version and diagnostic tools (2026-10-25)
+
+**Request:** implement FRICTION's first three ranked tooling improvements. Work is on
+`feat/release-diagnostics` in `.worktrees/release-diagnostics`; no game files were installed.
+Research/design: PLAN_RELEASE_TOOLS. Commands and limitations: [TOOLS.md](../TOOLS.md).
+
+**Cause of repeated work:** releases and installs were manual, diagnostic evidence needed throwaway
+parsers, and core/profiler/fixture versions were edited independently. The profiler version actually
+lives in `profiler.py` and is re-exported; the fixture generator had a hardcoded core version.
+
+**Changes:**
+- `bump_version.py` synchronizes core/profiler declarations, preserves the compatibility history,
+  regenerates all 21 contract fixtures and updates the two contract introductions. Dry runs do not
+  write; generator failures restore original bytes. No runtime version was bumped in this task.
+- `release.py` takes explicit local input paths, builds the movie, runs both real-movie suites,
+  repacks with `--new-guid`, builds the standard artifact and optional profiler, and publishes a
+  completed local directory with a SHA-256 manifest. Existing release directories are refused.
+- `install.py` verifies the manifest, archive versions, installed stock hash and all package bytes
+  against reconstruction from stock (including bulk-data relocation). It checks the process twice,
+  backs up selected installed files by replaced version and UTC date, stages/copies/verifies them,
+  rolls back copy failures and prints PROGRESS rows. Profiler installation requires `--profiler`.
+- `diag.py` reads local/copied logs, safely parses F7 dicts, decodes zoom inputs, flags foreign HUD
+  names and summarizes warnings/events, anchors and the latest profiler text summary. Nonfinite GFx
+  reads become null; malformed/truncated records are reported without losing prior valid evidence.
+
+**Validation:** test-first CLI scenarios against temporary repositories, synthetic package/movie inputs,
+logs and fake game folders; confirmed CLI boundaries with the user. All 80 default unit cases and
+all existing per-file coverage gates pass, as do Ruff and the repository checks. Scenarios include
+partial-build cleanup, repeatable version bumps, preservation of old producer versions, generator
+rollback, game-running refusal, tampered payload/manifest refusal, dry runs, profiler opt-in, copy
+rollback and non-execution of log text. Both real-movie suites also pass through `release.py` with
+the primary checkout's extracted game inputs. `diag.py` reads the current installed SDK log/settings.
+Mutation testing was not requested and was not run; floors and mutation scope are unchanged.
+
+**Local validation release** (`dist/releases/validation-0102`, never installed):
+- `GfxHUD_Minimap.upk`: `a090b80c9a9b3029d8b0825f349f7804643ceda11944c0378fdb8a13576b2b97`;
+- `HUD_minimap.gfx`: `8014864975257b7486d3157fe008f75abe38f8aaf1252cd33f2acfa9bc5b2ad5`;
+- `classic_minimap.sdkmod`: `7a1ab22f025f42ad7eb97abb3350dff3f172a34a0dbf15c150fdaf5bb178d390`;
+- `classic_minimap_profiler.sdkmod`: `1cde794e68c6d1cfbf19a3f81525cc675e1140795bee97cebbc26d17824ea034`.
+
+The package GUID is fresh per build, and ZIP timestamps can change archive hashes; these identify
+this validation bundle only. The stock input hash is `5c515c3ea119bcffbaf774657d58b995b41a4f0daf6d9f3291ca9fb14b93ea88`.
+
+**Installed hashes:** unchanged from §3af; no game files were copied. **Unverified:** a real install
+through the new installer and subsequent in-game play. SSH deployment is deferred. Saved-log
+foreign-HUD detection does not implement PLAN_V12's runtime console message or HUD merge.

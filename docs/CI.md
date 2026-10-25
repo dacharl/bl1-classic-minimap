@@ -68,3 +68,8 @@ python -I -m venv .venv
 `tools/ci_fixture.py` independently authors empty sprites and five native-contract stubs, then passes them through the real movie builder. Both existing movie/mod suites run against that result without skipped assertions. This catches source logic and bytecode generation regressions. It does not verify original/copied game functions, artwork, UPK relocation, runtime Scaleform compatibility or in-game behavior. Run both original suites against your locally built game movie before installing/releasing, as described in PROGRESS.
 
 The obsolete probe and research tools have lint/syntax checks only. Strict SDK type checks and mutation gates for the movie builder/assembler are future work. Configure required status checks in GitHub branch protection after the first hosted run.
+
+`test_workflow.WorkflowChecks` is part of the default unit run. It exercises the maintenance CLIs
+against temporary source trees, independently authored movie/package inputs, logs and fake game
+folders. It also injects process-query and file-replacement outcomes at the OS boundary to check
+running-game refusal and rollback. It never installs into the user's game. See [TOOLS.md](TOOLS.md).

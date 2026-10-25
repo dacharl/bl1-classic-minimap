@@ -11,6 +11,7 @@ import json
 import re
 import sys
 import tempfile
+import tomllib
 import types
 from pathlib import Path
 
@@ -42,7 +43,8 @@ class Clock:
 def fake_core(clock):
     """Shaped like classic_minimap 0.10.0: tick admits via current_hud_movie, then sends commands."""
     core = types.ModuleType('classic_minimap')
-    core.__version__ = '0.10.0'
+    core.__version__ = tomllib.loads((ROOT / 'sdk_mods/classic_minimap/pyproject.toml').read_text(
+        encoding='utf-8'))['project']['version']
     core.costs = {}
 
     def spend(name):

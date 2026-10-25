@@ -56,7 +56,7 @@ def native_contract():
     return functions
 
 
-def build_fixture():
+def fixture_inputs():
     status = movie([
         sprite(1040), sprite(1050), sprite(1066, [(1, 1050)], ['questionmark']),
         sprite(1132, [(1, 1066)]), sprite(1154, [(1, 1040), (5, 1040), (8, 1132)]),
@@ -64,5 +64,9 @@ def build_fixture():
     ])
     enhanced = movie([tag(2, struct.pack('<H', sid) + b'\x08\x00\x00\x00\x00\x00')
                       for sid in (81, 82, 108, 110, 127, 179)])
-    data, _ = build(movie([]), status, enhanced)
+    return movie([]), status, enhanced
+
+
+def build_fixture():
+    data, _ = build(*fixture_inputs())
     return data

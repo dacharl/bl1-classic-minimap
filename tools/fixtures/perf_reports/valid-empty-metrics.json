@@ -9,7 +9,7 @@
  "producer": {
   "name": "classic_minimap_profiler",
   "version": "0.1.2",
-  "core_version": "0.10.0"
+  "core_version": "0.10.2"
  },
  "capture": {
   "id": "000000000000000000000000c0ffee20",

@@ -111,19 +111,23 @@ Items already logged above as they happened: the profiler benchmark and coverage
 
 ## Suggested improvements (ranked)
 
-1. **Release and install tooling** (now more pressing: six manual installs this session).
+**2026-10-25 status:** items 1–3 are implemented and validated offline (PHASE3 §3ah;
+[usage](../TOOLS.md)). Real installation through the tool is unverified; optional Deck SSH deployment
+is deferred. Item 4 is now the highest-ranked pending tool.
+
+1. **Release and install tooling — implemented offline** (six manual installs motivated this).
    - `tools/release.py`: bump `__version__` and `pyproject.toml` together, run both suites, build the package (`--new-guid`) and `.sdkmod`.
    - `tools/install.py`: refuse while `Borderlands.exe` runs, back up the installed files to `dist/vNNN/`, copy, verify SHA-256, and run the package bulk-data check.
      - Back up to a dated folder named after the version being replaced.
      - Install the profiler only with `--profiler`.
      - Print the PROGRESS rows to paste.
      - Optionally target the Deck over SSH.
-2. **`tools/diag.py`: read any `unrealsdk.log`** (local, or a copy from the Deck):
+2. **`tools/diag.py`: read any `unrealsdk.log` — implemented** (local, or a copy from the Deck):
    - phase and template/HUD MovieInfo, flagging a foreign HUD movie;
    - the last N F7 snapshots, with `zoom_fit` decoded (points, raw, final);
    - warnings since startup, and map-ready and rebuild lines with timestamps;
    - a summary of `classic_minimap_anchors.jsonl` and the latest profiler summary.
-3. **`tools/bump_version.py`:** bump the mod (both fields), add it to the profiler's `SUPPORTED_CORE_VERSIONS`, bump the profiler (both fields), regenerate `tools/fixtures/perf_reports/`, and update the version lines in PERF_REPORT_V1 and the handoff. Write bytes without a BOM.
+3. **`tools/bump_version.py` — implemented:** bump the mod (both fields), add it to the profiler's `SUPPORTED_CORE_VERSIONS`, bump the profiler (both fields), regenerate `tools/fixtures/perf_reports/`, and update the version lines in PERF_REPORT_V1 and the handoff. Write bytes without a BOM.
 4. **Resumable, watched mutation runs:**
    - `run_mutations.py --resume` keeps the Cosmic Ray database and runs only pending items.
    - It writes `dist/ci/mutations.json` after every progress line, not only at the end.
@@ -147,3 +151,11 @@ Items already logged above as they happened: the profiler benchmark and coverage
 11. **Agent shell rules in AGENTS.md** (done in the previous session; this session added the `-I`/`PYTHONIOENCODING` note): use the Write tool for scripts (no heredocs with backslashes), the Edit tool for text, literal paths in worktrees, PowerShell when Bash's wrapper fails, and `PYTHONIOENCODING=utf-8`.
 12. **Commit per version** on the feature branch once the user approves, so each in-game run maps to a commit and diffs stay reviewable. This session showed the cost of batching: one five-commit split of 33 changed files.
 13. **A Steam Deck testing section in the README:** log and settings paths under Proton (including the SD card), F7 through Steam Input or the on-screen keyboard, and known HUD-mod conflicts.
+
+## Maintenance tooling implementation (2026-10-25)
+
+| What happened | Cause | Workaround | Fix |
+|---|---|---|---|
+| Both real-movie suites failed on the primary checkout's existing output before any source changes | The ignored `HUD_minimap.gfx` was older than the current source (old threats/tint behavior) | Rebuilt in the task worktree from the explicitly selected local inputs; both suites passed | Build and test a fresh movie in `release.py`; never treat an existing ignored artifact as current |
+| Baseline Git tests and the install test's process check failed inside the sandbox | Temporary Git repository creation and `tasklist` needed access beyond the initial tool sandbox | Reran those tests with the required access; they passed | Distinguish environment refusals from behavior failures; process-query errors must still refuse installation |
+| An initial contract-version edit replaced a historical producer version in the allowlist | Broad replacement in the introduction changed both the current producer and history | A CLI scenario caught the missing old version before completion | Edit the current-version fields separately and extend, rather than replace, the documented producer list |
