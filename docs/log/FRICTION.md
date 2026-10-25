@@ -76,18 +76,74 @@ Second rebase onto automatic workers: PROGRESS had an open-items conflict during
 | The restarted full mutation run stalled again at 3,850/3,866 | Some mutants spin in one C call (holding the GIL), so the in-process watchdog never ran; Windows Cosmic Ray kills only its direct child | Suites in a kill-on-close job object (Windows) and in the caller's process group (POSIX); reproduced and verified with Cosmic Ray's own kill function | Process lifetime must be enforced by the OS, not by threads in the hung process; test hang handling against the real caller's kill path |
 | `PYTHONIOENCODING` had no effect on a `python -I` script | Isolated mode ignores `PYTHON*` environment variables | `sys.stdout.reconfigure(encoding='utf-8')` in the script, or write to a file | Don't rely on `PYTHONIOENCODING` with `-I` |
 
+## Session of 2026-10-24/25 (v0.10.0 → v0.10.2, runs 13–17, profiler 0.1.x)
+
+Items already logged above as they happened: the profiler benchmark and coverage traps, both mutation stalls, the run 14–15 fixes (wobble, gradients, DLC frame), and the BOM. These are the rest.
+
+### Process and workflow
+
+| What happened | Cause | Workaround | Fix |
+|---|---|---|---|
+| Six installs in two days, each a hand-written PowerShell block (tasklist, back up to a new `dist\v…` folder, copy, hash each file, check the stock HUD, then edit PROGRESS and PHASE3) | No install tool; suggestion 1 from the previous session was never built | Careful copy-paste; every install was verified | Build `tools/install.py` (suggestion 1). The backup folders (`v0100`, `v0100-wobblefix`, `v0100-run15`, `v0101-run16`) became ad hoc names |
+| One mod fix cascaded into seven files: mod version ×2, the profiler allowlist, profiler version ×2, all 21 fixtures, two contract docs | The profiler's exact core allowlist (decision 14) plus fixtures that embed the producer version | A guard test now catches a missing allowlist entry | A bump tool that updates every field and regenerates the fixtures (suggestion 3) |
+| Full mutation runs took about 75 minutes, two stalled, and all results were lost each time (the log only had the last progress line) | `run_mutations.py` creates a fresh database per run, has no resume, and nothing notices a stall | Kept a copy of the log; read the counts from its last line | Resume from the existing database, plus a no-progress alarm (suggestion 4) |
+| Commits had to be split by hand: PROGRESS, PHASE3, README and AGENTS each mixed several features | Records for parallel work go into shared files | A strip-and-restore script for one split; grouping shared files with their nearest commit for the rest | Commit per feature as soon as it's validated, not in batches |
+| A multi-line `Edit` on the PROGRESS table failed | The old text cut table rows mid-line, so it wasn't contiguous | Redid it as three single-row edits | Edit whole lines; for tables, one row per edit |
+
+### Diagnosis
+
+| What happened | Cause | Workaround | Fix |
+|---|---|---|---|
+| Every in-game report needed a new throwaway parser (F7 fields, zoom inputs, anchors, profiler summary, screenshot crops) | F7 prints a Python dict into the log; nothing summarizes it | Scratch scripts `diaglast/diagall/diagzoom/anchors.py`, `crop_box.py` | `tools/diag.py` (suggestion 2) |
+| On the Deck the mod looked dead: no minimap, no message | The only hint went to `unrealsdk.log`; nothing on screen. Another HUD mod (Extended UI) had replaced the movie, and the hint ("load a save") was wrong for that case | Read the uploaded Deck log; the user disabled Extended UI | In-game console messages for idle states, naming a foreign HUD movie (PLAN_V12 item 2) |
+| Finding the Deck's log took a round trip; F7 needs a keyboard on the Deck | Paths and input differ under Proton | Explained in chat | A README section for Steam Deck testing (log path, settings path, F7 via Steam Input) |
+| GFx questions (art size, gradients, animation, exports) each needed a new scratch script | Inspection tools cover timelines and dependencies but not shape geometry, colours or gradient mapping | `shapebounds/shapedump/shaperender/gradscan/gradmap/rawdef.py` in the scratchpad | Promote them into `tools/swfinspect.py` (suggestion 5) |
+| Two assumptions about copied art broke in game: the icon's width pulses, and `setRGB` flattens every layer | The AS VM models clips as static boxes with no timeline or colour layers | Measured with `swftimeline.py`; regression tests added afterwards | Before measuring or colouring a copied clip, list its frames and layers; let the VM model frame-varying sizes where measurements depend on them |
+
+### Environment and agent tooling
+
+| What happened | Cause | Workaround |
+|---|---|---|
+| `start_session` refused `C:/Users/.../steam-deck-scripts`, then needed the user to trust the repository | The app wants the native Windows spelling and a trusted folder | Retried with backslashes; the user then declined the session |
+| `Select-Object -First N` after a native command made PowerShell report exit 255 | The pipeline closes early; the command itself succeeded | Ignored after checking the output |
+| Reading the Codex grilling session needed a JSONL parser | No tool for other agents' transcripts | Scratch `codextail.py` |
+| Usage limits interrupted two long turns | Long test, mutation and benchmark runs inside a turn | Resumed from the summary; background runs survived |
+
 ## Suggested improvements (ranked)
 
-1. **Release and install tooling.**
+1. **Release and install tooling** (now more pressing: six manual installs this session).
    - `tools/release.py`: bump `__version__` and `pyproject.toml` together, run both suites, build the package (`--new-guid`) and `.sdkmod`.
    - `tools/install.py`: refuse while `Borderlands.exe` runs, back up the installed files to `dist/vNNN/`, copy, verify SHA-256, and run the package bulk-data check.
-2. **One shared input cache for every checkout and worktree.** `tools/inputs.py` would extract the classic HUD and status-menu movies and the Enhanced HUD from the game installs into a cache outside the repo (e.g. `%LOCALAPPDATA%\bl1-classic-minimap\inputs`, overridable). The build commands would read from there, and backups would go there too.
-3. **Fix the GFx ID collision for inspection tools.** Make the `swfdeps.Movie` lookup prefer standard SWF definitions over GFx extension tags, behind a flag, and verify that `swfbuild`'s closure is unchanged byte for byte before switching it on.
-4. **Check fake signatures against the packages.** Add a test helper that reads a script function's parameters (including `out`) with `uedis`/`upk`, and asserts each fake's Python signature matches. It would have caught run 12 offline.
-5. **In-game self-test (F7 extension).** Exercise each risky SDK call once (giver calls, the `transform.matrix` read-back, radar read) and log pass/fail, so one key press validates new assumptions before a full play-through.
-6. **Promote the scratch helpers into `tools/`:**
+     - Back up to a dated folder named after the version being replaced.
+     - Install the profiler only with `--profiler`.
+     - Print the PROGRESS rows to paste.
+     - Optionally target the Deck over SSH.
+2. **`tools/diag.py`: read any `unrealsdk.log`** (local, or a copy from the Deck):
+   - phase and template/HUD MovieInfo, flagging a foreign HUD movie;
+   - the last N F7 snapshots, with `zoom_fit` decoded (points, raw, final);
+   - warnings since startup, and map-ready and rebuild lines with timestamps;
+   - a summary of `classic_minimap_anchors.jsonl` and the latest profiler summary.
+3. **`tools/bump_version.py`:** bump the mod (both fields), add it to the profiler's `SUPPORTED_CORE_VERSIONS`, bump the profiler (both fields), regenerate `tools/fixtures/perf_reports/`, and update the version lines in PERF_REPORT_V1 and the handoff. Write bytes without a BOM.
+4. **Resumable, watched mutation runs:**
+   - `run_mutations.py --resume` keeps the Cosmic Ray database and runs only pending items.
+   - It writes `dist/ci/mutations.json` after every progress line, not only at the end.
+   - A no-progress timeout (e.g. 10 minutes) prints the stuck workers' processes and exits, instead of hanging.
+5. **`tools/swfinspect.py`** from this session's scratch scripts:
+   - `bounds` (shape/sprite bounds, including GFx id collisions);
+   - `dump` (fills, line styles, vertices);
+   - `render` (wireframe PNG);
+   - `gradients` (per-shape gradient index → tag-1003 image, and stock-vs-built comparison);
+   - `frames` (which frames change a sprite's size or colour).
+
+   Also add the "classic shapes keep their gradient images" check to the real-movie AS suite when `HUD_classic.gfx` is present.
+6. **One shared input cache for every checkout and worktree.** `tools/inputs.py` would extract the classic HUD and status-menu movies and the Enhanced HUD from the game installs into a cache outside the repo (e.g. `%LOCALAPPDATA%\bl1-classic-minimap\inputs`, overridable). The build commands would read from there, and backups would go there too.
+7. **Fix the GFx ID collision for inspection tools.** Make the `swfdeps.Movie` lookup prefer standard SWF definitions over GFx extension tags, behind a flag, and verify that `swfbuild`'s closure is unchanged byte for byte before switching it on.
+8. **Check fake signatures against the packages.** Add a test helper that reads a script function's parameters (including `out`) with `uedis`/`upk`, and asserts each fake's Python signature matches. It would have caught run 12 offline.
+9. **In-game self-test and visible status (F7 extension).** Exercise each risky SDK call once (giver calls, the `transform.matrix` read-back, radar read) and log pass/fail, so one key press validates new assumptions before a full play-through. Echo the phase and any idle reason (foreign HUD, missing package, no anchor) to the in-game console, not only the log.
+10. **Promote the scratch helpers into `tools/`:**
    - `bulkcheck.py` → `tools/upkcheck.py` (package bulk-data validation);
    - `checklinks.py` → `tools/checklinks.py`;
    - `strrefs.py` (x64 string references) → `tools/strrefs.py`.
-7. **Agent shell rules in AGENTS.md:** use the Write tool for scripts (no heredocs with backslashes), the Edit tool for text, literal paths in worktrees, PowerShell when Bash's wrapper fails, and `PYTHONIOENCODING=utf-8`.
-8. **Commit per version** on the feature branch once the user approves, so each in-game run maps to a commit and diffs stay reviewable.
+11. **Agent shell rules in AGENTS.md** (done in the previous session; this session added the `-I`/`PYTHONIOENCODING` note): use the Write tool for scripts (no heredocs with backslashes), the Edit tool for text, literal paths in worktrees, PowerShell when Bash's wrapper fails, and `PYTHONIOENCODING=utf-8`.
+12. **Commit per version** on the feature branch once the user approves, so each in-game run maps to a commit and diffs stay reviewable. This session showed the cost of batching: one five-commit split of 33 changed files.
+13. **A Steam Deck testing section in the README:** log and settings paths under Proton (including the SD card), F7 through Steam Input or the on-screen keyboard, and known HUD-mod conflicts.

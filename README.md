@@ -63,6 +63,7 @@ Open **MODS → Classic Minimap**:
 - **Markers look stale:** press **F8**. Markers also refresh on their own when your mission, objectives or area change.
 - **Something looks wrong:** press **F7** where it happens, then send
   `…\Borderlands\Binaries\Plugins\unrealsdk.log` (and a screenshot).
+- **No minimap with Extended UI (Extended Item Cards) installed:** that mod also replaces the HUD movie, and only one replacement can be active. Disable Extended UI to use the minimap; compatibility is being looked at.
 - **The game crashes at startup** with "memory could not be written": check free space on your system drive first. A full disk caused exactly this crash during testing.
 
 ## Known limitations

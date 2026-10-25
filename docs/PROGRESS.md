@@ -13,7 +13,9 @@ This page tracks where the project stands: what works, what's installed, how to 
 - **Works in game (confirmed through run 12):** zone art, landmarks, player centring, radar enemy dots, the objective turn-in tint, the Enhanced-style dock with the HUD tilt, ECHO/mission text moved aside, no-flicker rebuilds, DLC3 maps, Enhanced zoom and icon size, the north marker, and hiding during the tunnel, menus and death.
 - **Run 13 (v0.9.0):** box size matches the footage, but the map is ~2.5–3× less zoomed and objectives near the top edge are clipped (PHASE3 §3u).
 - **Run 14 (2026-10-24):** the profiler loads and captures in game. An objective near the window edge "wobbled" because the handoff measured the animated icon's live width; fixed in a rebuilt package (`5eefdf81…6d03`, installed; the previous `5bae8e3f…bc29` is in the worktree's `dist\v0100\`), mod unchanged (PHASE3 §3aa).
-- **Installed now, not yet played (2026-10-24):** mod v0.10.1, profiler 0.1.1, package `4a840f56…cabc`; previous files backed up in the worktree's `dist\v0100-run15\` (PHASE3 §3ad).
+- **Run 17, Steam Deck (2026-10-24):** v0.10.2 works under Proton once **Extended UI** (Extended Item Cards 1.3.2) is disabled: it replaces the HUD movie with its own `GfxHUD_MOD` after our redirect, so only one can win. The map maths matches the PC exactly (PHASE3 §3ag). Compatibility and a clearer "another mod replaced the HUD" message are open.
+- **Run 16 → v0.10.2, profiler 0.1.2 (installed, not yet played; previous files in the worktree's `dist\v0101-run16\`):** DLC maps confirmed fixed. The gold turn-in tint now multiplies instead of flattening (the diamond keeps its ring and centre), and the zoom fit is redone with the placed pawn the first time the map shows after a level change (PHASE3 §3af).
+- **Previously installed (played in run 16):** mod v0.10.1, profiler 0.1.1, package `4a840f56…cabc`; previous files backed up in the worktree's `dist\v0100-run15\` (PHASE3 §3ad).
   - **Run 15 → v0.10.1:** a DLC-to-DLC trip on the same HUD (T-Bone → Tartarus) kept the old DLC map; fixed by leaving the `dlcmap1` frame when the DLC package changes. Profiler 0.1.1 accepts core 0.10.1 (PHASE3 §3ac).
   - **Threat markers:** Enhanced's red diamond with a black outline (E shape 127) instead of drawn squares, counter-rotated with the map (PHASE3 §3ad).
 - **Gradient fix (installed; box confirmed faint blue in run 15):** the bright damage indicator and the green/red/white box came from the builder shifting classic's external gradient numbering; package `e2b687c1…ab51` restores it (PHASE3 §3ab).
@@ -64,6 +66,7 @@ Docs are cited across the code and docs by bare name (e.g. "PHASE3 §3l", "PLAN_
 | [PLAN_V08.md](plans/PLAN_V08.md) | v0.8: Enhanced zoom (108% relative to the window), edge indicators, mission givers via classic's IMissionDirector script |
 | [PLAN_V09.md](plans/PLAN_V09.md) | v0.9: Enhanced's box and clip-layer window; its fixed-zoom conclusion is superseded by PLAN_V10 |
 | [PLAN_V10.md](plans/PLAN_V10.md) | v0.10: native `QuickAccessInit` objective-fit zoom (108% without objectives), full-icon edge handoff; N overlap matches Enhanced |
+| [PLAN_V12.md](plans/PLAN_V12.md) | Coexisting with other HUD mods (Extended UI): research and a runtime merge of our minimap block into whichever HUD movie is installed |
 | [PLAN_V11_MCP_HANDOFF.md](plans/PLAN_V11_MCP_HANDOFF.md) | Contract and task list for `steam-deck-scripts` to build the MCP performance adapter (PLAN_V11 decision 15): report schema v1, file layout, gates H0–H2, acceptance tests |
 | [PLAN_V11.md](plans/PLAN_V11.md) | External profiler first: artifact separation, reversible wrappers, prior MCP report-format research, bounded reports/tests and overhead validation; instrumented build only as fallback |
 | **log/** | |
@@ -77,9 +80,9 @@ Docs are cited across the code and docs by bare name (e.g. "PHASE3 §3l", "PLAN_
 
 | File | Version / SHA-256 |
 |---|---|
-| `WillowGame\CookedPC\Packages\Interface\GfxHUD_Minimap.upk` | **v0.10 + run-14/15 fixes** `4a840f56…cabc` (handoff sized from the icon's scale, §3aa; classic's gradient textures kept, §3ab; Enhanced threat diamonds, §3ad). Backups in the worktree: gradient-fix package `e2b687c1…ab51` in `dist\v0100-run15\`, wobble-fix package `5eefdf81…6d03` in `dist\v0100-wobblefix\`, first v0.10 package `5bae8e3f…bc29` in `dist\v0100\`; v0.9 package `dc1292c5…ab9d` in `dist\v090\` |
-| `sdk_mods\classic_minimap.sdkmod` | **v0.10.1** `0042d3c4…873c`, not yet played (PHASE3 §3ac). Backups: v0.10.0 in the worktree's `dist\v0100-run15\`, v0.9.0 in `dist\v090\`, v0.8.1 in `dist\v081\`; older ones in the main checkout's `dist\v080\`, `dist\v070\`, `dist\v060\`, `dist\v051\` |
-| `sdk_mods\classic_minimap_profiler.sdkmod` | **profiler 0.1.1** `0f642d31…d5c8`, optional (0.1.0 loaded and captured in run 14; backup in `dist\v0100-run15\`). Delete it to remove |
+| `WillowGame\CookedPC\Packages\Interface\GfxHUD_Minimap.upk` | **v0.10 + run-14/16 fixes** `5eb071eb…61f1` (handoff sized from the icon's scale, §3aa; classic's gradient textures kept, §3ab; Enhanced threat diamonds, §3ad; multiplying tint, §3af). Backups in the worktree: diamond package `4a840f56…cabc` in `dist\v0101-run16\`, gradient-fix package `e2b687c1…ab51` in `dist\v0100-run15\`, wobble-fix package `5eefdf81…6d03` in `dist\v0100-wobblefix\`, first v0.10 package `5bae8e3f…bc29` in `dist\v0100\`; v0.9 package `dc1292c5…ab9d` in `dist\v090\` |
+| `sdk_mods\classic_minimap.sdkmod` | **v0.10.2** `e7d6da71…d42a`, not yet played (PHASE3 §3af). Backups: v0.10.1 in the worktree's `dist\v0101-run16\`, v0.10.0 in `dist\v0100-run15\`, v0.9.0 in `dist\v090\`, v0.8.1 in `dist\v081\`; older ones in the main checkout's `dist\v080\`, `dist\v070\`, `dist\v060\`, `dist\v051\` |
+| `sdk_mods\classic_minimap_profiler.sdkmod` | **profiler 0.1.2** `497fe5c5…174e`, optional (0.1.0 loaded and captured in run 14; backups in `dist\v0101-run16\`, `dist\v0100-run15\`). Delete it to remove |
 | `sdk_mods\minimap_probe.sdkmod` | probe v0.2. Leave it disabled; it's not needed any more |
 | `WillowGame\CookedPC\Packages\Interface\GfxHUD.upk` | **stock** `5c515c3e…3ea88` (backup: `dist\phase1\GfxHUD.orig.upk`) |
 
@@ -141,6 +144,10 @@ That's one zone so far. **The decomp (ENHANCED_NATIVE.md §3) shows that the tru
 ## Open items
 
 - Hosted CI verification of automatic workers remains pending; local validation is recorded in PHASE3 §3s.
+- **Runtime HUD merge (PLAN_V12, planned):** Extended UI's HUD movie shares stock's prefix, gradients and images with no id or name clashes; our block spliced into it passes both suites offline. Plan: merge into whatever HUD movie another mod installs, at runtime.
+- **HUD mod conflicts (run 17):**
+  - **Extended UI:** Extended Item Cards ("Extended UI") ships its own replacement HUD movie (`GfxHUD_MOD`) and wins the `hud_instance` template when it loads after us. Options: build our package on top of its HUD movie (needs its package), or detect the foreign movie and say so.
+  - **Misleading message:** the current message ("load a save or change area") is wrong in this case.
 - **Threat markers (installed, not yet played):** Enhanced's diamond (E shape 127, copied as 1310) replaces the drawn square; it counter-rotates with the map (PHASE3 §3ad). Check its size against Enhanced and with "Rotate with player".
 - **Profiler 0.1.0 (v0.11):**
   - Decide how decision 8's p95 requirement is accepted: the stub harness's noise (±0.7 ms paired) cannot resolve 0.05 ms.

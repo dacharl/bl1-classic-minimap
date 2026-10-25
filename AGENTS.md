@@ -140,6 +140,7 @@ Write commit messages and PR descriptions in plain language: what changed and wh
   - Use the Edit tool rather than `sed` for patterns containing backticks, quotes or backslashes.
   - Spell out paths instead of shell variables; worktree sessions also refuse `python -c` and variable-built commands.
   - If Bash fails with exit 127 writing its cwd file, use PowerShell.
+  - Never write source files with PowerShell `Set-Content`/`Out-File`: Windows PowerShell 5.1 adds a UTF-8 BOM (it broke a version bump once). Use the Edit tool.
   - Set `PYTHONIOENCODING=utf-8` (or avoid printing non-ASCII) when running Python from PowerShell. `python -I` ignores it: call `sys.stdout.reconfigure(encoding="utf-8")` in the script or write output to a file.
 - **Worktrees:** `dist/` and `tools/pk/` are ignored, so a new worktree starts without build inputs. Copy `dist/phase1/GfxHUD.orig.upk`, `dist/phase2/{HUD_classic,status_menu,HUD_enhanced}.gfx` and `tools/pk/*.u` from the main checkout (or re-extract them with the PROGRESS commands).
 - **Git:** this repository was initialized at the user's request. Commit or push only when the user asks; do not add a remote or publish game-derived files without explicit authorization.

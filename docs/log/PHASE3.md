@@ -692,3 +692,53 @@ The user also pointed to MCP diagnostic formatting in `C:/Users/Charles/Dev/stea
 | profiler `profiler.py` | 759 of 926, 29 timeouts | 82.0% (80.6% if the 16 unfinished count as undetected) | **78%** (new) |
 
 These floors are now in `pyproject.toml` and CI.md. A complete run with the fixed command is still pending; mutation runs are on demand only.
+
+## 3af. Run 16: flat turn-in diamond, zoom off after a level change → v0.10.2, profiler 0.1.2 (2026-10-24)
+
+**Seen:**
+- DLC maps work after T-Bone ↔ Tartarus.
+- The gold turn-in objective looked flat: a solid, tilted gold square instead of a diamond with a ring and a dark centre.
+- Arid's zoom changed after getting into a vehicle (moderate on foot, very close afterwards).
+
+**Turn-in diamond:**
+- **Cause:** the tint used `Color.setRGB`, which paints every pixel one colour. The objective sprite (1050) has a faint 45-unit square glow (shape 1047), the diamond ring and a dark centre; all three became solid gold, so the glow showed as a big gold square. Enhanced's turn-in giver art (shape 108) is a green "?", unrelated.
+- **Fix (movie):** new root `MinimapTint(clip, rgb)` applies a multiplying colour transform: ra/ga/ba = channel / 2.55, alpha and offsets untouched. White turns gold and the dark centre stays dark. It is used for the in-map icon and its edge diamond.
+- **Tests:** the VM's `Color.setTransform` is recorded, and `tint_of()` rejects any `setRGB`. The suite failed while `setRGB` was used.
+
+**Zoom after the vehicle:**
+- **Evidence (F7):** at 02:16:06 the fit's player point was (−381, 537, −11146), Tartarus coordinates while the map was Arid. The capture ran after the trip, before the game moved the pawn: raw 61%, shown 108%.
+- The status-menu-close rebuild at 02:16:12 refitted with the real position, about 280 UU from the objective, giving 400%, which is correct.
+- **Fix (mod 0.10.2):** a capture that fits also sets `fit_pending`. The first time the map is shown afterwards (no loading movie, levels settled), `refit_when_shown` refreshes **only the pawn point**, keeping the capture's waypoints, since objective changes keep the fit as in Enhanced. It refits and redraws only if the points changed. It runs once.
+- **Tests:** a capture during a loading movie with a stale, far pawn gives 108%; then the pawn is placed and loading ends, and the zoom must be 400%, staying there. This failed before the fix. The existing "objective change keeps the fit" scenario caught a first attempt that refreshed waypoints too.
+
+**Versions:** mod 0.10.2; profiler 0.1.2 (allowlist adds 0.10.2); fixtures regenerated (producer version only). All version edits were made with the Edit tool (no BOM).
+
+**Validation:**
+- Both real-movie suites, 55 unit cases, Ruff, the repository gate and coverage pass (core 90.41%/84.53%, `swfbuild.py` 97.25%/80.30%).
+- **Builds (not installed):**
+  - `GfxHUD_Minimap.upk` `5eb071eb9244557f27edf434f0209c6b27b2d755f5f66d72d6ade36405e461f1` (movie `80148649…2ad5`);
+  - `classic_minimap.sdkmod` 0.10.2 `e7d6da7151c29ddc592cb9be9f42bf5a2d8755d60f9f0fcd38c4b013fc00d42a`;
+  - `classic_minimap_profiler.sdkmod` 0.1.2 `497fe5c53e251ad2fc5ac4f10b7637b0a7cd9e59b7fdd9fd6b6d6fc8547f174e`.
+
+**Not changed:** closing the status menu still refits (PLAN_V10's choice). That is what corrected the zoom in run 16, and Enhanced itself refits only at HUD init.
+
+**Installed on the Steam Deck too (run 17, below).**
+
+**Installed (user request, game closed):** previous files (mod 0.10.1, profiler 0.1.1, package `4a840f56…cabc`) were backed up to the worktree's `dist\v0101-run16\`. The three builds above are installed, each installed copy's SHA-256 matches its build, and the stock `GfxHUD.upk` is unchanged.
+
+## 3ag. Run 17: Steam Deck, and a conflict with Extended UI (2026-10-24)
+
+**Seen:** v0.10.2 on the Steam Deck (Proton) showed no minimap and no error.
+
+**Log (the Deck's `unrealsdk.log`, read by the agent):**
+- The SDK and mod loaded. At 03:39:52 Classic Minimap redirected the HUD template to `GfxHUD_Minimap.FlashMovie.HUD`.
+- By 03:41:00 the template and the live HUD used `GFxMovieInfo'GfxHUD_MOD.FlashMovie.HUD'` instead. F7 (five snapshots) showed phase `stockhud`, `root functions: False`, and both MovieInfos `GfxHUD_MOD`.
+- **Cause:** another mod redirects the same `hud_instance` template to its own replacement HUD movie and loads later. The user confirmed it is **Extended Item Cards ("Extended UI" 1.3.2)**. Only one replacement HUD movie can win the template; our mod correctly idles on a HUD without its root functions, but its hint ("load a save or change area") was misleading here.
+
+**With Extended UI disabled (second log, 03:53):**
+- `map attached` → `map ready: Arid (frame 2), 24 markers` → `minimap shown` about 3 s later.
+- The Deck's anchor record matches the Windows PC exactly (Arid Transform and CoordScale), so the maths is identical under Proton.
+
+**Open:**
+1. Compatibility with Extended UI. Building our package on top of its HUD movie, instead of the stock one, would let both work; that needs its package from the Deck.
+2. Diagnostics should name a foreign HUD movie ("another mod replaced the HUD: GfxHUD_MOD") instead of the generic hint.
