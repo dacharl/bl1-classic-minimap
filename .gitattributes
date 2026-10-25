@@ -1,0 +1,2 @@
+# The oversized contract fixture is padded with spaces on purpose (it must exceed 256 KiB).
+tools/fixtures/perf_reports/invalid-oversized.json -whitespace
