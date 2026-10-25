@@ -9,7 +9,7 @@ select = ["F", "E9"]
 [tool.coverage.run]
 branch = true
 include = ["sdk_mods/classic_minimap/*", "sdk_mods/classic_minimap_profiler/*", "tools/as2asm.py",
-           "tools/swfbuild.py", "tools/build_sdkmod.py"]
+           "tools/swfbuild.py", "tools/build_sdkmod.py", "tools/land_branch.py"]
 data_file = "dist/ci/.coverage"
 
 [tool.coverage.report]
@@ -46,6 +46,10 @@ branch = 78
 [tool.quality.coverage."tools/build_sdkmod.py"]
 line = 94
 branch = 83
+
+[tool.quality.coverage."tools/land_branch.py"]
+line = 92
+branch = 85
 
 [tool.quality.mutation]
 "sdk_mods/classic_minimap/__init__.py" = 70

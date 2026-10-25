@@ -15,7 +15,8 @@ ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
 from parallel_workers import worker_count  # noqa: E402
 
-DEFAULT_TESTS = ['test_ci.SourceChecks', 'test_quality.GateChecks', 'test_runners.RunnerChecks', 'test_profiler']
+DEFAULT_TESTS = ['test_ci.SourceChecks', 'test_quality.GateChecks', 'test_runners.RunnerChecks', 'test_profiler',
+                 'test_land.LandChecks']
 
 
 def test_ids(suite):

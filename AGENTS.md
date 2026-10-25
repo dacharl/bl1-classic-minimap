@@ -112,6 +112,23 @@ These come from PROGRESS's hard-won facts. Don't break them:
 
 Use **Conventional Commits**: `<type>(<optional scope>): <imperative summary>`. Common types are `feat`, `fix`, `docs`, `refactor`, `test`, `build` and `chore`. For example: `fix(mod): pass mission out parameters positionally`. Use `!` and a `BREAKING CHANGE:` footer only for an actual breaking change.
 
+### Linear history: fast-forward only
+
+`main` takes task branches by **fast-forward only**. There are no merge commits, here or on GitHub.
+- **Land with the tool**, which never pushes:
+  ```bash
+  python -I tools/land_branch.py <branch> --dry-run
+  ```
+  ```bash
+  python -I tools/land_branch.py <branch>
+  ```
+  - It fetches `origin/main` and refuses if `main` and `origin/main` have diverged.
+  - It needs the branch to contain the newer of the two.
+  - It then fast-forwards `main`: through `merge --ff-only` in the worktree that has `main` checked out, which must be clean, or as a guarded ref update when no worktree has it.
+- **If `main` moved on,** rebase the branch onto it in the branch's own worktree (`git rebase main`), or pass `--rebase`. That aborts on a conflict and leaves everything as it was, so resolve conflicts by hand.
+- **Never `git merge` without `--ff-only`**, and never `git pull` without `--rebase`. Rebase only commits that haven't been pushed.
+- **On GitHub,** use "Rebase and merge" or "Squash and merge" only.
+
 Before committing, review the staged diff and file list, run `git diff --cached --check`, and check that no game assets, build outputs, secrets or unrelated changes are staged. Summarize validation and any pending in-game checks in the commit body when relevant. Verify the resulting commit's author, committer and message after committing.
 
 ### No agent attribution
