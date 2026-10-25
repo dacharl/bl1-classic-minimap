@@ -48,7 +48,7 @@ from mods_base import (SETTINGS_DIR, BoolOption, ButtonOption, ObjectFlags, Slid
 from unrealsdk.hooks import Type
 from unrealsdk.unreal import WeakPointer
 
-__version__ = "0.10.1"
+__version__ = "0.10.2"
 
 
 STAGE_W = 1280.0                       # classic HUD stage is 1280x720
@@ -199,6 +199,9 @@ class State:
         self.fit_points: list[tuple[float, float, float]] = []
         self.zoom_points: list[tuple[float, float, float]] = []
         self.fit_anchor: Any = None
+        self.fit_art: tuple[float, float] = (0.0, 0.0)     # zone art size at 100%, for refit_when_shown
+        self.fit_pending = False
+        self.fit_has_pawn = self.zoom_has_pawn = False     # whether the first point is the pawn's
 
 
 S = State()
@@ -502,11 +505,7 @@ def collect(pc: Any, movie: Any) -> bool:
             S.phase, S.retry_at = "anchorwait", time.time() + delay
             return False
         S.anchor = anchor_snapshot(anchor)
-        S.zoom_points = [vec3(pc.Pawn.Location)] if pc.Pawn is not None else []
-        gri = pc.WorldInfo.GRI
-        if gri is not None and gri.RadarMgr is not None:
-            S.zoom_points += [p for slot in gri.ActiveWaypointData
-                             if (p := vec3(slot.WaypointLocation)) != (0.0, 0.0, 0.0)]
+        S.zoom_points, S.zoom_has_pawn = fit_inputs(pc), pc.Pawn is not None
         S.sources = object_sources(helper)
         S.givers = find_givers() if opt_givers.value else []
         S.sources += [(LANDMARK_CLIP, frame, *loc, False) for _, frame, loc in giver_states(pc)]
@@ -526,6 +525,15 @@ def collect(pc: Any, movie: Any) -> bool:
         release(helper)
     S.anchor_attempts = 0
     return True
+
+
+def fit_inputs(pc: Any) -> list[tuple[float, float, float]]:
+    """QuickAccessInit's points: the pawn, then every nonzero waypoint slot (gated on RadarMgr)."""
+    points = [vec3(pc.Pawn.Location)] if pc.Pawn is not None else []
+    gri = pc.WorldInfo.GRI
+    if gri is not None and gri.RadarMgr is not None:
+        points += [p for slot in gri.ActiveWaypointData if (p := vec3(slot.WaypointLocation)) != (0.0, 0.0, 0.0)]
+    return points
 
 
 def rebuild_in_place(pc: Any, movie: Any) -> None:
@@ -685,9 +693,11 @@ def capture(movie: Any, in_place: bool = False) -> bool:
         scale = get_num(movie, "map.maps.themap._xscale")
         if not finite_positive(scale):
             return False
-        S.fit_points = S.zoom_points[:]
-        S.fit_raw, S.fit = fit_zoom(S.fit_points, S.xf, S.cs, w * 100 / scale, h * 100 / scale)
+        S.fit_points, S.fit_has_pawn = S.zoom_points[:], S.zoom_has_pawn
+        S.fit_art = (w * 100 / scale, h * 100 / scale)
+        S.fit_raw, S.fit = fit_zoom(S.fit_points, S.xf, S.cs, *S.fit_art)
         S.fit_anchor = fit_anchor
+        S.fit_pending = True              # confirm once the map is shown (refit_when_shown)
     S.frame = get_num(movie, "map.maps._currentframe")
     S.marks = []
     for clip, frame, x, y, z, waypoint in S.sources:
@@ -719,6 +729,26 @@ def fit_zoom(points: list[tuple[float, float, float]], xf: tuple[float, ...],
     dv = -sum(spans[i] * xf[i * 4] for i in range(3)) * cs[1] * art_h / 100
     raw = 0.5 * min(MASK_W / du if du else math.inf, -MASK_H / dv if dv else math.inf)
     return raw, min(400.0, max(100.0, raw) + 8.0)
+
+
+def refit_when_shown(pc: Any, movie: Any) -> None:
+    """Redo the capture's fit once, the first time the map is shown afterwards.
+
+    After a level change the capture can run while the pawn still has its previous zone's location (run 15:
+    Tartarus coordinates in Arid gave 108% instead of 400%). Enhanced fits at HUD init, after loading; by the
+    time the map shows (no loading movie, live levels settled) the pawn has been placed. Only the pawn point
+    is refreshed: the capture's waypoints stay, since objective changes keep the fit (as in Enhanced). Same
+    points: no change. Different points: refit and redraw."""
+    S.fit_pending = False
+    waypoints = S.fit_points[1:] if S.fit_has_pawn else S.fit_points
+    points = ([vec3(pc.Pawn.Location)] if pc.Pawn is not None else []) + waypoints
+    if points == S.fit_points:
+        return
+    S.fit_points, S.fit_has_pawn = points, pc.Pawn is not None
+    S.fit_raw, fit = fit_zoom(points, S.xf, S.cs, *S.fit_art)
+    if fit != S.fit:
+        S.fit = fit
+        place_static(movie)
 
 
 def zoom_percent() -> float:
@@ -1152,6 +1182,9 @@ def tick(pc: Any) -> None:
         warn_once("vis:" + type(ex).__name__, f"visibility check unavailable ({type(ex).__name__}: {ex})")
         reason = ""
     set_visible(movie, not reason, reason)
+    if S.fit_pending and not reason:
+        refit_when_shown(pc, movie)
+        S.next_threats = 0.0              # a redraw clears the dots: redraw them on the next tick
 
 
 @hook("WillowGame.WillowPlayerController:PlayerTick", Type.PRE)

@@ -547,7 +547,7 @@ def main(gfx_path, on_import=None):
         close(ic.get('_x'), tm.get('_x') + u * tm.get('_width'), 0.01)
         close(ic.get('_y'), tm.get('_y') + v * tm.get('_height'), 0.01)
     objective_icon = [c for c in icons if c.frame == 'objective'][0]
-    assert '_rgb' not in objective_icon.props, 'active mission: stock objective colour'
+    assert asvm.tint_of(objective_icon) is None, 'active mission: stock objective colour'
     # run 9 stuck diamond/arrow: the icon templates are hidden, every created icon is shown
     assert ms.get('landmarks').get('_visible') is False and ms.get('players').get('_visible') is False
     assert all(c.get('_visible') is True for c in icons)
@@ -804,8 +804,8 @@ def main(gfx_path, on_import=None):
     assert len(helpers) == n + 1 and mod.S.phase == 'running' and mod.S.tint == mod.STATUS_TINT[2]
     ms = m.get('maps')
     obj = [c for c in ms.children.values() if c.depth >= 0 and c.frame == 'objective']
-    assert len(obj) == 2 and all(c.props.get('_rgb') == 0xFFC420 for c in obj), [c.props for c in obj]  # slots 0, 1
-    assert all('_rgb' not in c.props for c in ms.children.values() if c.depth >= 0 and c.frame != 'objective')
+    assert len(obj) == 2 and all(asvm.tint_of(c) == 0xFFC420 for c in obj), [c.props for c in obj]  # slots 0, 1
+    assert all(asvm.tint_of(c) is None for c in ms.children.values() if c.depth >= 0 and c.frame != 'objective')
     status_a.Status = 1
     step(0.6); step(); step()
     assert len(helpers) == n + 2 and mod.S.tint is None
@@ -1065,6 +1065,26 @@ def main(gfx_path, on_import=None):
         close(fitted_art.get('_xscale'), 108)
     finally:
         pc.Pawn = pawn
+    # Run 15: after a level change the capture ran while the pawn still had its previous zone's location
+    # (Tartarus coordinates in Arid), so the fit used a wrong player point (108% instead of 400%). Enhanced
+    # fits at HUD init, after loading; the mod refits once when the map is first shown after a capture.
+    slots[0].WaypointLocation = vec(2000, 3000, 0)
+    pc.Pawn.Location = vec(-20000.0, -30000.0, 0.0)       # stale: far from the objective
+    pc.loading_movie = True
+    pc.myHUD = HUD(Movie(gfx))
+    step(); step()
+    assert mod.S.phase == 'running' and pc.myHUD.movie.root.get('map').get('_visible') is False
+    stale_art = pc.myHUD.movie.vm.lookup({}, 'map.maps.themap')
+    close(stale_art.get('_xscale'), 108)                  # fitted from the stale point while hidden
+    pc.Pawn.Location = vec(0.0, 0.0, 0.0)                 # the game places the pawn, loading ends
+    pc.loading_movie = False
+    for _ in range(6):
+        step(1.0)
+    assert pc.myHUD.movie.root.get('map').get('_visible') is True
+    close(stale_art.get('_xscale'), 400)
+    assert mod.S.fit_points[0] == (0.0, 0.0, 0.0)
+    step(0.6); step()
+    close(stale_art.get('_xscale'), 400)                  # refits once, not on every later tick
     # Run 14: T-Bone Junction (DLC3) -> Tartarus Station (DLC4) kept the same HUD, so the mod rebuilt in place.
     # Both use the dlcmap1 frame; the map must leave it so InitMapFrame re-enters it and loads the new DLC movie.
     dlc3, dlc4 = "GFxMovieInfo'dlc3_maps.dlcmap_HUB'", "GFxMovieInfo'dlc4_maps.dlcmap_dlc4tartarus'"

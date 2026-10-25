@@ -227,22 +227,40 @@ def num(v):
         return float('nan')
 
 
+def tint_of(clip):
+    """RGB a clip is tinted to, from a multiplying colour transform (white -> that colour, dark stays dark,
+    alpha untouched); None if untinted. A flat setRGB fill is never accepted (run 15: the turn-in diamond
+    lost its ring and centre and its faint glow became a solid square)."""
+    assert '_rgb' not in clip.props, 'tints must multiply (setTransform), not flatten (setRGB)'
+    ct = clip.props.get('_ct')
+    if ct is None:
+        return None
+    assert (ct['aa'], ct['rb'], ct['gb'], ct['bb'], ct['ab']) == (100, 0, 0, 0, 0), ct
+    return sum(int(round(ct[k] * 2.55)) << s for k, s in (('ra', 16), ('ga', 8), ('ba', 0)))
+
+
 class VM:
     def __init__(self, root):
         self.root = root
         self.funcs = {}
-        self.globals = {'Math': Obj(cos=math.cos, sin=math.sin, PI=math.pi, abs=lambda v: abs(num(v)), max=max),
+        self.globals = {'Math': Obj(cos=math.cos, sin=math.sin, PI=math.pi, abs=lambda v: abs(num(v)), max=max,
+                                    floor=lambda v: float(math.floor(num(v)))),
                         '_root': root, '_level0': root, 'Object': Obj,
                         'Number': lambda v=UNDEF: num(v), 'Array': lambda *a: ASArray(a), 'Color': self.color,
                         'flash': Obj(geom=Obj(Matrix=make_matrix))}
 
     @staticmethod
     def color(target=UNDEF):
-        """new Color(clip): setRGB records the tint on the clip as props['_rgb']."""
+        """new Color(clip): setRGB records props['_rgb'] (a flat fill: every pixel one colour); setTransform
+        records the colour transform object's fields as props['_ct']."""
         def set_rgb(v):
             if isinstance(target, Clip):
                 target.props['_rgb'] = int(num(v))
-        return Obj(setRGB=set_rgb)
+
+        def set_transform(t):
+            if isinstance(target, Clip):
+                target.props['_ct'] = {k: num(t.get(k)) for k in ('ra', 'ga', 'ba', 'aa', 'rb', 'gb', 'bb', 'ab')}
+        return Obj(setRGB=set_rgb, setTransform=set_transform)
 
     def lookup(self, scope, name):
         if '.' in name:
@@ -489,10 +507,12 @@ def main(path):
     assert len(ms.children) == before + 1 and added
     close(added[0].get('_x'), tm.get('_x') + 0.25 * tm.get('_width'))
     close(added[0].get('_y'), tm.get('_y') + 0.75 * tm.get('_height'))
-    assert '_rgb' not in added[0].props, 'untinted add must not touch the colour'
+    assert tint_of(added[0]) is None, 'untinted add must not touch the colour'
     vm.call('MinimapCmd', 'add~map.maps.landmarks~0.3~0.3~0~objective~16761888')     # 0xFFC420 tint
-    tinted = [c for c in ms.children.values() if c.frame == 'objective' and c.props.get('_rgb') == 16761888]
-    assert len(tinted) == 1, 'optional 7th field tints the new icon via Color.setRGB'
+    tinted = [c for c in ms.children.values() if c.frame == 'objective' and c.props.get('_ct')]
+    assert len(tinted) == 1 and tint_of(tinted[0]) == 0xFFC420, 'optional 7th field tints the new icon'
+    ct = tinted[0].props['_ct']
+    close(ct['ra'], 100); close(ct['ga'], 0xC4 / 2.55); close(ct['ba'], 0x20 / 2.55)   # multiplies: dark stays dark
     vm.call('MinimapCmd', 'bogus~1')
     assert root.get('mmBadCmd') == 'bogus~1'
 
@@ -591,7 +611,7 @@ def main(path):
     assert e0.get('_visible') is False, 'an objective inside the window gets no edge indicator'
     assert e1.get('_visible') is True and e1.frame == 'bl1mm_objective'
     close(e1.get('_x'), cx + EX, 1e-6); close(e1.get('_y'), cy, 1e-3)
-    close(e1.get('_xscale'), 373 * 0.55, 1e-6); assert e1.props.get('_rgb') == 16761888
+    close(e1.get('_xscale'), 373 * 0.55, 1e-6); assert tint_of(e1) == 16761888
     # run 12 "double waypoint": while the edge diamond shows, the objective's own icon (partly clipped at the
     # window border) is hidden; the inside one keeps its icon. At the switch point both sit at the same
     # spot, so one marker slides onto the edge.

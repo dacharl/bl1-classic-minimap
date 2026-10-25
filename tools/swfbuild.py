@@ -244,7 +244,7 @@ def new_functions():
     # Classic's landmark art has no Enhanced turnin/newmission frames: the mod tints the objective diamond
     a.if_not(('<', 6, 'n'), 'add_done')
     a.setm('o', 'mmTint', ('fn', 'Number', ('idx', 'parts', 6)))       # edge indicator copies the tint
-    a.do(('call', ('new', 'Color', 'o'), 'setRGB', ('mem', 'o', 'mmTint')))
+    a.do(('fn', 'MinimapTint', 'o', ('mem', 'o', 'mmTint')))
     a.label('add_done')
     a.ret(True)
     a.label('c_frame')       # frame~label: select the zone art directly
@@ -271,6 +271,19 @@ def new_functions():
     a.setm('_root', 'mmBadCmd', 's')
     a.ret(False)
     fns.append(function('MinimapCmd', ('s',), a))
+
+    # MinimapTint(clip, rgb): tint by multiplying (white -> rgb, dark stays dark, alpha untouched). setRGB
+    # painted every pixel one colour: the objective diamond lost its ring and centre and its faint 45-unit
+    # glow square became a solid gold square (run 15).
+    a = Fn()
+    a.local('ct', ('new', 'Object'))
+    a.setm('ct', 'ra', ('/', ('call', 'Math', 'floor', ('/', 'rgb', 65536)), 2.55))
+    a.setm('ct', 'ga', ('/', ('%', ('call', 'Math', 'floor', ('/', 'rgb', 256)), 256), 2.55))
+    a.setm('ct', 'ba', ('/', ('%', 'rgb', 256), 2.55))
+    a.setm('ct', 'aa', 100).setm('ct', 'rb', 0).setm('ct', 'gb', 0).setm('ct', 'bb', 0).setm('ct', 'ab', 0)
+    a.do(('call', ('new', 'Color', 'clip'), 'setTransform', 'ct'))
+    a.ret(True)
+    fns.append(function('MinimapTint', ('clip', 'rgb'), a))
 
     a = Fn()  # MinimapPlayer(u, v, deg): create the local player's icon once, then move/turn it
     a.if_not(('==', '_root.mmPlayer', Ellipsis), 'move')
@@ -429,7 +442,7 @@ def new_functions():
     a.setv('e', ('call', 'map', 'attachMovie', ('s', 'bl1mm_objective'), ('+', ('s', 'mmEdge'), 'i'), ('+', EDGE_DEPTH + 1, 'i')))
     a.do(('call', 'pool', 'push', 'e'))
     a.if_not(('!', ('==', ('mem', 'o', 'mmTint'), Ellipsis)), 'e_have')
-    a.do(('call', ('new', 'Color', 'e'), 'setRGB', ('mem', 'o', 'mmTint')))
+    a.do(('fn', 'MinimapTint', 'e', ('mem', 'o', 'mmTint')))
     a.label('e_have')
     a.setm('e', '_xscale', ('*', 'isc', OBJECTIVE_SCALE * 100)).setm('e', '_yscale', ('*', 'isc', OBJECTIVE_SCALE * 100))
     edge_point('eo')
