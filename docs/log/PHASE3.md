@@ -845,6 +845,11 @@ so no minimap was drawn; the check was the log line. Cost of a merge in game: ab
 write, around 1.6 s once per session; above decision 6's 1 s trigger for a disk cache, and the read of our own
 movie is avoidable (a cheaper read, or caching the block bytes, is the first thing to try).
 
+**v0.12.0 release bundle built (not installed):** `tools/release.py --output dist/releases/0.12.0 --profiler` (it runs
+both movie suites on the built movie). SHA-256: `classic_minimap.sdkmod` `cfa93923…0d45`,
+`classic_minimap_profiler.sdkmod` `988511a9…6376`, `GfxHUD_Minimap.upk` `a858eed8…d0f4`, `HUD_minimap.gfx`
+`8b435820…38be`; stock input `5c515c3e…ea88`. The package GUID is fresh per build.
+
 **Still unverified:** the merge with a real foreign movie in game, the Deck run, and (a constructed `GFxMovieInfo` honoured by GFx; `bytes(RawData)` / `RawData = list(...)`
 speed and typing in pyunrealsdk; `template_obj` copying their texture references); the merge against the real
 Extended UI HUD (its package was not at hand, so only the synthetic fixture and the stock HUD were tested); the Deck
