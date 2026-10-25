@@ -850,7 +850,19 @@ both movie suites on the built movie). SHA-256: `classic_minimap.sdkmod` `cfa939
 `classic_minimap_profiler.sdkmod` `988511a9…6376`, `GfxHUD_Minimap.upk` `a858eed8…d0f4`, `HUD_minimap.gfx`
 `8b435820…38be`; stock input `5c515c3e…ea88`. The package GUID is fresh per build.
 
-**Still unverified:** the merge with a real foreign movie in game, the Deck run, and (a constructed `GFxMovieInfo` honoured by GFx; `bytes(RawData)` / `RawData = list(...)`
+**v0.12.0 installed and played on the PC (run 19, 2026-10-25 19:46):** without Extended UI the minimap works as
+before; with Extended UI enabled both the minimap and its cards, armor bars and compass work after quit to menu
+and load (user report). From the log (Extended UI session): the merge ran once, `merged in 3.40s (840389 bytes)`
+(the bytes match the offline merge), then "Merged into GFxMovieInfo'GfxHUD_MOD.FlashMovie.HUD''s HUD movie…" in
+the log. That is about twice the 1.6 s the spike predicted: two 0.7 s reads, the pure-Python merge (1.6 s on a
+fast desktop) and the 0.2 s write; it happens once, in the first `IsMenuLevel`, and is above decision 6's 1 s
+trigger for a cache. **Level-change delay (user):** Arid Hills to Arid Badlands, the HUD was up several seconds
+before the minimap. Log: hidden "loading movie" 19:47:42.2, map ready 19:47:49.8 (anchor wait 7.6 s), shown
+19:47:52.5 (our 3 s settle rule). The earlier 0.10.2 session's Arid to Dry change took 4.1 s to ready plus the same
+3 s, so a delay existed before the merge; the transitions differ, so whether Extended UI adds to it is not
+established. Both are tuning-pass items (PROGRESS).
+
+**Still unverified:** the Deck run with Extended UI, the Deck run, and (a constructed `GFxMovieInfo` honoured by GFx; `bytes(RawData)` / `RawData = list(...)`
 speed and typing in pyunrealsdk; `template_obj` copying their texture references); the merge against the real
 Extended UI HUD (its package was not at hand, so only the synthetic fixture and the stock HUD were tested); the Deck
 run (plan step 4). If the spike fails, switch the install to the package fallback (decision 9).
