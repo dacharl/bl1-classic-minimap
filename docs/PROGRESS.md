@@ -6,7 +6,7 @@ This page tracks where the project stands: what works, what's installed, how to 
 
 ## Where it stands
 
-- **Runtime HUD merge (PLAN_V12, v0.12.0 + profiler 0.1.3, built offline, not installed, 2026-10-25):** `swfmerge.py` splices our block into another mod's HUD movie (Extended UI) when it takes the template, with status in the log, console and MODS menu; a refused movie keeps its template. Unit and real-movie suites pass. The PC spike passed (a constructed `GFxMovieInfo` is loaded by GFx); the Deck run is still to do. PHASE3 §3ai.
+- **Runtime HUD merge (PLAN_V12, v0.12.0 + profiler 0.1.3, built offline, installed on the PC 2026-10-25 but not yet played):** `swfmerge.py` splices our block into another mod's HUD movie (Extended UI) when it takes the template, with status in the log, console and MODS menu; a refused movie keeps its template. Unit and real-movie suites pass. The PC spike passed (a constructed `GFxMovieInfo` is loaded by GFx); the Deck run is still to do. PHASE3 §3ai.
 
 - **Release and diagnostic tooling (2026-10-25):** `bump_version.py`, `release.py`, `install.py` and `diag.py` implement FRICTION's first three suggestions. CLI scenarios use temporary repositories/logs/game folders. A release built from the local game inputs passes both movie suites; no real installation or runtime version bump was performed. See [TOOLS.md](TOOLS.md), PLAN_RELEASE_TOOLS and PHASE3 §3ah.
 
@@ -87,9 +87,9 @@ Docs are cited across the code and docs by bare name (e.g. "PHASE3 §3l", "PLAN_
 
 | File | Version / SHA-256 |
 |---|---|
-| `WillowGame\CookedPC\Packages\Interface\GfxHUD_Minimap.upk` | **v0.10 + run-14/16 fixes** `5eb071eb…61f1` (handoff sized from the icon's scale, §3aa; classic's gradient textures kept, §3ab; Enhanced threat diamonds, §3ad; multiplying tint, §3af). Backups in the worktree: diamond package `4a840f56…cabc` in `dist\v0101-run16\`, gradient-fix package `e2b687c1…ab51` in `dist\v0100-run15\`, wobble-fix package `5eefdf81…6d03` in `dist\v0100-wobblefix\`, first v0.10 package `5bae8e3f…bc29` in `dist\v0100\`; v0.9 package `dc1292c5…ab9d` in `dist\v090\` |
-| `sdk_mods\classic_minimap.sdkmod` | **v0.10.2** `e7d6da71…d42a`, not yet played (PHASE3 §3af). Backups: v0.10.1 in the worktree's `dist\v0101-run16\`, v0.10.0 in `dist\v0100-run15\`, v0.9.0 in `dist\v090\`, v0.8.1 in `dist\v081\`; older ones in the main checkout's `dist\v080\`, `dist\v070\`, `dist\v060\`, `dist\v051\` |
-| `sdk_mods\classic_minimap_profiler.sdkmod` | **profiler 0.1.2** `497fe5c5…174e`, optional (0.1.0 loaded and captured in run 14; backups in `dist\v0101-run16\`, `dist\v0100-run15\`). Delete it to remove |
+| `WillowGame\CookedPC\Packages\Interface\GfxHUD_Minimap.upk` | **v0.12.0** `a858eed8…d0f4` (block manifest for the runtime merge, PHASE3 §3ai), installed 2026-10-25, not yet played. Previous package `5eb071eb…61f1` is in the worktree's `dist\v0.10.2-20261025T193718.875658Z\`. Older: **v0.10 + run-14/16 fixes** `5eb071eb…61f1` (handoff sized from the icon's scale, §3aa; classic's gradient textures kept, §3ab; Enhanced threat diamonds, §3ad; multiplying tint, §3af). Backups in the worktree: diamond package `4a840f56…cabc` in `dist\v0101-run16\`, gradient-fix package `e2b687c1…ab51` in `dist\v0100-run15\`, wobble-fix package `5eefdf81…6d03` in `dist\v0100-wobblefix\`, first v0.10 package `5bae8e3f…bc29` in `dist\v0100\`; v0.9 package `dc1292c5…ab9d` in `dist\v090\` |
+| `sdk_mods\classic_minimap.sdkmod` | **v0.12.0** `cfa93923…0d45`, installed 2026-10-25, not yet played (PHASE3 §3ai); v0.10.2 `e7d6da71…d42a` is in the same backup folder as the package. Older backups: v0.10.1 in the worktree's `dist\v0101-run16\`, v0.10.0 in `dist\v0100-run15\`, v0.9.0 in `dist\v090\`, v0.8.1 in `dist\v081\`; older ones in the main checkout's `dist\v080\`, `dist\v070\`, `dist\v060\`, `dist\v051\` |
+| `sdk_mods\classic_minimap_profiler.sdkmod` | **profiler 0.1.3** `988511a9…6376` installed 2026-10-25 (0.1.2 `497fe5c5…174e` in the same backup folder), optional (0.1.0 loaded and captured in run 14; backups in `dist\v0101-run16\`, `dist\v0100-run15\`). Delete it to remove |
 | `sdk_mods\minimap_probe.sdkmod` | probe v0.2. Leave it disabled; it's not needed any more |
 | `WillowGame\CookedPC\Packages\Interface\GfxHUD.upk` | **stock** `5c515c3e…3ea88` (backup: `dist\phase1\GfxHUD.orig.upk`) |
 
