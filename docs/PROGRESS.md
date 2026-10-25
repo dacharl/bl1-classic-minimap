@@ -6,7 +6,7 @@ This page tracks where the project stands: what works, what's installed, how to 
 
 ## Where it stands
 
-- **Runtime HUD merge (PLAN_V12, v0.12.0 + profiler 0.1.3, built offline, not installed, 2026-10-25):** `swfmerge.py` splices our block into another mod's HUD movie (Extended UI) when it takes the template, with status in the log, console and MODS menu; a refused movie keeps its template. Unit and real-movie suites pass. The in-game spike (a constructed `GFxMovieInfo`) and the Deck run are still to do. PHASE3 §3ai.
+- **Runtime HUD merge (PLAN_V12, v0.12.0 + profiler 0.1.3, built offline, not installed, 2026-10-25):** `swfmerge.py` splices our block into another mod's HUD movie (Extended UI) when it takes the template, with status in the log, console and MODS menu; a refused movie keeps its template. Unit and real-movie suites pass. The PC spike passed (a constructed `GFxMovieInfo` is loaded by GFx); the Deck run is still to do. PHASE3 §3ai.
 
 - **Release and diagnostic tooling (2026-10-25):** `bump_version.py`, `release.py`, `install.py` and `diag.py` implement FRICTION's first three suggestions. CLI scenarios use temporary repositories/logs/game folders. A release built from the local game inputs passes both movie suites; no real installation or runtime version bump was performed. See [TOOLS.md](TOOLS.md), PLAN_RELEASE_TOOLS and PHASE3 §3ah.
 

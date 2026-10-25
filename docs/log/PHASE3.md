@@ -834,7 +834,18 @@ committed; source in `dist/spike/classic_minimap_spike/`). F6 builds a `GFxMovie
 with timings for every step, points the template at it and logs `SPIKE PASS` when the next HUD runs it (`mmfallback`
 exists); F5 restores. Only checked against fakes.
 
-**Still unverified:** the spike (a constructed `GFxMovieInfo` honoured by GFx; `bytes(RawData)` / `RawData = list(...)`
+**Spike run (PC, 2026-10-25 19:24, run 18): PASS.** First attempt (area change only) was inconclusive: the HUD
+persists across travel, so no new HUD spawned. Second attempt: F6 in game, then quit to menu and load a save.
+Every HUD that spawned afterwards (`WillowHUDGFxMovie_3` to `_6`) had `MovieInfo` = the constructed object and
+`mmfallback._x = -20000`, i.e. GFx loaded our movie from a `GFxMovieInfo` built in Python. No crash. Timings for the
+616,279-byte movie: `bytes(RawData)` 708 ms, `construct_object(template_obj=)` 0.2 ms, `RawData = list(bytes)` 164 ms,
+read-back 708 ms (identical). `template_obj` copied the data properties (only name, hash, flags, net index and
+archetype differ). The installed 0.10.2 core idled on that HUD as designed ("not GfxHUD_Minimap.FlashMovie.HUD"),
+so no minimap was drawn; the check was the log line. Cost of a merge in game: about 0.7 s per movie read plus 0.2 s
+write, around 1.6 s once per session; above decision 6's 1 s trigger for a disk cache, and the read of our own
+movie is avoidable (a cheaper read, or caching the block bytes, is the first thing to try).
+
+**Still unverified:** the merge with a real foreign movie in game, the Deck run, and (a constructed `GFxMovieInfo` honoured by GFx; `bytes(RawData)` / `RawData = list(...)`
 speed and typing in pyunrealsdk; `template_obj` copying their texture references); the merge against the real
 Extended UI HUD (its package was not at hand, so only the synthetic fixture and the stock HUD were tested); the Deck
 run (plan step 4). If the spike fails, switch the install to the package fallback (decision 9).
