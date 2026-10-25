@@ -159,6 +159,8 @@ That's one zone so far. **The decomp (ENHANCED_NATIVE.md §3) shows that the tru
 - **HUD mod conflicts (run 17):**
   - **Extended UI:** Extended Item Cards ("Extended UI") ships its own replacement HUD movie (`GfxHUD_MOD`) and wins the `hud_instance` template when it loads after us. Options: build our package on top of its HUD movie (needs its package), or detect the foreign movie and say so.
   - **Misleading message:** the current message ("load a save or change area") is wrong in this case.
+- **Tuning pass (later, not game-breaking):**
+  - **Zoom without a nearby objective (2026-10-25 screenshots):** in Skag Gully with "Roadkill" tracked the map sat at the 108% floor, which doesn't match what Enhanced shows there. After a mission turn-in the zoom changed (fit to the new objective). Compare our fit against Enhanced's `QuickAccessInit` for far objectives and the no-objective case before changing anything (PLAN_V10).
 - **Threat markers (installed, not yet played):** Enhanced's diamond (E shape 127, copied as 1310) replaces the drawn square; it counter-rotates with the map (PHASE3 §3ad). Check its size against Enhanced and with "Rotate with player".
 - **Profiler 0.1.0 (v0.11):**
   - Decide how decision 8's p95 requirement is accepted: the stub harness's noise (±0.7 ms paired) cannot resolve 0.05 ms.
