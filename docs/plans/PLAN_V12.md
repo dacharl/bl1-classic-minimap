@@ -1,6 +1,6 @@
 # v0.12 plan: coexist with other HUD mods by merging at runtime (2026-10-25)
 
-**Planned and grilled (decisions 1–12, 2026-10-25); not implemented.**
+**Planned and grilled (decisions 1–12, 2026-10-25); implemented offline in v0.12.0 (PHASE3 §3ai). Step 0 (spike) and step 4 (in-game) are still to do.** Deviation from decision 2: the manifest is a Metadata tag in our own movie, not a second movie in the package (`upkpatch` can't add exports).
 
 Run 17 (PHASE3 §3ag): on the Steam Deck the minimap stayed idle because **Extended Item Cards ("Extended UI" 1.3.2)** also replaces the HUD movie, and whichever mod sets the `hud_instance` template last wins. The user asked whether this can be solved dynamically instead of with a separate build per HUD mod.
 

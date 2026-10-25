@@ -2,12 +2,14 @@
 shape fills with, every font a text field uses, and what kind of definition each one is.
 Usage: python -I tools/swfdeps.py movie.gfx <character id> [<character id> ...]
 """
+import os
 import struct
 import sys
 
-SHAPES = {2: 1, 22: 2, 32: 3, 83: 4}          # DefineShape tag -> version
-DEFINES = {2, 22, 32, 83, 39, 6, 20, 21, 35, 36, 90, 10, 48, 75, 11, 33, 37, 7, 34, 46, 84, 14, 18,
-           1001, 1003, 1005, 1008, 1009}
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'sdk_mods', 'classic_minimap'))
+from swfmerge import (DEFINES, SHAPES, Bits, read_fills, read_lines, read_tags, shape_gradient_count,  # noqa: E402,F401
+                      skip_matrix, skip_rect, walk_shape)
+
 NAMES = {2: 'Shape', 22: 'Shape2', 32: 'Shape3', 83: 'Shape4', 39: 'Sprite', 6: 'BitsJPEG', 20: 'BitsLossless',
          21: 'BitsJPEG2', 35: 'BitsJPEG3', 36: 'BitsLossless2', 90: 'BitsJPEG4', 10: 'Font', 48: 'Font2',
          75: 'Font3', 11: 'Text', 33: 'Text2', 37: 'EditText', 7: 'Button', 34: 'Button2', 46: 'MorphShape',
@@ -15,146 +17,8 @@ NAMES = {2: 'Shape', 22: 'Shape2', 32: 'Shape3', 83: 'Shape4', 39: 'Sprite', 6: 
          1005: 'GFxCompactedFont', 1008: 'GFxSubImage', 1009: 'GFxExternalImage2'}
 
 
-class Bits:
-    def __init__(self, b, pos=0):
-        self.b, self.p = b, pos * 8
-
-    def u(self, n):
-        v = 0
-        for _ in range(n):
-            v = (v << 1) | ((self.b[self.p >> 3] >> (7 - (self.p & 7))) & 1)
-            self.p += 1
-        return v
-
-    def s(self, n):
-        v = self.u(n)
-        return v - (1 << n) if n and v & (1 << (n - 1)) else v
-
-    def align(self):
-        self.p = (self.p + 7) & ~7
-        return self.p >> 3
-
-
-def read_tags(d, p, end):
-    out = []
-    while p < end:
-        hdr = struct.unpack_from('<H', d, p)[0]; p += 2
-        code, ln = hdr >> 6, hdr & 0x3F
-        if ln == 0x3F:
-            ln = struct.unpack_from('<I', d, p)[0]; p += 4
-        out.append((code, d[p:p + ln])); p += ln
-        if code == 0:
-            break
-    return out
-
-
-def skip_rect(b, p):
-    return p + (5 + 4 * (b[p] >> 3) + 7) // 8
-
-
-def skip_matrix(br):
-    if br.u(1):
-        n = br.u(5); br.u(n); br.u(n)
-    if br.u(1):
-        n = br.u(5); br.u(n); br.u(n)
-    n = br.u(5); br.u(n); br.u(n)
-    br.align()
-
-
-def read_fills(b, p, ver, bitmaps, gradients=None):
-    n = b[p]; p += 1
-    if n == 0xFF and ver >= 2:
-        n = struct.unpack_from('<H', b, p)[0]; p += 2
-    for _ in range(n):
-        t = b[p]; p += 1
-        if t == 0x00:
-            p += 4 if ver >= 3 else 3
-        elif t in (0x10, 0x12, 0x13):
-            if gradients is not None:
-                gradients.append(t)
-            br = Bits(b, p); skip_matrix(br); p = br.p >> 3
-            k = b[p] & 0x0F; p += 1 + k * (5 if ver >= 3 else 4)
-            if t == 0x13:
-                p += 2
-        elif 0x40 <= t <= 0x43:
-            bitmaps.add(struct.unpack_from('<H', b, p)[0]); p += 2
-            br = Bits(b, p); skip_matrix(br); p = br.p >> 3
-        else:
-            raise ValueError('fill type %#x' % t)
-    return p
-
-
-def read_lines(b, p, ver, bitmaps, gradients=None):
-    n = b[p]; p += 1
-    if n == 0xFF:
-        n = struct.unpack_from('<H', b, p)[0]; p += 2
-    for _ in range(n):
-        if ver < 4:
-            p += 2 + (4 if ver >= 3 else 3)
-        else:
-            p += 2
-            f1 = b[p]; _f2 = b[p + 1]; p += 2
-            if (f1 >> 4) & 3 == 2:  # miter join
-                p += 2
-            if f1 & 0x08:            # has fill
-                p = read_fills(b[:p] + bytes([1]) + b[p:], p, ver, bitmaps, gradients) - 1
-            else:
-                p += 4
-    return p
-
-
 def shape_bitmaps(code, b):
     return walk_shape(code, b)[0]
-
-
-def shape_gradient_count(code, b):
-    """Gradient fill styles in a top-level tag (fills and line fills, initial and inline), 0 for non-shapes.
-
-    GFx numbers gradient fills in file order and keys its external gradient images (tag 1003) by that
-    number, so inserting gradient-bearing shapes shifts every later gradient (PHASE3 run 14)."""
-    return len(walk_shape(code, b)[1]) if code in SHAPES else 0
-
-
-def walk_shape(code, b):
-    """(bitmap ids, gradient fill types in order) of a DefineShape tag body."""
-    ver = SHAPES[code]
-    bitmaps, gradients = set(), []
-    p = skip_rect(b, 2)
-    if ver == 4:
-        p = skip_rect(b, p) + 1
-    p = read_fills(b, p, ver, bitmaps, gradients)
-    p = read_lines(b, p, ver, bitmaps, gradients)
-    br = Bits(b, p)
-    nf, nl = br.u(4), br.u(4)
-    while True:
-        if br.u(1):  # edge
-            straight = br.u(1); n = br.u(4) + 2
-            if straight:
-                if br.u(1):
-                    br.u(n); br.u(n)
-                else:
-                    br.u(1); br.u(n)
-            else:
-                br.u(n); br.u(n); br.u(n); br.u(n)
-            continue
-        flags = br.u(5)
-        if flags == 0:
-            break
-        if flags & 1:
-            n = br.u(5); br.u(n); br.u(n)
-        if flags & 2:
-            br.u(nf)
-        if flags & 4:
-            br.u(nf)
-        if flags & 8:
-            br.u(nl)
-        if flags & 16:
-            q = br.align()
-            q = read_fills(b, q, ver, bitmaps, gradients)
-            q = read_lines(b, q, ver, bitmaps, gradients)
-            br = Bits(b, q)
-            nf, nl = br.u(4), br.u(4)
-    return bitmaps, gradients
 
 
 class Movie:

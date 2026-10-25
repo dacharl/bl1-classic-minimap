@@ -48,7 +48,10 @@ from mods_base import (SETTINGS_DIR, BoolOption, ButtonOption, ObjectFlags, Slid
 from unrealsdk.hooks import Type
 from unrealsdk.unreal import WeakPointer
 
-__version__ = "0.10.2"
+from .swfmerge import MergeRefused
+from .swfmerge import merge as merge_movie
+
+__version__ = "0.12.0"
 
 
 STAGE_W = 1280.0                       # classic HUD stage is 1280x720
@@ -97,6 +100,7 @@ RECORD_KINDS = {"FloatProperty", "IntProperty", "BoolProperty", "ByteProperty", 
 ANCHOR_LOG: Path = SETTINGS_DIR / "classic_minimap_anchors.jsonl"
 MOVIE_PACKAGE = "GfxHUD_Minimap"
 MOVIE_PATH = "GfxHUD_Minimap.FlashMovie.HUD"
+STOCK_PATH = "GfxHUD.FlashMovie.HUD"
 TEMPLATE_PATH = "GfxHUD.FlashInstances.hud_instance"   # GFxMovieDefinition.Movie for the HUD
 
 opt_position = SpinnerOption("Position", "Docked", ["Docked", "Custom"],
@@ -405,8 +409,14 @@ def describe(movie: Any) -> dict[str, Any]:
 
 class Redirect:
     template: Any = None
-    original: Any = None
-    movie_info: Any = None
+    original: Any = None          # what disable restores: the stock movie, or the other mod's movie when merged
+    movie_info: Any = None        # our own movie (GfxHUD_Minimap)
+    merged: Any = None            # our block spliced into another mod's movie (PLAN_V12)
+    merged_from: Any = None       # the foreign movie `merged` was built from; reused while it is unchanged
+    merged_active: bool = False   # the template points at `merged` because of us
+    refused: Any = None           # a foreign movie we refused; not re-checked while the template holds it
+    enabled: bool = False
+    status: str = ""
 
 
 def find(cls: str, path: str) -> Any:
@@ -416,12 +426,41 @@ def find(cls: str, path: str) -> Any:
         return None
 
 
-def redirect() -> bool:
-    """Point the HUD movie template at GfxHUD_Minimap's movie, loading the package if needed."""
-    tmpl = find("WillowHUDGFxMovie", TEMPLATE_PATH)
-    if tmpl is None:
-        log(f"HUD template {TEMPLATE_PATH} not found; minimap idle")
-        return False
+def console_line(msg: str) -> None:
+    """Print to the in-game console (the F7 path); optional, since it needs a viewport."""
+    try:
+        get_pc().Player.ViewportClient.ViewportConsole.OutputText(f"[Classic Minimap] {msg}")
+    except Exception:
+        pass
+
+
+def set_status(msg: str) -> None:
+    """Say why the minimap is or isn't running: SDK log, in-game console and the MODS menu (PLAN_V12 decision 5)."""
+    if msg == Redirect.status:
+        return
+    Redirect.status = msg
+    log(msg)
+    console_line(msg)
+    try:
+        mod.description = f"{BASE_DESCRIPTION}\n\n{msg}" if BASE_DESCRIPTION else msg
+    except Exception:
+        pass
+
+
+def clear_status() -> None:
+    Redirect.status = ""
+    try:
+        mod.description = BASE_DESCRIPTION
+    except Exception:
+        pass
+
+
+def is_stock(info: Any) -> bool:
+    return STOCK_PATH in str(info)
+
+
+def load_movie_info() -> Any:
+    """Our movie, loading GfxHUD_Minimap if needed."""
     info = find("GFxMovieInfo", MOVIE_PATH)
     if info is None:
         try:
@@ -431,24 +470,95 @@ def redirect() -> bool:
         info = find("GFxMovieInfo", MOVIE_PATH)
     if info is None:
         log(f"{MOVIE_PACKAGE}.upk not found in WillowGame/CookedPC; minimap idle")
+    return info
+
+
+def redirect() -> bool:
+    """Point the HUD movie template at GfxHUD_Minimap's movie, or merge into another mod's movie (PLAN_V12)."""
+    tmpl = find("WillowHUDGFxMovie", TEMPLATE_PATH)
+    if tmpl is None:
+        log(f"HUD template {TEMPLATE_PATH} not found; minimap idle")
+        return False
+    current = tmpl.MovieInfo
+    if not is_stock(current) and current != Redirect.movie_info and current != Redirect.merged:
+        return merge_into(tmpl, current)
+    info = load_movie_info()
+    if info is None:
         return False
     if Redirect.template is None:
         Redirect.original = tmpl.MovieInfo
     Redirect.template, Redirect.movie_info = tmpl, info
     tmpl.MovieInfo = info
+    clear_status()
     log(f"HUD template now uses {MOVIE_PATH} (was {Redirect.original})")
     return True
 
 
+def merge_into(tmpl: Any, foreign: Any) -> bool:
+    """Another mod replaced the HUD movie: splice our block into its movie instead of taking the template.
+
+    Never overrides (ADR 0003): a movie that fails the checks stays in place and the minimap stays idle."""
+    if foreign == Redirect.refused:
+        return False
+    ours = load_movie_info()
+    if ours is None:
+        return False
+    Redirect.movie_info = ours
+    if Redirect.merged is not None and Redirect.merged_from == foreign:
+        info = Redirect.merged                               # decision 7: unchanged foreign movie, reuse
+    else:
+        started = time.time()
+        try:
+            data = merge_movie(bytes(foreign.RawData), bytes(ours.RawData), __version__)
+            info = unrealsdk.construct_object("GFxMovieInfo", getattr(foreign, "Outer", None), "MinimapMergedHUD",
+                                              int(ObjectFlags.KEEP_ALIVE), foreign)
+            info.RawData = list(data)
+        except MergeRefused as ex:
+            Redirect.refused = foreign
+            set_status(f"Refused: {ex}. The minimap stays idle.")
+            return False
+        except Exception as ex:
+            Redirect.refused = foreign
+            set_status(f"Refused: couldn't build the merged HUD movie ({type(ex).__name__}: {ex}). "
+                       "The minimap stays idle.")
+            return False
+        log(f"merged in {time.time() - started:.2f}s ({len(data)} bytes)")
+        release(Redirect.merged)
+        Redirect.merged, Redirect.merged_from = info, foreign
+    Redirect.template, Redirect.original, Redirect.merged_active = tmpl, foreign, True
+    tmpl.MovieInfo = info
+    set_status(f"Merged into {foreign}'s HUD movie. A HUD that is already up keeps its movie: "
+               "the minimap appears from the next level load.")
+    return True
+
+
+def reconcile() -> None:
+    """Called on enable and after every IsMenuLevel: handle another mod taking the HUD template."""
+    tmpl = Redirect.template or find("WillowHUDGFxMovie", TEMPLATE_PATH)
+    if tmpl is None:
+        return
+    current = tmpl.MovieInfo
+    if current == Redirect.movie_info or (Redirect.merged is not None and current == Redirect.merged):
+        return
+    if current == Redirect.refused:
+        return
+    redirect()
+
+
 def unredirect() -> None:
-    if Redirect.template is not None and Redirect.original is not None:
-        Redirect.template.MovieInfo = Redirect.original
-    Redirect.template = Redirect.original = Redirect.movie_info = None
+    tmpl = Redirect.template
+    if tmpl is not None and Redirect.original is not None:
+        if not Redirect.merged_active or tmpl.MovieInfo == Redirect.merged:
+            tmpl.MovieInfo = Redirect.original
+        else:
+            log("the HUD template changed after the merge: left the template alone")
+    Redirect.template = Redirect.original = Redirect.movie_info = Redirect.refused = None
+    Redirect.merged_active = False
 
 
 def uses_minimap_movie(movie: Any) -> bool:
     try:
-        return Redirect.movie_info is not None and movie.MovieInfo == Redirect.movie_info
+        return Redirect.movie_info is not None and movie.MovieInfo in (Redirect.movie_info, Redirect.merged)
     except Exception:
         return False
 
@@ -459,8 +569,11 @@ def start(pc: Any, movie: Any) -> None:
     if not uses_minimap_movie(movie):
         # This HUD was spawned from the stock movie (before the redirect, or the redirect failed).
         S.phase = "stockhud"
-        warn_once("stockhud", f"current HUD uses {movie.MovieInfo}, not {MOVIE_PATH}: "
-                              "load a save or change area for the minimap to appear")
+        if Redirect.refused is not None:
+            warn_once("stockhud", f"current HUD uses {movie.MovieInfo}; {Redirect.status}")
+        else:
+            warn_once("stockhud", f"current HUD uses {movie.MovieInfo}, not {MOVIE_PATH}: "
+                                  "load a save or change area for the minimap to appear")
         return
     if not layout(movie):
         # Either the HUD movie hasn't run its frame-1 script yet (root functions not defined), the
@@ -1228,6 +1341,7 @@ def on_diag_key() -> None:
     info: dict[str, Any] = {"version": __version__, "phase": S.phase, "attempts": S.attempts,
                             "pawn": str(pc.Pawn) if pc else None, "same_movie": movie == S.movie,
                             "template.MovieInfo": str(Redirect.template.MovieInfo) if Redirect.template else None,
+                            "hud_merge": Redirect.status or None,
                             "hud.MovieInfo": str(movie.MovieInfo) if movie is not None else None}
     if movie is not None:
         info.update(describe(movie))
@@ -1286,12 +1400,25 @@ opt_rebuild = ButtonOption("Rebuild now", on_press=lambda _: rebuild(),
                            description="Re-collect landmarks and objectives.")
 
 
+@hook("Engine.WorldInfo:IsMenuLevel", Type.POST)
+def on_menu_level(obj: Any, args: Any, ret: Any, func: Any) -> None:
+    """Another HUD mod (Extended UI) swaps the template in its own IsMenuLevel PRE hook; merge after it."""
+    if not Redirect.enabled:
+        return
+    try:
+        reconcile()
+    except Exception as ex:  # never let a minimap error break the game loop
+        warn_once("menu:" + type(ex).__name__, f"HUD template check failed ({type(ex).__name__}: {ex})")
+
+
 def on_enable() -> None:
+    Redirect.enabled = True
     redirect()
     S.reset()       # re-check the current HUD on the next tick
 
 
 def on_disable() -> None:
+    Redirect.enabled = False
     teardown()
     unredirect()
 
@@ -1299,3 +1426,4 @@ def on_disable() -> None:
 mod = build_mod(options=[opt_position, opt_dock_size, opt_scale, opt_margin_x, opt_margin_y, opt_zoom, opt_icon_size,
                          opt_rotate, opt_rotation_offset, opt_threats, opt_threat_range, opt_givers, opt_hide_compass,
                          opt_rebuild])
+BASE_DESCRIPTION = getattr(mod, "description", "") or ""

@@ -34,6 +34,7 @@ The suggestions at the end are ranked by how much time they would have saved.
 | What happened | Cause | Workaround |
 |---|---|---|
 | A literal NUL byte written into `tools/swfbuild.py` | The Bash wrapper collapses `\\` inside heredocs, so `b'\\0'` became `b'\0'` → NUL | Write scripts with the Write tool, never through heredocs; fixed with a byte-level script |
+| A `cat >> doc <<'EOF'` heredoc with markdown backticks (PLAN_V12 session) executed `swfmerge.py`, `bump_version.py` etc. as shell scripts and wrote nothing; heredoc `\x00` escapes in a Python patch script also wrote NUL bytes into a test file | The wrapper `eval`s the command, so backticks in a quoted heredoc still run, and backslashes collapse | Nothing was changed (checked with `git status`); redo with Write/Edit | Use the Write or Edit tool for any text containing backticks or backslashes (already the rule above) |
 | `sed` patterns with backticks ran as commands; `$VAR` expanded to empty (a write was aimed at `/MEMORY.md`) | The wrapper re-quotes commands through `eval` | Use the Edit tool for text changes; spell out paths instead of using shell variables |
 | Worktree session refused `python -c …` and commands that use variables | The isolation guard can't prove such commands aren't git | Put analysis code in scratchpad `.py` files; use literal paths |
 | Bash failed with exit 127 on every command for a while | The wrapper couldn't write its cwd file in `%TEMP%` (disk was fine) | Fell back to PowerShell |

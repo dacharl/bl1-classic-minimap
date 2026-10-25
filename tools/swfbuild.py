@@ -36,8 +36,9 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import as2asm  # noqa: E402
 from as2asm import Fn, function  # noqa: E402
-from swfdeps import (DEFINES, SHAPES as SHAPE_CODES, Movie, read_tags, shape_bitmaps, shape_gradient_count,  # noqa: E402
-                     skip_rect)
+from swfdeps import DEFINES, SHAPES as SHAPE_CODES, Movie, read_tags, shape_bitmaps, skip_rect  # noqa: E402
+import swfmerge  # noqa: E402
+from swfmerge import tag  # noqa: E402,F401
 
 SOURCE_ROOTS = (1132,)            # maps (zone art, landmark/player icon clips, dlcmap frame) in status_menu.gfx
 MAPS_SPRITE = 1132
@@ -72,12 +73,6 @@ OBJECTIVE_HALF = 45.1 * OBJECTIVE_SCALE / 2
 SOURCE_CLIPS = ('landmarks', 'players', 'enemy')   # maps' icon templates that AddLandmark duplicates
 HUD_CLIPS = ('echo', 'quest', 'check1', 'check2', 'check3', 'check4', 'check5')   # p1 column we shift
 THREAT_DEPTH = 1000
-
-
-def tag(code, body):
-    if len(body) < 0x3F and code not in (6, 21, 35, 20, 36, 90):
-        return struct.pack('<H', (code << 6) | len(body)) + body
-    return struct.pack('<HI', (code << 6) | 0x3F, len(body)) + body
 
 
 def top_level(d):
@@ -683,6 +678,15 @@ def landmark_frames(raw):
     return tag(39, struct.pack('<HH', sid, frames + 2) + b''.join(tag(c, b) for c, b in tags + extra) + tag(0, b''))
 
 
+def core_version():
+    """The mod version the block manifest is stamped with (PLAN_V12 decision 11)."""
+    path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'sdk_mods', 'classic_minimap',
+                        'pyproject.toml')
+    with open(path, encoding='utf-8') as f:
+        text = f.read()
+    return next(l.split('"')[1] for l in text.splitlines() if l.startswith('version'))
+
+
 def shift_gradient_images(root, insert_at, added):
     """Keep classic's external gradient images on classic's own shapes.
 
@@ -692,18 +696,10 @@ def shift_gradient_images(root, insert_at, added):
     the box drew classic's bar textures and the damage indicator lost its texture (PHASE3 run 14). Records
     numbered at or after the insertion point move up by the number of inserted fills; the inserted fills
     get no record and render as their own vector gradients."""
-    before = sum(shape_gradient_count(c, b) for c, b, _ in root[:insert_at])
-    added_tags = read_tags(added, 0, len(added))
-    if any(c == 1003 for c, _ in added_tags):
+    before = swfmerge.gradient_total(root[:insert_at])
+    if any(c == 1003 for c, _ in read_tags(added, 0, len(added))):
         raise SystemExit('inserted block carries its own external gradient records')
-    count = sum(shape_gradient_count(c, b) for c, b in added_tags)
-    out = []
-    for code, body, raw in root:
-        if code == 1003 and count and struct.unpack_from('<H', body, 0)[0] >= before:
-            body = struct.pack('<H', struct.unpack_from('<H', body, 0)[0] + count) + body[2:]
-            raw = tag(1003, body)
-        out.append((code, body, raw))
-    return out
+    return swfmerge.shift_gradients(root, before, swfmerge.describe_block(added)['gradients'])
 
 
 def build(hud, status_menu, enhanced):
@@ -743,7 +739,8 @@ def build(hud, status_menu, enhanced):
     first_show = next(i for i, (c, _, _) in enumerate(root) if c == 1)
     root = shift_gradient_images(root, first_show, added)
     head = hud[:skip_rect(hud, 8) + 4]
-    out = bytearray(head + b''.join(r for _, _, r in root[:first_show]) + added
+    manifest = swfmerge.manifest_tag(core_version(), root[:first_show], added)   # lets the mod merge the block at runtime
+    out = bytearray(head + b''.join(r for _, _, r in root[:first_show]) + manifest + added
                     + b''.join(r for _, _, r in root[first_show:]))
     trailing = hud[len(head) + sum(len(r) for _, _, r in root):]
     out += trailing

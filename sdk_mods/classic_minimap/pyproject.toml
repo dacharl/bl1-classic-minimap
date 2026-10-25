@@ -1,6 +1,6 @@
 [project]
 name = "Classic Minimap"
-version = "0.10.2"
+version = "0.12.0"
 description = "An Enhanced-style minimap for classic Borderlands GOTY. Needs GfxHUD_Minimap.upk."
 authors = [{ name = "bl1-classic-minimap" }]
 

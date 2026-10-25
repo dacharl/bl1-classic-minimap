@@ -27,6 +27,10 @@ output = "dist/ci/coverage.xml"
 line = 89
 branch = 81
 
+[tool.quality.coverage."sdk_mods/classic_minimap/swfmerge.py"]
+line = 90
+branch = 80
+
 [tool.quality.coverage."sdk_mods/classic_minimap_profiler/__init__.py"]
 line = 95
 branch = 95
@@ -53,6 +57,7 @@ branch = 85
 
 [tool.quality.mutation]
 "sdk_mods/classic_minimap/__init__.py" = 70
+"sdk_mods/classic_minimap/swfmerge.py" = 70
 "tools/build_sdkmod.py" = 80
 # From the 2026-10-24 run (3,850/3,866 complete): __init__ 31/34 (91.2%); profiler 759/926 (82.0%; 80.6%
 # if its 16 unfinished mutants count as undetected)

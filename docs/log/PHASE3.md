@@ -789,3 +789,41 @@ this validation bundle only. The stock input hash is `5c515c3ea119bcffbaf774657d
 **Installed hashes:** unchanged from §3af; no game files were copied. **Unverified:** a real install
 through the new installer and subsequent in-game play. SSH deployment is deferred. Saved-log
 foreign-HUD detection does not implement PLAN_V12's runtime console message or HUD merge.
+
+## 3ai. PLAN_V12: runtime HUD merge → core v0.12.0, profiler 0.1.3 (2026-10-25, offline only)
+
+**Built, not installed, not played.** Branch `feat/runtime-hud-merge`. Plan step 0 (the in-game spike that shows GFx
+loads a `GFxMovieInfo` constructed from Python) has **not** been run: it needs the game.
+
+What changed:
+- `sdk_mods/classic_minimap/swfmerge.py` (decision 10): the tag walk, the shape/gradient counter (moved out of
+  `swfdeps.py`, which re-exports it), the prefix/id/export/function-name/gradient checks and the splice. The mod and
+  `swfbuild` both use it.
+- **Manifest (decision 2, adjusted):** `upkpatch` can only replace an existing export, so a second movie in
+  `GfxHUD_Minimap.upk` was not feasible. Instead `swfbuild` puts a Metadata tag (code 77, JSON) right before our block
+  in our own movie, holding the mod version (decision 11), stock's prefix tag codes, the gradient counts and the
+  block's character ids, export names and root function names. The runtime slices the block out of our movie by tag
+  count, so it still never reads or diffs the stock HUD. Players skip tag 77.
+- **Mod:** `redirect()` merges when the template holds a movie that is neither stock nor ours (`merge_into`).
+  `Engine.WorldInfo:IsMenuLevel` POST runs `reconcile()` (returns at once when the template is ours or merged; a
+  refused movie is not re-checked). The merged `GFxMovieInfo` is built with `construct_object(..., KEEP_ALIVE,
+  template_obj=foreign)` and its `RawData` set. Disable restores their movie only while the template still holds the
+  merged object; re-enable reuses the merge while their movie is unchanged. Status goes to the SDK log, a console
+  line and the MODS description (`set_status`); a refusal keeps their template and leaves the minimap idle (ADR 0003).
+- Versions bumped with `tools/bump_version.py 0.12.0 --profiler-version 0.1.3`.
+
+Evidence: the real build's manifest (102 characters, 17 functions, 12 gradients, 4 before the block, 158 prefix tags,
+105 block tags) matches the PLAN_V12 research. Merging our block into the stock classic HUD reproduces our own movie
+minus the manifest tag exactly, and `test_minimap_as.py` passes on it. A merge takes about 0.5 s in CPython (once per
+session, no cache, decision 6).
+
+Tests (red first): `tools/test_swfmerge.py` (27 cases: synthetic foreign HUD, splice, gradient shift, every refusal,
+shape-walker records) and new scenarios in `test_minimap_mod.py` (merge on the POST hook, reuse, restore rules,
+refusals, status lines, version mismatch, stock path unchanged). `test_workflow.py` no longer hard-codes versions. Both
+movie suites, all 107 unit tests, the coverage floors (swfmerge 98.9% line / 95.7% branch; floors 90/80) and Ruff
+pass. Mutation testing was not run (a swfmerge floor of 70 is configured).
+
+**Unverified:** the spike (a constructed `GFxMovieInfo` honoured by GFx; `bytes(RawData)` / `RawData = list(...)`
+speed and typing in pyunrealsdk; `template_obj` copying their texture references); the merge against the real
+Extended UI HUD (its package was not at hand, so only the synthetic fixture and the stock HUD were tested); the Deck
+run (plan step 4). If the spike fails, switch the install to the package fallback (decision 9).

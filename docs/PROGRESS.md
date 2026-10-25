@@ -6,6 +6,8 @@ This page tracks where the project stands: what works, what's installed, how to 
 
 ## Where it stands
 
+- **Runtime HUD merge (PLAN_V12, v0.12.0 + profiler 0.1.3, built offline, not installed, 2026-10-25):** `swfmerge.py` splices our block into another mod's HUD movie (Extended UI) when it takes the template, with status in the log, console and MODS menu; a refused movie keeps its template. Unit and real-movie suites pass. The in-game spike (a constructed `GFxMovieInfo`) and the Deck run are still to do. PHASE3 §3ai.
+
 - **Release and diagnostic tooling (2026-10-25):** `bump_version.py`, `release.py`, `install.py` and `diag.py` implement FRICTION's first three suggestions. CLI scenarios use temporary repositories/logs/game folders. A release built from the local game inputs passes both movie suites; no real installation or runtime version bump was performed. See [TOOLS.md](TOOLS.md), PLAN_RELEASE_TOOLS and PHASE3 §3ah.
 
 - **Profiler add-on 0.1.0 (PLAN_V11, built offline, not installed):** `sdk_mods/classic_minimap_profiler/` attaches reversible wrappers to the core only during a capture, saves schema-v1 reports with an 8-slot archive, and leaves the core artifact byte-identical. The report contract is frozen (PERF_REPORT_V1 + fixtures, handoff H0 done); `steam-deck-scripts` owns the adapter (H1). Memory requirement met; the 0.05 ms p95 requirement is unresolved on the stub harness (wrapper cost ≈ 0.020 ms per admitted update). PHASE3 §3z.
@@ -48,6 +50,7 @@ This page tracks where the project stands: what works, what's installed, how to 
 | v0.8 | Enhanced zoom and icon size, north/objective edge indicators, "!"/turn-in mission givers | Run 11: disk-full crash (§3m). Run 12: zoom, icons, tilt and north confirmed; double marker and giver calls fixed in v0.8.1 (§3n) |
 | v0.9 | Enhanced's box art and 207.95 × 173.65 window, dock/icon values, edge indicators on the box border | Run 13: box matches; fixed zoom and clipped icons need correction (§3u) |
 | v0.10 | Native-style objective-fit zoom, full-icon edge handoff, F7 zoom diagnostics and console confirmation | Built; not installed or played (§3v/3w) |
+| v0.12 | Runtime merge into other HUD mods' movies (`swfmerge.py`, block manifest), merge status messages | Built offline; spike and Deck run pending (§3ai) |
 | v0.11 | Separate optional profiler add-on 0.1.0, telemetry-free core artifact, frozen report contract, overhead benchmark | Built offline; not installed (§3z). Adapter in `steam-deck-scripts` pending |
 
 ## Doc map
@@ -152,7 +155,7 @@ That's one zone so far. **The decomp (ENHANCED_NATIVE.md §3) shows that the tru
 - **Maintenance tooling:** a real installation through `install.py` remains unverified; install only when requested. Optional Deck deployment over SSH is deferred. Runtime foreign-HUD console feedback remains separate from `diag.py`'s saved-log detection.
 
 - Hosted CI verification of automatic workers remains pending; local validation is recorded in PHASE3 §3s.
-- **Runtime HUD merge (PLAN_V12, planned):** Extended UI's HUD movie shares stock's prefix, gradients and images with no id or name clashes; our block spliced into it passes both suites offline. Plan: merge into whatever HUD movie another mod installs, at runtime.
+- **Runtime HUD merge (PLAN_V12, implemented offline in v0.12.0; in-game spike, Deck run and PC regression pending):** Extended UI's HUD movie shares stock's prefix, gradients and images with no id or name clashes; our block spliced into it passes both suites offline. Plan: merge into whatever HUD movie another mod installs, at runtime.
 - **HUD mod conflicts (run 17):**
   - **Extended UI:** Extended Item Cards ("Extended UI") ships its own replacement HUD movie (`GfxHUD_MOD`) and wins the `hud_instance` template when it loads after us. Options: build our package on top of its HUD movie (needs its package), or detect the foreign movie and say so.
   - **Misleading message:** the current message ("load a save or change area") is wrong in this case.

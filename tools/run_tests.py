@@ -16,7 +16,7 @@ sys.path.insert(0, str(HERE))
 from parallel_workers import worker_count  # noqa: E402
 
 DEFAULT_TESTS = ['test_ci.SourceChecks', 'test_quality.GateChecks', 'test_runners.RunnerChecks', 'test_profiler',
-                 'test_land.LandChecks', 'test_workflow.WorkflowChecks']
+                 'test_land.LandChecks', 'test_workflow.WorkflowChecks', 'test_swfmerge']
 
 
 def test_ids(suite):

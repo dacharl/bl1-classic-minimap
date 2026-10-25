@@ -3,6 +3,7 @@ import json
 import contextlib
 import io
 import os
+import re
 import shutil
 import struct
 import subprocess
@@ -15,6 +16,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / 'tools'))
+from swfbuild import core_version  # noqa: E402
 
 
 def stock_package(movie):
@@ -191,8 +193,9 @@ class WorkflowChecks(unittest.TestCase):
         result = self.cli('release.py', '--inputs', inputs, '--stock-package', stock, '--output', output, '--profiler')
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         manifest = json.loads((output / 'release.json').read_bytes())
-        self.assertEqual(manifest['core_version'], '0.10.2')
-        self.assertEqual(manifest['profiler_version'], '0.1.2')
+        profiler_source = (ROOT / 'sdk_mods/classic_minimap_profiler/profiler.py').read_text(encoding='utf-8')
+        self.assertEqual(manifest['core_version'], core_version())
+        self.assertEqual(manifest['profiler_version'], re.search(r'PROFILER_VERSION = "([^"]+)"', profiler_source)[1])
         for name in ('GfxHUD_Minimap.upk', 'classic_minimap.sdkmod', 'classic_minimap_profiler.sdkmod', 'HUD_minimap.gfx'):
             self.assertEqual(manifest['files'][name], hashlib.sha256((output / name).read_bytes()).hexdigest())
         self.assertEqual(manifest['stock_sha256'], hashlib.sha256(stock.read_bytes()).hexdigest())
