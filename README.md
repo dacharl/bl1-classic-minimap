@@ -71,6 +71,16 @@ Open **MODS → Classic Minimap**:
 - The classic game has no player-placed map waypoint, so Enhanced's waypoint marker has no equivalent.
 - The turn-in and "!" icons and the north marker reuse artwork from the Enhanced edition. Building the package therefore needs both editions installed. Playing needs only classic plus the built files.
 
+## Optional performance profiler (for investigation only)
+
+`classic_minimap_profiler.sdkmod` is a separate add-on for measuring how long the minimap's work takes. You don't need it to play, and the normal release doesn't include it; the minimap itself contains no timing code.
+
+- Install it next to `classic_minimap.sdkmod`, enable both, then open **MODS → Classic Minimap Profiler**.
+- **Capture length** (30/60/120/300 s), **Start performance capture**, **Dump performance report** (stop now and save; also writes the report to the SDK log), **Reset performance statistics** (discard without saving).
+- A capture measures only while it runs and saves when it stops, to `…\Borderlands\sdk_mods\settings\classic_minimap_profiler\reports\` (the previous eight reports are kept under `archive\`).
+- Its timings show which minimap operations take time; they don't measure frame rate. Use PresentMon (Windows) or MangoHud (Steam Deck) for frames.
+- It supports only the Classic Minimap version it was built for, and refuses others.
+
 ## Building from source
 
 The package and mod are built from your own game files: the classic HUD and status-menu movies, plus three small vector icons from the Enhanced HUD.
@@ -89,4 +99,4 @@ The release contains the Python mod source only. Build `GfxHUD_Minimap.upk` loca
 
 ## Continuous integration
 
-Pushes and merges to `main`, pull requests targeting `main`, and merge-queue events run lint, workflow/repository checks, source-only movie/mod/archive tests with per-file line and branch coverage floors, and mutation thresholds for the shipped Python mod and packager. See [docs/CI.md](docs/CI.md) for thresholds, scope, reports and local commands. Real game-movie and in-game verification remain local release checks.
+Pushes and merges to `main`, pull requests targeting `main`, and merge-queue events run the two blocking checks: lint (including workflow/repository checks) and source-only movie/mod/archive/profiler unit tests with per-file line and branch coverage floors. Mutation testing is on demand only (**Actions → Mutation testing → Run workflow**, or locally), because a full run takes over an hour. See [docs/CI.md](docs/CI.md) for thresholds, scope, reports and local commands. Real game-movie and in-game verification remain local release checks.

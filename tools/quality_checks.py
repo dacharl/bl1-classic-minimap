@@ -43,22 +43,49 @@ def mutation_errors(report, floors):
     return errors
 
 
-def repository_errors():
-    errors = []
-    source = ROOT / 'sdk_mods/classic_minimap'
-    version = tomllib.loads((source / 'pyproject.toml').read_text())['project']['version']
+MOD_FOLDERS = ('sdk_mods/classic_minimap', 'sdk_mods/classic_minimap_profiler')
+
+
+def literal_assignments(tree, name):
+    return [ast.literal_eval(node.value) for node in tree.body if isinstance(node, ast.Assign)
+            and any(isinstance(target, ast.Name) and target.id == name for target in node.targets)]
+
+
+def declared_version(source):
+    """__version__ as a literal in __init__.py, or re-exported (`from .x import NAME as __version__`) from a
+    sibling module that assigns NAME a literal."""
     tree = ast.parse((source / '__init__.py').read_text(encoding='utf-8'))
-    versions = [ast.literal_eval(node.value) for node in tree.body if isinstance(node, ast.Assign)
-                and any(isinstance(target, ast.Name) and target.id == '__version__' for target in node.targets)]
-    if versions != [version]:
-        errors.append('Mod version fields do not match')
-    quality = tomllib.loads((ROOT / 'pyproject.toml').read_text())['tool']['quality']
-    for path in source.rglob('*.py'):
-        name = path.relative_to(ROOT).as_posix()
+    versions = literal_assignments(tree, '__version__')
+    for node in tree.body:
+        if isinstance(node, ast.ImportFrom) and node.level == 1 and node.module:
+            for alias in node.names:
+                if alias.asname == '__version__':
+                    sibling = ast.parse((source / f'{node.module}.py').read_text(encoding='utf-8'))
+                    versions += literal_assignments(sibling, alias.name)
+    return versions
+
+
+def mod_errors(source, root, quality):
+    """Version fields agree, and every shipped .py file has coverage and mutation floors."""
+    errors = []
+    version = tomllib.loads((source / 'pyproject.toml').read_text())['project']['version']
+    if declared_version(source) != [version]:
+        errors.append(f'{source.name}: mod version fields do not match')
+    for path in sorted(source.rglob('*.py')):
+        name = path.relative_to(root).as_posix()
         if '__pycache__' not in path.parts:
             for gate in ('coverage', 'mutation'):
                 if name not in quality[gate]:
                     errors.append(f'{name}: missing {gate} threshold')
+    return errors
+
+
+def repository_errors():
+    errors = []
+    quality = tomllib.loads((ROOT / 'pyproject.toml').read_text())['tool']['quality']
+    for folder in MOD_FOLDERS:
+        errors += mod_errors(ROOT / folder, ROOT, quality)
+    tree = ast.parse((ROOT / 'sdk_mods/classic_minimap/__init__.py').read_text(encoding='utf-8'))
     if any(isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
            and node.func.attr == 'Invoke' for node in ast.walk(tree)):
         errors.append('Classic GFx Invoke is unsafe; use SingleArgInvokeS (PROGRESS fact 2)')

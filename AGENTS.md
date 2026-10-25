@@ -34,6 +34,7 @@ docs/
   log/               PHASE0-3: dated build/test log (PHASE3 records every in-game run); FRICTION: lessons
 sdk_mods/
   classic_minimap/   the mod (__init__.py, pyproject.toml)
+  classic_minimap_profiler/  optional performance-capture add-on (PLAN_V11); never part of the standard release
   minimap_probe/     early diagnostic probe (obsolete; keep disabled)
 tools/               package, Flash and binary tooling, and the two offline test suites
 dist/                build outputs, version backups (vNNN/), decoded exes, REA output (not source)
@@ -67,7 +68,7 @@ Code comments cite docs by bare name and section, e.g. "PHASE3 3f", "PLAN_V08 3"
    python -I tools/test_minimap_as.py dist/phase2/HUD_minimap.gfx
    python -I tools/test_minimap_mod.py dist/phase2/HUD_minimap.gfx
    ```
-   - Also run the source-only CI checks relevant to the change (see [docs/CI.md](docs/CI.md)). Coverage and mutation floors are in `pyproject.toml`; do not lower them or omit files to make a regression pass. Hosted fixture tests supplement the real-movie suites above.
+   - Also run the source-only CI checks relevant to the change (see [docs/CI.md](docs/CI.md)). Coverage and mutation floors are in `pyproject.toml`; do not lower them or omit files to make a regression pass. Lint and unit tests with coverage are the continuous, blocking checks; mutation testing runs only on demand (it takes over an hour), so run it when the user asks or before raising floors. Hosted fixture tests supplement the real-movie suites above.
 4. **Build** with the commands in PROGRESS:
    - The movie build needs the classic HUD, the status-menu movie, and the Enhanced HUD movie, all extracted from the user's own installs.
    - Repack the package with `--new-guid`.
@@ -139,6 +140,6 @@ Write commit messages and PR descriptions in plain language: what changed and wh
   - Use the Edit tool rather than `sed` for patterns containing backticks, quotes or backslashes.
   - Spell out paths instead of shell variables; worktree sessions also refuse `python -c` and variable-built commands.
   - If Bash fails with exit 127 writing its cwd file, use PowerShell.
-  - Set `PYTHONIOENCODING=utf-8` (or avoid printing non-ASCII) when running Python from PowerShell.
+  - Set `PYTHONIOENCODING=utf-8` (or avoid printing non-ASCII) when running Python from PowerShell. `python -I` ignores it: call `sys.stdout.reconfigure(encoding="utf-8")` in the script or write output to a file.
 - **Worktrees:** `dist/` and `tools/pk/` are ignored, so a new worktree starts without build inputs. Copy `dist/phase1/GfxHUD.orig.upk`, `dist/phase2/{HUD_classic,status_menu,HUD_enhanced}.gfx` and `tools/pk/*.u` from the main checkout (or re-extract them with the PROGRESS commands).
 - **Git:** this repository was initialized at the user's request. Commit or push only when the user asks; do not add a remote or publish game-derived files without explicit authorization.

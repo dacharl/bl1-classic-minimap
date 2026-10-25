@@ -8,7 +8,8 @@ select = ["F", "E9"]
 
 [tool.coverage.run]
 branch = true
-include = ["sdk_mods/classic_minimap/*", "tools/as2asm.py", "tools/swfbuild.py", "tools/build_sdkmod.py"]
+include = ["sdk_mods/classic_minimap/*", "sdk_mods/classic_minimap_profiler/*", "tools/as2asm.py",
+           "tools/swfbuild.py", "tools/build_sdkmod.py"]
 data_file = "dist/ci/.coverage"
 
 [tool.coverage.report]
@@ -26,6 +27,14 @@ output = "dist/ci/coverage.xml"
 line = 89
 branch = 81
 
+[tool.quality.coverage."sdk_mods/classic_minimap_profiler/__init__.py"]
+line = 95
+branch = 95
+
+[tool.quality.coverage."sdk_mods/classic_minimap_profiler/profiler.py"]
+line = 95
+branch = 88
+
 [tool.quality.coverage."tools/as2asm.py"]
 line = 81
 branch = 76
@@ -41,3 +50,7 @@ branch = 83
 [tool.quality.mutation]
 "sdk_mods/classic_minimap/__init__.py" = 70
 "tools/build_sdkmod.py" = 80
+# From the 2026-10-24 run (3,850/3,866 complete): __init__ 31/34 (91.2%); profiler 759/926 (82.0%; 80.6%
+# if its 16 unfinished mutants count as undetected)
+"sdk_mods/classic_minimap_profiler/__init__.py" = 85
+"sdk_mods/classic_minimap_profiler/profiler.py" = 78
