@@ -48,7 +48,7 @@ from mods_base import (SETTINGS_DIR, BoolOption, ButtonOption, ObjectFlags, Slid
 from unrealsdk.hooks import Type
 from unrealsdk.unreal import WeakPointer
 
-__version__ = "0.10.0"
+__version__ = "0.10.1"
 
 
 STAGE_W = 1280.0                       # classic HUD stage is 1280x720
@@ -490,6 +490,7 @@ def collect(pc: Any, movie: Any) -> bool:
     stage until capture swaps them (no blank map during rebuilds, run 9).
     """
     helper = unrealsdk.construct_object("WillowGFxHelperMap", movie, flags=int(ObjectFlags.KEEP_ALIVE))
+    old_dlc = S.anchor.get("DLCMap")
     try:
         helper.Init(pc)
         anchor = helper.Anchor
@@ -516,6 +517,10 @@ def collect(pc: Any, movie: Any) -> bool:
         except Exception:
             S.objective_key = None
         S.tint = objective_tint(pc)
+        # DLC zones share the dlcmap1 frame, whose action loads the DLC movie only when the playhead enters it.
+        # A new DLC on the same HUD (T-Bone -> Tartarus, run 14) would keep the old art, so leave the frame first.
+        if S.anchor["DLCMap"] not in ("None", old_dlc):
+            cmd(movie, "frame", "none")
         helper.InitMapFrame(movie)        # native: map.maps.gotoAndStop(<zone>) or InitDLC(<frame>, <pkg>)
     finally:
         release(helper)

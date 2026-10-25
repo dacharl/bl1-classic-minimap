@@ -98,7 +98,7 @@ class Clip:
     def as_attachMovie(self, ident, name, depth):
         if not Clip.attach_works:
             return UNDEF
-        if ident in ('bl1mm_north', 'bl1mm_objective'):      # edge indicator art (PLAN_V08)
+        if ident in ('bl1mm_north', 'bl1mm_objective', 'bl1mm_enemy'):   # edge indicator / threat art
             c = self.add(Clip(name, None, depth))
             c.frame = ident
             return c
@@ -442,7 +442,15 @@ def main(path):
     assert len(pool) == 2
     close(pool[0].get('_x'), tm.get('_x') + 0.25 * tm.get('_width'))
     close(pool[1].get('_y'), tm.get('_y') + 0.1 * tm.get('_height'))
-    assert pool[0].drawn and pool[0].drawn[0][0] == 'beginFill'
+    # Enhanced's threat art (E sprite 128 -> shape 127: red diamond, black outline), not a drawn square, and
+    # counter-rotated against the map like Enhanced's CancelOutIconRotation, so it stays a diamond
+    assert pool[0].frame == 'bl1mm_enemy' and not pool[0].drawn
+    close(pool[0].get('_rotation'), -ms.get('_rotation')); close(pool[1].get('_rotation'), -ms.get('_rotation'))
+    vm.call('MinimapRecenter', True, 120)          # the map turns between threat updates
+    assert abs(ms.get('_rotation') - R) > 1
+    close(pool[0].get('_rotation'), -ms.get('_rotation'))
+    vm.call('MinimapRecenter', False, 0)
+    close(ms.get('_rotation'), 0); close(pool[1].get('_rotation'), 0)
     vm.call('UpdateThreats', '0.5,0.5|')
     assert len(pool) == 2 and pool[0].get('_visible') is True and pool[1].get('_visible') is False
     vm.call('UpdateThreats', '')
@@ -539,7 +547,11 @@ def main(path):
     # PLAN_V08 movie structure: Enhanced turnin/newmission frames appended to the landmark sprite; the
     # north and objective art exported for the edge indicators
     mv = Movie(data=d)
-    assert {1306: 'bl1mm_north', 1050: 'bl1mm_objective', 1200: 'bl1mm_map'}.items() <= mv.exports.items()
+    assert {1306: 'bl1mm_north', 1050: 'bl1mm_objective', 1200: 'bl1mm_map', 1311: 'bl1mm_enemy'}.items() \
+        <= mv.exports.items()
+    # threat art: a one-frame wrapper around Enhanced's shape 127, copied as 1310
+    enemy = [(c, b) for c, b in read_tags(mv.defs[1311][1], 4, len(mv.defs[1311][1])) if c in (26, 70)]
+    assert len(enemy) == 1 and struct.unpack_from('<H', enemy[0][1], 3)[0] == 1310 and mv.defs[1310][0] == 2
     labels = [b.split(b'\0')[0].decode() for c, b in read_tags(mv.defs[1066][1], 4, len(mv.defs[1066][1])) if c == 43]
     assert labels[-3:] == ['questionmark', 'turnin', 'newmission'], labels
     # PLAN_V09: bl1mm_map is Enhanced's minimap clip layout: box art at depth 3, the window as a clip layer
@@ -606,6 +618,14 @@ def main(path):
         o_out.props.update(_x=dx, _y=dy, _xscale=size, _yscale=size)
         vm.call('MinimapCmd', 'tick~0.5~0.5~0~0~0')
         assert e1.get('_visible') is outside and o_out.get('_visible') is not outside, (dx, dy, size)
+    # Run 14 "wobble": classic's objective art animates (sprite 1050's ring, shape 1049, scales 1.0 -> 2.2 over
+    # 12 frames), so the icon's live _width pulses between ~24.8 and ~48 units. The handoff must use the icon's
+    # static size (its scale), or it flips with the animation while nothing moves.
+    o_out.props.update(_x=0, _y=-70, _xscale=100, _yscale=100)
+    for pulse in (24.8, 48.0, 30.0, 48.0, 24.8):
+        o_out.base_w = o_out.base_h = pulse
+        vm.call('MinimapCmd', 'tick~0.5~0.5~0~0~0')
+        assert e1.get('_visible') is False and o_out.get('_visible') is True, pulse
     # rotating the map moves north along the edge (Enhanced northMC.gotoAndStop(currentRot))
     vm.call('MinimapCmd', 'tick~0.5~0.5~-90~1~0')            # heading east -> maps rotated +90
     close(ms.get('_rotation'), 90)

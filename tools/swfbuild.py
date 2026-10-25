@@ -36,7 +36,8 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import as2asm  # noqa: E402
 from as2asm import Fn, function  # noqa: E402
-from swfdeps import DEFINES, SHAPES as SHAPE_CODES, Movie, read_tags, shape_bitmaps, skip_rect  # noqa: E402
+from swfdeps import (DEFINES, SHAPES as SHAPE_CODES, Movie, read_tags, shape_bitmaps, shape_gradient_count,  # noqa: E402
+                     skip_rect)
 
 SOURCE_ROOTS = (1132,)            # maps (zone art, landmark/player icon clips, dlcmap frame) in status_menu.gfx
 MAPS_SPRITE = 1132
@@ -50,9 +51,11 @@ FALLBACK_OFFSCREEN = -20000
 LANDMARK_SPRITE = 1066            # status menu landmark icons (frames objective .. questionmark)
 # Vector art copied from the Enhanced HUD movie (E_HUD; PLAN_V08.md): shape id there -> id here. No bitmaps.
 ENH_SHAPES = {108: 1301, 110: 1303, 179: 1305,     # turnin, newmission ("!"), north "N"
-              81: 1307, 82: 1308}                   # minimap box (background + border), window (mask) (PLAN_V09)
+              81: 1307, 82: 1308,                   # minimap box (background + border), window (mask) (PLAN_V09)
+              127: 1310}                            # threat marker: red diamond, black outline (E sprite 128)
 TURNIN_ART, NEWMISSION_ART, NORTH_ART = 1302, 1304, 1306   # one-frame wrapper sprites (as E 109, 111, 180)
 WINDOW_ART = 1309                 # wrapper placing the window shape top-left anchored (see map_sprite)
+ENEMY_ART = 1311                  # one-frame wrapper for the threat marker (as E sprite 128), exported bl1mm_enemy
 # Enhanced's window (E shape 82, centred) and where its sprite 187 places things
 WINDOW_LEFT, WINDOW_TOP, WINDOW_W, WINDOW_H = -103.95, -86.8, 207.95, 173.65
 BOX_DEPTH, MASK_DEPTH, MAPS_DEPTH = 3, 4, 6
@@ -62,11 +65,13 @@ EDGE_DEPTH = 100                  # north indicator; objective edge icons at EDG
 # just outside the 207.95 x 173.65 window (E sprites 182/186 frame positions + their (0, -55) placement)
 EDGE_OUT_X, EDGE_OUT_Y = 110.0 - WINDOW_W / 2, 92.0 - WINDOW_H / 2
 OBJECTIVE_SCALE = 0.55
+# Static half-size of an objective icon at _xscale 100: the diamond's base shape (1047, 45.1 units) at the
+# landmark frame's 0.55. The art also has a pulsing ring (shape 1049 scaled 1.0 -> 2.2 over 12 frames), so the
+# icon's live _width swings with the animation; the edge handoff must not use it (run 14 "wobble").
+OBJECTIVE_HALF = 45.1 * OBJECTIVE_SCALE / 2
 SOURCE_CLIPS = ('landmarks', 'players', 'enemy')   # maps' icon templates that AddLandmark duplicates
 HUD_CLIPS = ('echo', 'quest', 'check1', 'check2', 'check3', 'check4', 'check5')   # p1 column we shift
 THREAT_DEPTH = 1000
-THREAT_COLOR = 0xFF2A2A
-THREAT_HALF = 5
 
 
 def tag(code, body):
@@ -428,8 +433,9 @@ def new_functions():
     a.label('e_have')
     a.setm('e', '_xscale', ('*', 'isc', OBJECTIVE_SCALE * 100)).setm('e', '_yscale', ('*', 'isc', OBJECTIVE_SCALE * 100))
     edge_point('eo')
-    # PLAN_V10: the whole icon must fit the actual window. Keep the diamond on Enhanced's box path.
-    a.local('r', ('*', ('/', ('call', 'Math', 'max', ('mem', 'o', '_width'), ('mem', 'o', '_height')), 2), 'k'))
+    # PLAN_V10: the whole icon must fit the actual window. Keep the diamond on Enhanced's box path. The icon's
+    # size comes from its scale, not its live _width, which pulses with the art (OBJECTIVE_HALF).
+    a.local('r', ('*', ('*', OBJECTIVE_HALF, ('/', ('mem', 'o', '_xscale'), 100)), 'k'))
     a.if_not(('!', ('<', ('-', 'hw', 'r'), 'ax')), 'e_off')
     a.if_not(('!', ('<', ('-', 'hh', 'r'), 'ay')), 'e_off')
     a.setm('e', '_visible', False)
@@ -507,6 +513,16 @@ def new_functions():
     a.setv('R', ('-', ('fn', 'Number', 'offset'), ('mem', 'p', '_rotation')))
     a.label('norot')
     a.setm('ms', '_rotation', 'R')
+    # threat markers keep their diamond orientation while the map turns (Enhanced CancelOutIconRotation)
+    a.if_not(('!', ('==', '_root.mmThreats', Ellipsis)), 'r_nothreats')
+    a.local('tp', '_root.mmThreats')
+    a.local('ti', 0)
+    a.label('r_threatloop')
+    a.if_not(('<', 'ti', ('mem', 'tp', 'length')), 'r_nothreats')
+    a.setm(('idx', 'tp', 'ti'), '_rotation', ('-', 0, 'R'))
+    a.setv('ti', ('+', 'ti', 1))
+    a.jump('r_threatloop')
+    a.label('r_nothreats')
     a.local('ang', ('*', 'R', 0.017453292519943295))
     a.local('c', ('call', 'Math', 'cos', 'ang'))
     a.local('n', ('call', 'Math', 'sin', 'ang'))
@@ -536,19 +552,14 @@ def new_functions():
     a.if_not(('!', ('==', 'it', ('s', ''))), 'next')
     a.local('uv', ('call', 'it', 'split', ('s', ',')))
     a.if_not(('!', ('<', 'k', ('mem', 'pool', 'length'))), 'have')
-    a.local('c', ('call', 'ms', 'createEmptyMovieClip', ('+', ('s', 'mmT'), 'k'), ('+', THREAT_DEPTH, 'k')))
-    a.do(('call', 'c', 'beginFill', THREAT_COLOR, 100))
-    a.do(('call', 'c', 'moveTo', -THREAT_HALF, -THREAT_HALF))
-    a.do(('call', 'c', 'lineTo', THREAT_HALF, -THREAT_HALF))
-    a.do(('call', 'c', 'lineTo', THREAT_HALF, THREAT_HALF))
-    a.do(('call', 'c', 'lineTo', -THREAT_HALF, THREAT_HALF))
-    a.do(('call', 'c', 'lineTo', -THREAT_HALF, -THREAT_HALF))
-    a.do(('call', 'c', 'endFill'))
+    # Enhanced's threat art (E sprite 128: red diamond, black outline), as its UpdateThreats duplicates
+    a.local('c', ('call', 'ms', 'attachMovie', ('s', 'bl1mm_enemy'), ('+', ('s', 'mmT'), 'k'), ('+', THREAT_DEPTH, 'k')))
     a.do(('call', 'pool', 'push', 'c'))
     a.label('have')
     a.local('c', ('idx', 'pool', 'k'))
     a.setm('c', '_x', ('+', ('mem', 'tm', '_x'), ('*', ('fn', 'Number', ('idx', 'uv', 0)), ('mem', 'tm', '_width'))))
     a.setm('c', '_y', ('+', ('mem', 'tm', '_y'), ('*', ('fn', 'Number', ('idx', 'uv', 1)), ('mem', 'tm', '_height'))))
+    a.setm('c', '_rotation', ('-', 0, ('mem', 'ms', '_rotation')))   # stays a diamond (CancelOutIconRotation)
     a.setm('c', '_visible', True)
     a.if_not(('!', ('==', '_root.mmIconScale', Ellipsis)), 'dot_noscale')
     a.setm('c', '_xscale', '_root.mmIconScale').setm('c', '_yscale', '_root.mmIconScale')
@@ -634,7 +645,7 @@ def enhanced_art(enhanced):
             raise SystemExit('Enhanced shape %d fills with bitmaps; refusing to copy' % old)
         out.append(tag(code, struct.pack('<H', new) + body[2:]))
     out += [wrapper_sprite(TURNIN_ART, ENH_SHAPES[108]), wrapper_sprite(NEWMISSION_ART, ENH_SHAPES[110]),
-            wrapper_sprite(NORTH_ART, ENH_SHAPES[179])]
+            wrapper_sprite(NORTH_ART, ENH_SHAPES[179]), wrapper_sprite(ENEMY_ART, ENH_SHAPES[127])]
     # the window shape is centred; its wrapper shifts it so the sprite's origin is the window's top-left
     out.append(tag(39, struct.pack('<HH', WINDOW_ART, 1)
                    + tag(26, bytes([0x06]) + struct.pack('<HH', 1, ENH_SHAPES[82])
@@ -659,6 +670,29 @@ def landmark_frames(raw):
     return tag(39, struct.pack('<HH', sid, frames + 2) + b''.join(tag(c, b) for c, b in tags + extra) + tag(0, b''))
 
 
+def shift_gradient_images(root, insert_at, added):
+    """Keep classic's external gradient images on classic's own shapes.
+
+    GFx numbers gradient fills in file order and keys DefineExternalGradient (1003) records by that number
+    (classic: 14 fills, 14 records, ids 0-13). Our block goes in before root[insert_at] and brings its own
+    gradient fills (Enhanced's box, the status-menu map art), which shifted every later classic gradient:
+    the box drew classic's bar textures and the damage indicator lost its texture (PHASE3 run 14). Records
+    numbered at or after the insertion point move up by the number of inserted fills; the inserted fills
+    get no record and render as their own vector gradients."""
+    before = sum(shape_gradient_count(c, b) for c, b, _ in root[:insert_at])
+    added_tags = read_tags(added, 0, len(added))
+    if any(c == 1003 for c, _ in added_tags):
+        raise SystemExit('inserted block carries its own external gradient records')
+    count = sum(shape_gradient_count(c, b) for c, b in added_tags)
+    out = []
+    for code, body, raw in root:
+        if code == 1003 and count and struct.unpack_from('<H', body, 0)[0] >= before:
+            body = struct.pack('<H', struct.unpack_from('<H', body, 0)[0] + count) + body[2:]
+            raw = tag(1003, body)
+        out.append((code, body, raw))
+    return out
+
+
 def build(hud, status_menu, enhanced):
     hud_movie, sm_movie = Movie(data=hud), Movie(data=status_menu)
 
@@ -674,7 +708,7 @@ def build(hud, status_menu, enhanced):
     defs = [raw for code, body, raw in top_level(status_menu)
             if code in DEFINES and len(body) >= 2 and struct.unpack_from('<H', body, 0)[0] in ids]
     assert len(defs) == len(ids), (len(defs), len(ids))
-    new_ids = set(ENH_SHAPES.values()) | {TURNIN_ART, NEWMISSION_ART, NORTH_ART, WINDOW_ART}
+    new_ids = set(ENH_SHAPES.values()) | {TURNIN_ART, NEWMISSION_ART, NORTH_ART, WINDOW_ART, ENEMY_ART}
     if new_ids & (set(ids) | set(hud_movie.defs) | {MAP_ID}):
         raise SystemExit('character id clash for Enhanced art: %s' % sorted(new_ids & (set(ids) | set(hud_movie.defs))))
     li = [i for i, raw in enumerate(defs) if raw_id(raw) == LANDMARK_SPRITE]
@@ -686,13 +720,15 @@ def build(hud, status_menu, enhanced):
     add_player_capture(funcs['AddLandmark'])
     actions = [funcs[n] for n in COPIED_FUNCTIONS] + new_functions()
     do_action = tag(12, as2asm.encode(actions, end=True))
-    export = tag(56, struct.pack('<H', 3) + b''.join(struct.pack('<H', cid) + name.encode() + b'\0' for cid, name in
-                                                     ((MAP_ID, EXPORT_NAME), (NORTH_ART, 'bl1mm_north'),
-                                                      (OBJECTIVE_ART, 'bl1mm_objective'))))
+    exports = ((MAP_ID, EXPORT_NAME), (NORTH_ART, 'bl1mm_north'), (OBJECTIVE_ART, 'bl1mm_objective'),
+               (ENEMY_ART, 'bl1mm_enemy'))
+    export = tag(56, struct.pack('<H', len(exports)) + b''.join(struct.pack('<H', cid) + name.encode() + b'\0'
+                                                                for cid, name in exports))
     added = b''.join(defs) + map_sprite() + export + place_fallback() + do_action
 
     root = top_level(hud)
     first_show = next(i for i, (c, _, _) in enumerate(root) if c == 1)
+    root = shift_gradient_images(root, first_show, added)
     head = hud[:skip_rect(hud, 8) + 4]
     out = bytearray(head + b''.join(r for _, _, r in root[:first_show]) + added
                     + b''.join(r for _, _, r in root[first_show:]))

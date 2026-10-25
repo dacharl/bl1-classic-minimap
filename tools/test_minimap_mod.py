@@ -380,7 +380,14 @@ class Helper:
         self.calls.append('InitMapFrame')
         maps = movie.vm.lookup({}, 'map.maps')
         assert maps is not UNDEF, 'InitMapFrame before MinimapCreate'
-        maps.as_gotoAndStop(WORLD.zone_frame if self.Anchor is not None else 'none')
+        before = maps.frame
+        target = WORLD.zone_frame if self.Anchor is not None else 'none'
+        maps.as_gotoAndStop(target)
+        # DLC zones (MapFrame dlcmap1, DLCMap set): the native calls InitDLC, and the dlcmap1 frame's action
+        # loadMovie(_root.LoadDLCPackage) runs only when the playhead *enters* the frame (status menu sprite
+        # 1132 frame 30). Already on dlcmap1, gotoAndStop is a no-op and the old DLC movie stays (run 14).
+        if self.Anchor is not None and self.Anchor.DLCMap is not None and before != target:
+            WORLD.loaded_dlc = str(self.Anchor.DLCMap)
         return True
 
     def InitMapFrameVars(self, movie):
@@ -390,7 +397,9 @@ class Helper:
         raise AssertionError('v0.6 projects in Python; UpdateObjects must not be called')
 
 
-def main(gfx_path):
+def main(gfx_path, on_import=None):
+    """on_import(mod), if given, runs right after the real mod is imported (the profiler add-on's tests
+    attach a capture there and expect every assertion below to hold unchanged)."""
     gfx = Path(gfx_path).read_bytes()
     clock = [1000.0]
     world = types.SimpleNamespace()
@@ -447,6 +456,8 @@ def main(gfx_path):
     sys.path.insert(0, os.path.join(os.path.dirname(HERE), 'sdk_mods'))
     import classic_minimap as mod
     mod.time = types.SimpleNamespace(time=lambda: clock[0])
+    if on_import is not None:
+        on_import(mod)
     tick = HOOKS['WillowGame.WillowPlayerController:PlayerTick']
 
     def step(dt=0.06):
@@ -1054,6 +1065,27 @@ def main(gfx_path):
         close(fitted_art.get('_xscale'), 108)
     finally:
         pc.Pawn = pawn
+    # Run 14: T-Bone Junction (DLC3) -> Tartarus Station (DLC4) kept the same HUD, so the mod rebuilt in place.
+    # Both use the dlcmap1 frame; the map must leave it so InitMapFrame re-enters it and loads the new DLC movie.
+    dlc3, dlc4 = "GFxMovieInfo'dlc3_maps.dlcmap_HUB'", "GFxMovieInfo'dlc4_maps.dlcmap_dlc4tartarus'"
+    saved_anchor = (FakeAnchor.MapFrame, FakeAnchor.DLCMap, WORLD.zone_frame)
+    try:
+        FakeAnchor.MapFrame, FakeAnchor.DLCMap, WORLD.zone_frame = 'dlcmap1', dlc3, 'dlcmap1'
+        WORLD.loaded_dlc = None
+        mod.rebuild()
+        step(); step(); step()
+        assert WORLD.loaded_dlc == dlc3 and mod.S.anchor['DLCMap'] == dlc3, (WORLD.loaded_dlc, mod.S.phase)
+        FakeAnchor.DLCMap = dlc4                       # same frame label, new DLC package
+        mod.rebuild()
+        step(); step(); step()
+        assert WORLD.loaded_dlc == dlc4, 'the DLC4 movie must replace the DLC3 one: %r' % WORLD.loaded_dlc
+        assert mod.S.phase == 'running' and mod.S.anchor['DLCMap'] == dlc4
+        WORLD.loaded_dlc = None
+        mod.rebuild()                                  # same DLC again: no reload (no blank map in between)
+        step(); step()
+        assert WORLD.loaded_dlc is None and mod.S.phase == 'running'
+    finally:
+        FakeAnchor.MapFrame, FakeAnchor.DLCMap, WORLD.zone_frame = saved_anchor
     mod.on_disable()
     print('all minimap mod integration checks passed')
 

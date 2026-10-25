@@ -63,6 +63,6 @@ def build_fixture():
         tag(12, as2asm.encode(native_contract(), end=True)),
     ])
     enhanced = movie([tag(2, struct.pack('<H', sid) + b'\x08\x00\x00\x00\x00\x00')
-                      for sid in (81, 82, 108, 110, 179)])
+                      for sid in (81, 82, 108, 110, 127, 179)])
     data, _ = build(movie([]), status, enhanced)
     return data

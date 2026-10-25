@@ -61,7 +61,7 @@ def skip_matrix(br):
     br.align()
 
 
-def read_fills(b, p, ver, bitmaps):
+def read_fills(b, p, ver, bitmaps, gradients=None):
     n = b[p]; p += 1
     if n == 0xFF and ver >= 2:
         n = struct.unpack_from('<H', b, p)[0]; p += 2
@@ -70,6 +70,8 @@ def read_fills(b, p, ver, bitmaps):
         if t == 0x00:
             p += 4 if ver >= 3 else 3
         elif t in (0x10, 0x12, 0x13):
+            if gradients is not None:
+                gradients.append(t)
             br = Bits(b, p); skip_matrix(br); p = br.p >> 3
             k = b[p] & 0x0F; p += 1 + k * (5 if ver >= 3 else 4)
             if t == 0x13:
@@ -82,7 +84,7 @@ def read_fills(b, p, ver, bitmaps):
     return p
 
 
-def read_lines(b, p, ver, bitmaps):
+def read_lines(b, p, ver, bitmaps, gradients=None):
     n = b[p]; p += 1
     if n == 0xFF:
         n = struct.unpack_from('<H', b, p)[0]; p += 2
@@ -95,20 +97,33 @@ def read_lines(b, p, ver, bitmaps):
             if (f1 >> 4) & 3 == 2:  # miter join
                 p += 2
             if f1 & 0x08:            # has fill
-                p = read_fills(b[:p] + bytes([1]) + b[p:], p, ver, bitmaps) - 1
+                p = read_fills(b[:p] + bytes([1]) + b[p:], p, ver, bitmaps, gradients) - 1
             else:
                 p += 4
     return p
 
 
 def shape_bitmaps(code, b):
+    return walk_shape(code, b)[0]
+
+
+def shape_gradient_count(code, b):
+    """Gradient fill styles in a top-level tag (fills and line fills, initial and inline), 0 for non-shapes.
+
+    GFx numbers gradient fills in file order and keys its external gradient images (tag 1003) by that
+    number, so inserting gradient-bearing shapes shifts every later gradient (PHASE3 run 14)."""
+    return len(walk_shape(code, b)[1]) if code in SHAPES else 0
+
+
+def walk_shape(code, b):
+    """(bitmap ids, gradient fill types in order) of a DefineShape tag body."""
     ver = SHAPES[code]
-    bitmaps = set()
+    bitmaps, gradients = set(), []
     p = skip_rect(b, 2)
     if ver == 4:
         p = skip_rect(b, p) + 1
-    p = read_fills(b, p, ver, bitmaps)
-    p = read_lines(b, p, ver, bitmaps)
+    p = read_fills(b, p, ver, bitmaps, gradients)
+    p = read_lines(b, p, ver, bitmaps, gradients)
     br = Bits(b, p)
     nf, nl = br.u(4), br.u(4)
     while True:
@@ -135,11 +150,11 @@ def shape_bitmaps(code, b):
             br.u(nl)
         if flags & 16:
             q = br.align()
-            q = read_fills(b, q, ver, bitmaps)
-            q = read_lines(b, q, ver, bitmaps)
+            q = read_fills(b, q, ver, bitmaps, gradients)
+            q = read_lines(b, q, ver, bitmaps, gradients)
             br = Bits(b, q)
             nf, nl = br.u(4), br.u(4)
-    return bitmaps
+    return bitmaps, gradients
 
 
 class Movie:
