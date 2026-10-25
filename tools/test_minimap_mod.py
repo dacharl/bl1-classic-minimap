@@ -540,7 +540,7 @@ def main(gfx_path, on_import=None):
     assert info is MOVIE_INFOS[-1] and info is not STOCK_INFO and bytes(info.RawData) == gfx
     assert info.ObjectFlags & KEEP_ALIVE and info.Name == 'MinimapHUD' and LOADED == []
     assert len(builds) == 1 and builds[0][2] is None and builds[0][3] == mod.__version__
-    assert (mod.SETTINGS_DIR / mod.hudmovie.CACHE_NAME).read_bytes() == gfx
+    assert (mod.SETTINGS_DIR / mod.hudmovie.CACHE_NAMES[True]).read_bytes() == gfx
     assert 'original art' in mod.Redirect.status, mod.Redirect.status
     assert 'GfxHUD_Minimap.upk is no longer used' in out0.getvalue(), 'the old package is pointed out'
     MINIMAP_INFO = info
@@ -555,13 +555,17 @@ def main(gfx_path, on_import=None):
     assert len(builds) == 1 and bytes(TEMPLATE.MovieInfo.RawData) == gfx and mod.Redirect.result.cached
     MINIMAP_INFO = TEMPLATE.MovieInfo
     # "Use Enhanced artwork" off, then "Rebuild HUD movie": each builds a new movie and re-points the template
-    mod.opt_enhanced_art.on_change_while_enabled(mod.opt_enhanced_art, False)
-    mod.opt_enhanced_art.value = False
-    assert len(builds) == 2 and TEMPLATE.MovieInfo is MOVIE_INFOS[-1] and TEMPLATE.MovieInfo is not MINIMAP_INFO
-    mod.opt_rebuild_movie.on_press(mod.opt_rebuild_movie)
-    assert len(builds) == 3 and TEMPLATE.MovieInfo is MOVIE_INFOS[-1] and mod.Redirect.original is STOCK_INFO
-    mod.opt_enhanced_art.on_change_while_enabled(mod.opt_enhanced_art, True)
-    mod.opt_enhanced_art.value = True
+    out1 = io.StringIO()
+    with contextlib.redirect_stdout(out1):
+        mod.opt_enhanced_art.on_change_while_enabled(mod.opt_enhanced_art, False)
+        mod.opt_enhanced_art.value = False
+        assert len(builds) == 2 and TEMPLATE.MovieInfo is MOVIE_INFOS[-1] and TEMPLATE.MovieInfo is not MINIMAP_INFO
+        mod.opt_rebuild_movie.on_press(mod.opt_rebuild_movie)
+        assert len(builds) == 3 and TEMPLATE.MovieInfo is MOVIE_INFOS[-1] and mod.Redirect.original is STOCK_INFO
+        mod.opt_enhanced_art.on_change_while_enabled(mod.opt_enhanced_art, True)
+        mod.opt_enhanced_art.value = True
+    assert len(builds) == 3, 'switching back reads that choice\'s own movie cache'
+    assert 'no longer used' not in out1.getvalue(), 'the old-package note is logged once per session'
     MINIMAP_INFO = TEMPLATE.MovieInfo
     movie.MovieInfo = MINIMAP_INFO                     # spawned from the template after the redirect
 
@@ -880,19 +884,44 @@ def main(gfx_path, on_import=None):
     ms = m.get('maps')
     player = movie.root.get('mmPlayer')
 
-    # 7c. tracked mission becomes ready to turn in: the status is part of the rebuild key and the
-    #     objective diamond is tinted gold (classic art has no Enhanced "turnin" frame)
+    # 7c. tracked mission becomes ready to turn in: the status is part of the rebuild key, and like Enhanced
+    #     (FUN_14138d240, PHASE3 3ak) the objective slots are drawn with the "turnin" frame, untinted, instead
+    #     of the diamond. Enhanced's edge indicator follows only "objective" frames, so turn-ins get none.
+    def frames_on_map():
+        return [(c.frame, asvm.tint_of(c)) for c in m.get('maps').children.values() if c.depth >= 0]
     n = len(helpers)
     status_a.Status = 2
     step(0.6); step(); step()
-    assert len(helpers) == n + 1 and mod.S.phase == 'running' and mod.S.tint == mod.STATUS_TINT[2]
-    ms = m.get('maps')
-    obj = [c for c in ms.children.values() if c.depth >= 0 and c.frame == 'objective']
-    assert len(obj) == 2 and all(asvm.tint_of(c) == 0xFFC420 for c in obj), [c.props for c in obj]  # slots 0, 1
-    assert all(asvm.tint_of(c) is None for c in ms.children.values() if c.depth >= 0 and c.frame != 'objective')
+    assert len(helpers) == n + 1 and mod.S.phase == 'running' and mod.S.tint is None
+    assert mod.S.objective_frame == 'turnin'
+    marks = frames_on_map()
+    assert marks.count(('turnin', None)) == 2 and not any(f == 'objective' for f, _ in marks), marks  # slots 0, 1
+    assert all(t is None for _, t in marks)
+    # a giver standing on the objective (the turn-in NPC) adds no second mark there; givers elsewhere still do
+    board_loc = board.Location
+    slot = slots[0].WaypointLocation
+    board.Location, board.redeemable, zed.eligible = vec(slot.X + 100.0, slot.Y, slot.Z), 1, 1
+    step(0.6); step(); step()
+    marks = frames_on_map()
+    assert marks.count(('turnin', None)) == 2 and marks.count(('newmission', None)) == 1, marks
+    board.Location, board.redeemable, zed.eligible = board_loc, 0, 0
+    # 7c'. "Tint objective diamonds" keeps the pre-v0.13.1 style: the diamond, tinted gold when ready to hand in
+    mod.opt_objective_tint.value = True
+    mod.opt_objective_tint.on_change_while_enabled(mod.opt_objective_tint, True); step(); step()
+    assert mod.S.objective_frame == 'objective' and mod.S.tint == mod.STATUS_TINT[2]
+    obj = [c for c in m.get('maps').children.values() if c.depth >= 0 and c.frame == 'objective']
+    assert len(obj) == 2 and all(asvm.tint_of(c) == 0xFFC420 for c in obj), [c.props for c in obj]
+    assert all(t is None for f, t in frames_on_map() if f != 'objective')
+    status_a.Status = 0                                # not started: green diamond (tinted) ...
+    step(0.6); step(); step()
+    assert mod.S.tint == mod.STATUS_TINT[0] and mod.S.objective_frame == 'objective'
+    mod.opt_objective_tint.value = False               # ... or Enhanced's "!" (newmission frame)
+    mod.opt_objective_tint.on_change_while_enabled(mod.opt_objective_tint, False); step(); step()
+    assert mod.S.objective_frame == 'newmission' and frames_on_map().count(('newmission', None)) == 2
     status_a.Status = 1
     step(0.6); step(); step()
-    assert len(helpers) == n + 2 and mod.S.tint is None
+    assert mod.S.tint is None and mod.S.objective_frame == 'objective'
+    assert frames_on_map().count(('objective', None)) == 2
     # mission data unreadable: no tint, the map still runs
     saved = pc.MissionPlaythroughData
     del pc.MissionPlaythroughData

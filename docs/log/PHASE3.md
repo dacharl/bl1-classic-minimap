@@ -941,9 +941,81 @@ Tests:
   repository gates all pass. Mutation testing was not run; the floors for the moved or new files are configured
   but not yet measured.
 
+**Installed on the PC (2026-10-25 23:06 UTC, game closed):** `tools/install.py dist/releases/0.13.0 --profiler
+--backups <main checkout>/dist`.
+- **Installed:** `classic_minimap.sdkmod` 0.13.0 `4181461e…c013` and `classic_minimap_profiler.sdkmod` 0.1.4
+  `370e2658…a0bd`, SHA-256 verified against the bundle.
+- **Backups:** the previous v0.12.0 files (`cfa93923…0d45`, `988511a9…6376`) are in the main checkout's
+  `dist\v0.12.0-20261025T230643.790982Z\`, with `install.json`.
+- **Untouched:** the old `GfxHUD_Minimap.upk` (`a858eed8…`), which the mod now ignores (the installer pointed it
+  out), and stock `GfxHUD.upk` (`5c515c3e…`). Not yet played.
+
 Still unverified (in game):
 - that GFx resolves the copied empty `WillowBody` record from the font library by name, as stock's font 119 is;
 - the glyphs' size and vertical centring;
 - the in-game build time, especially on the Deck (desktop CPython: about 1.2 s);
 - Proton paths and the Steam library discovery on the Deck;
 - the art switch and rebuild in a real session.
+
+## 3ak. Run 21: v0.13.0 on the PC, both art variants, with Extended UI (2026-10-25)
+
+User screenshots (Arid Badlands, "Roadkill" ready to turn in) and `unrealsdk.log` from 23:25–23:32 UTC.
+
+What works:
+- **Movie cache:** the first enable read the movie from the cache (`618106 bytes, enhanced art`).
+- **Build time:** a build takes **1.84–1.92 s** in game on the PC.
+- **Extended UI:** it is installed on the PC too, and the merge into its movie works with the player-built bytes
+  (`template.MovieInfo` = `MinimapMergedHUD`).
+- **Original art:** it renders after "Use Enhanced artwork" off plus a quit-and-load, as designed ("next level
+  load"). The glyphs draw from the game font, so the copied empty `WillowBody` record resolves by name, and "N"
+  and the outlined gold "X" are legible.
+
+Findings for tuning:
+1. **Duplicate turn-in marker (both arts).** At a giver whose mission is ready to hand in, two marks overlap:
+   - the tracked objective's diamond, tinted gold;
+   - our giver turn-in mark: Enhanced's green "?", which mostly hides the diamond, or the gold "X", which
+     collides with it visibly.
+
+   Not intended. Enhanced draws the objective slot itself as `turnin` (status 2) or `newmission` (status 0)
+   instead of the diamond (ENHANCED_NATIVE.md §4, `FUN_14138d240`), so it shows one mark there.
+2. **Original-art box too large:** it fills E shape 81's whole bounds (263 × 238). Those bounds include
+   Enhanced's transparent margin, so a translucent panel shows well outside the window, where Enhanced shows a
+   tight frame.
+3. **Turn-in colour:** the gold turn-in is ours, not Enhanced's. Checked in Enhanced's HUD movie:
+   - landmark sprite 112 frame `turnin` places 109 → shape 108 (fills `66FF00` green, black);
+   - frame `newmission` places 111 → shape 110 (black, `FFCC00` gold "!");
+   - frame `objective` places 91, a black-and-white diamond identical to classic's 1050.
+
+   Enhanced's AS has no colour code for these (its only `Color`/`setTransform` is item-card rarity, and its HUD
+   has no `SetMarkerColor`). Its edge indicator (`currentObjectiveMC`, sprite 186 → 91) follows only `objective`
+   frames.
+
+   So in Enhanced, an active objective is a white diamond, a ready turn-in is the green mark, and a new mission
+   is the gold "!". Our gold turn-in and green new-mission tint of the diamond dates from v0.6 (PHASE3 §3k,
+   chosen because classic's art has no such frames). It is not a v0.13 regression, but its colours are reversed
+   from Enhanced's art, and decision 13's gold "X" inherited it.
+4. **Art switching rebuilds every time:** each switch takes about 1.9 s, because the movie cache has one slot.
+5. **The old-package note repeats** on every build.
+
+**Fix → v0.13.1, profiler 0.1.5 (user: "match Enhanced, but keep the separate turn-in tinting as an option"):**
+- **Objective style:** `objective_style()` replaces `objective_tint()`. By default the objective slots take
+  Enhanced's frame from the tracked mission's status: `turnin` (2), `newmission` (0), else `objective`, all
+  untinted. Turn-ins therefore get no edge diamond, as in Enhanced, since the movie's edge list holds only
+  `objective` frames. The new option **"Tint objective diamonds"** (off by default) keeps the v0.6 style: the
+  diamond, tinted gold or green.
+- **One mark per spot:** a giver within `GIVER_OBJECTIVE_UU` (500 UU, about 10 m) of an objective adds no mark of
+  its own.
+- **Original art:** the "X" is green (`66FF00`, Enhanced's turn-in colour), and the box is a tight frame 5 px
+  around the window.
+- **Movie cache:** one slot per "Use Enhanced artwork" choice (`CACHE_NAMES`, `KEY_NAMES`).
+- **Old-package note:** logged once per session.
+- **Tests (each failed first):**
+  - mod-suite 7c: turn-in frames untinted, two slots, no diamond; a giver on the objective adds no mark while a
+    giver elsewhere does; the option's gold and green diamonds; `newmission` for a mission not started;
+  - `test_ci`: the green "X", the gold "!" and the tight box bounds;
+  - `test_hudmovie`: switching back reads the other choice's cache;
+  - the mod suite: the note isn't repeated.
+- **Real files (`release.py --game`):** the in-mod builds match. Enhanced art `9c8bb84c…3ab3`, original art
+  `7825b499…a08b`; bundle `dist/releases/0.13.1` (`classic_minimap.sdkmod` `e3669056…62b5`, profiler
+  `adb5d942…4287`).
+- **Gates:** 129 unit tests, both real-movie suites on both variants, and the gates pass. Not installed or played.

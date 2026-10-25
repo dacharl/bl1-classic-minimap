@@ -135,7 +135,7 @@ class ProvideChecks(unittest.TestCase):
         self.assertEqual(first.enhanced, game.enhanced_dir)
         second = game.provide()
         self.assertEqual((second.data, second.art, second.cached, len(self.calls)), (first.data, 'enhanced', True, 1))
-        self.assertTrue((game.settings / hudmovie.CACHE_NAME).is_file())
+        self.assertTrue((game.settings / hudmovie.CACHE_NAMES[True]).is_file())
 
     def test_cache_is_rebuilt_when_an_input_changes_even_at_the_same_size(self):
         """Decision 6: the key is every input's SHA-256, not size or time."""
@@ -159,10 +159,20 @@ class ProvideChecks(unittest.TestCase):
         self.assertFalse(game.provide(use_enhanced=False, rebuild=True).cached)
         self.assertEqual(len(self.calls), 4)
 
+    def test_each_art_choice_keeps_its_own_cache(self):
+        """Run 21: switching "Use Enhanced artwork" back and forth rebuilt every time (one cache slot)."""
+        game = Game(self.root)
+        self.assertEqual(game.provide().art, 'enhanced')
+        self.assertEqual(game.provide(use_enhanced=False).art, 'original')
+        self.assertEqual(len(self.calls), 2)
+        self.assertTrue(game.provide().cached)
+        self.assertTrue(game.provide(use_enhanced=False).cached)
+        self.assertEqual(len(self.calls), 2)
+
     def test_damaged_cache_is_rebuilt(self):
         game = Game(self.root)
         first = game.provide()
-        (game.settings / hudmovie.CACHE_NAME).write_bytes(first.data[:100])
+        (game.settings / hudmovie.CACHE_NAMES[True]).write_bytes(first.data[:100])
         again = game.provide()
         self.assertEqual((again.cached, again.data), (False, first.data))
 
@@ -175,7 +185,7 @@ class ProvideChecks(unittest.TestCase):
 
     def test_unwritable_cache_keeps_the_movie_in_memory(self):
         game = Game(self.root)
-        (game.settings / hudmovie.CACHE_NAME).mkdir()        # a folder where the cache file goes
+        (game.settings / hudmovie.CACHE_NAMES[True]).mkdir()        # a folder where the cache file goes
         result = game.provide()
         self.assertEqual((result.cached, result.art), (False, 'enhanced'))
         self.assertTrue(any("couldn't save the movie cache" in n for n in result.notes), result.notes)

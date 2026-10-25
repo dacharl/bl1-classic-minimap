@@ -4,14 +4,14 @@ A minimap for **Borderlands Game of the Year (classic)**, modelled on the one in
 
 - the current zone's map art, scrolling and centred on you (optionally rotating with you);
 - landmarks: New-U and fast-travel stations, vendors, Catch-A-Ride, bounty boards and area exits;
-- your current objective, tinted **gold** when the mission is ready to hand in;
-- **"!"** where a new mission can be picked up and a turn-in mark where a finished one can be handed in;
+- your current objective: a diamond, or, like Enhanced, the turn-in mark when the mission is ready to hand in;
+- **"!"** where a new mission can be picked up and a turn-in mark where a finished one can be handed in (one mark per spot);
 - a north marker and edge arrows pointing to objectives that are off the map window;
 - enemies as red dots, taken from the same radar the compass uses.
 
 The ECHO panel (including the Angel videos), the mission title and the objective checklist move left to make room while the minimap is shown, as they do in Enhanced. The minimap hides itself during the travel tunnel, in menus, in cutscenes and when you're down.
 
-> **Status:** v0.13.0 is a private test build: one-file install, with the HUD movie built from your own game files. It is tested offline; in-game checks on PC and Steam Deck are next. The first public release will be 1.0.0.
+> **Status:** v0.13.1 is a private test build: one-file install, with the HUD movie built from your own game files. v0.13.0 played well on the PC (with and without Enhanced's art, and with Extended UI). v0.13.1 adds Enhanced-style objective marks and refines the mod's own art. The Steam Deck run is next. The first public release will be 1.0.0.
 
 ## Requirements
 
@@ -58,6 +58,7 @@ Open **MODS → Classic Minimap**:
 | Show enemies | Red dots for enemies the radar tracks. |
 | Enemy range (m) | Only show enemies this close; 0 = no limit (like Enhanced). |
 | Show mission givers | "!" and turn-in marks at mission givers. |
+| Tint objective diamonds | Off (default, like Enhanced): a mission ready to hand in shows the turn-in mark, and one not started shows "!", in place of the objective diamond. On: the diamond stays and turns gold (ready to hand in) or green (not started), as in earlier versions. |
 | Hide compass | Hide the classic compass strip at the bottom. |
 | Use Enhanced artwork | On (default): Enhanced's artwork when Enhanced is installed. Off: the mod's own art. Takes effect from the next level load. |
 | Rebuild now | Re-collect landmarks and objectives (same as F8). |
@@ -71,8 +72,8 @@ Open **MODS → Classic Minimap**:
 
 With Enhanced installed, the minimap uses Enhanced's own box, window, turn-in and "!" marks, north "N" and enemy diamond. Without it, the mod draws its own:
 
-- "N", "!" and a gold "X" (turn-in), drawn in the game's own HUD font with a dark outline;
-- a dark box, a window and a red enemy diamond of the same sizes.
+- "N", a gold "!" and a green "X" (turn-in), the same colours as Enhanced's marks, drawn in the game's own HUD font with a dark outline;
+- a dark frame around the map window, and a red enemy diamond.
 
 The zone maps, landmark icons and objective diamond always come from classic itself.
 

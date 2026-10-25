@@ -26,7 +26,8 @@ How it works (ENHANCED_NATIVE.md; PLAN_DIRECT.md step B):
     and sent with its heading to the movie, which places the player icon and centres/rotates the map;
   * enemy dots: WillowGameReplicationInfo.RadarMgr.RemoteDynamicIcons (active entries), the list the
     compass radar draws and Enhanced's UpdateThreats reads; a pawn scan is the fallback;
-  * objective diamonds are tinted by the tracked mission's status (classic art has no turnin/newmission);
+  * objective slots take Enhanced's icon type from the tracked mission's status (turn-in mark, "!", or the
+    diamond; PHASE3 3ak), or with "Tint objective diamonds" the diamond tinted gold/green;
   * docked like Enhanced (PLAN_V07.md 3): the map takes Enhanced's p1-space placement, sheared like the other
     right-column HUD elements (transform.matrix, with an unsheared fallback), and while it shows, ECHO, the
     mission title and the checklist move to Enhanced's positions (its p<N>.UpdateEchoPosition);
@@ -54,7 +55,7 @@ from . import hudmovie
 from .swfmerge import MergeRefused
 from .swfmerge import merge as merge_movie
 
-__version__ = "0.13.0"
+__version__ = "0.13.1"
 
 
 STAGE_W = 1280.0                       # classic HUD stage is 1280x720
@@ -96,7 +97,9 @@ RADAR_PROBE_RANGE_UU = 1500.0          # an enemy this close should be on the ra
 RADAR_MISS_LIMIT = 5                   # ...if it isn't on this many probes, switch to the pawn scan
 RADAR_PROBE_EVERY = 8                  # probe every Nth empty radar read (THREAT_INTERVAL each)
 MS_NOT_STARTED, MS_READY_TO_TURN_IN = 0, 2     # IMission.EMissionStatus
-STATUS_TINT = {MS_NOT_STARTED: 0x50E050, MS_READY_TO_TURN_IN: 0xFFC420}   # newmission green, turnin gold
+STATUS_FRAME = {MS_NOT_STARTED: "newmission", MS_READY_TO_TURN_IN: "turnin"}   # Enhanced's objective icon types
+STATUS_TINT = {MS_NOT_STARTED: 0x50E050, MS_READY_TO_TURN_IN: 0xFFC420}   # "Tint objective diamonds" (v0.6 style)
+GIVER_OBJECTIVE_UU = 500.0             # a giver this close to an objective is its NPC: one mark there (PHASE3 3ak)
 LANDMARK_CLIP = "map.maps.landmarks"   # icon template clip (frames objective .. questionmark, turnin, newmission)
 RECORD_KINDS = {"FloatProperty", "IntProperty", "BoolProperty", "ByteProperty", "StrProperty", "NameProperty",
                 "StructProperty", "ObjectProperty"}
@@ -120,6 +123,11 @@ opt_icon_size = SliderOption("Icon size (%)", 100, 50, 200,
 opt_givers = BoolOption("Show mission givers", True,
                         description="Show ! where a new mission can be picked up and the turn-in icon where "
                                     "a finished mission can be handed in, like Enhanced.")
+opt_objective_tint = BoolOption("Tint objective diamonds", False,
+                                description="Off (like Enhanced): a mission ready to hand in shows the turn-in mark "
+                                            "and one not started shows !, in place of the objective diamond. On: "
+                                            "the diamond stays and turns gold (ready to hand in) or green (not "
+                                            "started).")
 opt_rotate = BoolOption("Rotate with player", False, description="Rotate the map so you always face up.")
 opt_rotation_offset = SpinnerOption("Rotation offset", "0", ["0", "90", "180", "270"], is_hidden=True,
                                     description="Correction if the player arrow doesn't point up when rotating.")
@@ -203,6 +211,7 @@ class State:
         self.anchor: dict[str, Any] = {}
         self.sources: list[tuple[str, str, float, float, float, bool]] = []
         self.tint: Any = None
+        self.objective_frame = "objective"
         self.givers: list[Any] = []        # WeakPointers to interactive objects with mission directives
         # computed once the zone frame is on stage
         self.xf: tuple[float, ...] = ()
@@ -424,6 +433,7 @@ class Redirect:
     movie_info: Any = None        # the GFxMovieInfo constructed from the player-built movie (PLAN_V13)
     movie_data: Any = None        # the bytes `movie_info` holds; a new build means a new object
     result: Any = None            # hudmovie.Result: the player-built movie and how it was made
+    old_noted: bool = False       # the old GfxHUD_Minimap.upk note: once per session
     merged: Any = None            # our block spliced into another mod's movie (PLAN_V12)
     merged_from: Any = None       # the foreign movie `merged` was built from; reused while it is unchanged
     merged_active: bool = False   # the template points at `merged` because of us
@@ -496,7 +506,8 @@ def player_movie(rebuild: bool = False, use_enhanced: Any = None) -> Any:
     if not result.cached:
         console_line("Built the minimap's HUD movie from your game files; later sessions reuse it.")
     old = hudmovie.game_dir(settings) / hudmovie.INTERFACE / OLD_PACKAGE
-    if old.exists():
+    if not Redirect.old_noted and old.exists():
+        Redirect.old_noted = True
         log(f"{OLD_PACKAGE} is no longer used (the mod builds its HUD movie itself): you can delete {old}")
     return result.data
 
@@ -692,14 +703,16 @@ def collect(pc: Any, movie: Any) -> bool:
         S.zoom_points, S.zoom_has_pawn = fit_inputs(pc), pc.Pawn is not None
         S.sources = object_sources(helper)
         S.givers = find_givers() if opt_givers.value else []
-        S.sources += [(LANDMARK_CLIP, frame, *loc, False) for _, frame, loc in giver_states(pc)]
+        objectives = [(x, y, z) for _, _, x, y, z, waypoint in S.sources if waypoint]
+        S.sources += [(LANDMARK_CLIP, frame, *loc, False) for _, frame, loc in giver_states(pc)
+                      if not any(math.dist(loc, o) <= GIVER_OBJECTIVE_UU for o in objectives)]
         # Baseline for change detection = what this collection was built from. Recording it lazily at the
         # next check would miss an objective that moved in between and keep the stale marker.
         try:
             S.objective_key = objective_key(pc)
         except Exception:
             S.objective_key = None
-        S.tint = objective_tint(pc)
+        S.objective_frame, S.tint = objective_style(pc)
         # DLC zones share the dlcmap1 frame, whose action loads the DLC movie only when the playhead enters it.
         # A new DLC on the same HUD (T-Bone -> Tartarus, run 14) would keep the old art, so leave the frame first.
         if S.anchor["DLCMap"] not in ("None", old_dlc):
@@ -887,7 +900,10 @@ def capture(movie: Any, in_place: bool = False) -> bool:
     for clip, frame, x, y, z, waypoint in S.sources:
         u, v = to_map(x, y, z)
         if math.isfinite(u) and math.isfinite(v):
-            S.marks.append((clip, frame, u, v, 0.0, S.tint if waypoint else None))
+            if waypoint:
+                S.marks.append((clip, S.objective_frame, u, v, 0.0, S.tint))
+            else:
+                S.marks.append((clip, frame, u, v, 0.0, None))
     record_anchor(w, h)
     S.phase = "running"
     place_static(movie)
@@ -1108,14 +1124,19 @@ def mission_status(pc: Any, mission: Any) -> Any:
     return None
 
 
-def objective_tint(pc: Any) -> Any:
-    """Enhanced picks turnin/newmission icons from mission status (FUN_14138d240); classic's art has
-    neither frame, so the objective diamond is tinted instead (None = stock colour)."""
+def objective_style(pc: Any) -> tuple[str, Any]:
+    """(frame, tint) for the objective slots. Like Enhanced (FUN_14138d240, PHASE3 3ak): the tracked mission's
+    status picks the frame, "turnin" when ready to hand in, "newmission" when not started, else the plain
+    "objective" diamond; Enhanced never tints them. "Tint objective diamonds" keeps the diamond and tints it gold
+    or green instead, the style of v0.6 to v0.13.0 (None = stock colour)."""
     try:
-        return STATUS_TINT.get(mission_status(pc, tracked_mission()))
+        status = mission_status(pc, tracked_mission())
     except Exception as ex:
         warn_once("status:" + type(ex).__name__, f"mission status unavailable ({type(ex).__name__}: {ex})")
-        return None
+        return "objective", None
+    if opt_objective_tint.value:
+        return "objective", STATUS_TINT.get(status)
+    return STATUS_FRAME.get(status, "objective"), None
 
 
 def objective_key(pc: Any) -> tuple[str, ...]:
@@ -1471,6 +1492,7 @@ for _opt in (opt_position, opt_dock_size, opt_scale, opt_margin_x, opt_margin_y,
              opt_hide_compass):
     _opt.on_change_while_enabled = mark_layout_dirty
 opt_givers.on_change_while_enabled = lambda *_: rebuild()
+opt_objective_tint.on_change_while_enabled = lambda *_: rebuild()     # deferred: runs after the value is set
 
 opt_rebuild = ButtonOption("Rebuild now", on_press=lambda _: rebuild(),
                            description="Re-collect landmarks and objectives.")
@@ -1504,6 +1526,7 @@ def on_disable() -> None:
 
 
 mod = build_mod(options=[opt_position, opt_dock_size, opt_scale, opt_margin_x, opt_margin_y, opt_zoom, opt_icon_size,
-                         opt_rotate, opt_rotation_offset, opt_threats, opt_threat_range, opt_givers, opt_hide_compass,
+                         opt_rotate, opt_rotation_offset, opt_threats, opt_threat_range, opt_givers, opt_objective_tint,
+                         opt_hide_compass,
                          opt_enhanced_art, opt_rebuild, opt_rebuild_movie, opt_enhanced_folder])
 BASE_DESCRIPTION = getattr(mod, "description", "") or ""

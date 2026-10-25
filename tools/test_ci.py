@@ -71,6 +71,21 @@ class SourceChecks(unittest.TestCase):
             walk_shape(code, body)              # parses to the end record
         self.assertNotIn(1050, {1307, 1308, 1310})
         self.assertIn(1050, movie.defs)
+        # Run 21 (PHASE3 3ak): the turn-in "X" is green like Enhanced's turn-in mark (the "!" is gold), and the box
+        # is a tight frame around the window, not E shape 81's bounds (which include a transparent margin)
+        import swfbuild
+        self.assertIn(bytes.fromhex('66ff00ff'), movie.defs[1313][1])
+        self.assertIn(bytes.fromhex('ffcc00ff'), movie.defs[1315][1])
+        body = movie.defs[1307][1]
+        n = body[2] >> 3
+        bits = ''.join(format(x, '08b') for x in body[2:2 + (5 + 4 * n + 7) // 8])[5:]
+        x0, x1, y0, y1 = (int(bits[i * n:(i + 1) * n], 2) - (1 << n if bits[i * n] == '1' else 0) for i in range(4))
+        left, top = swfbuild.WINDOW_LEFT, swfbuild.WINDOW_TOP
+        right, bottom = left + swfbuild.WINDOW_W, top + swfbuild.WINDOW_H
+        for edge, window in ((x0, left), (y0, top)):
+            self.assertTrue(-10 <= edge / 20 - window < 0, (edge / 20, window))
+        for edge, window in ((x1, right), (y1, bottom)):
+            self.assertTrue(0 < edge / 20 - window <= 10, (edge / 20, window))
 
     def test_original_art_needs_the_hud_font(self):
         from ci_fixture import fixture_inputs, movie

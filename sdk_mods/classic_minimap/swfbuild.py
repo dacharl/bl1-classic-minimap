@@ -62,14 +62,14 @@ ENEMY_ART = 1311                  # one-frame wrapper for the threat marker (as 
 # Original art (PLAN_V13 decisions 5, 12-15), used when the Enhanced HUD movie isn't available. The glyph sprites
 # take the ids of Enhanced's turnin / newmission / north shapes: art id -> (glyph, colour, outline text id); the
 # coloured text is the next id. GLYPH_FONT copies the HUD's empty WillowBody record (the game's font library).
-GLYPHS = {1301: ('X', 0xFFC420, 1312), 1303: ('!', 0xFFCC00, 1314), 1305: ('N', 0xFFFFFF, 1316)}
+GLYPHS = {1301: ('X', 0x66FF00, 1312), 1303: ('!', 0xFFCC00, 1314), 1305: ('N', 0xFFFFFF, 1316)}  # E 108/110 colours
 GLYPH_FONT = 1318
 ORIGINAL_IDS = {1312, 1313, 1314, 1315, 1316, 1317, GLYPH_FONT}
 GLYPH_SIZE = 28.0                 # font height (px): capitals about 20 px, like Enhanced's 19-21 px marks
 GLYPH_BOX = 32.0
 GLYPH_OUTLINE = 1.0
-BOX_RECT = (-130.75, 132.65, -117.90, 120.60)   # E shape 81's bounds
-BOX_FILL, BOX_LINE, BOX_LINE_WIDTH = (0x0B1624, 0xB4), (0x6A9AC8, 0xE0), 2.0
+BOX_MARGIN = 5.0                  # a tight frame around the window (E shape 81's bounds include a clear margin, run 21)
+BOX_FILL, BOX_LINE, BOX_LINE_WIDTH = (0x0B1624, 0xE6), (0x6A9AC8, 0xF0), 2.0
 THREAT_ART_HALF, THREAT_LINE_WIDTH = 7.2, 1.5   # E shape 127 is 14.45 px across
 # Enhanced's window (E shape 82, centred) and where its sprite 187 places things
 WINDOW_LEFT, WINDOW_TOP, WINDOW_W, WINDOW_H = -103.95, -86.8, 207.95, 173.65
@@ -781,10 +781,10 @@ def original_art(hud):
     out = [tag(75, struct.pack('<H', GLYPH_FONT) + font[2:])]
     for sid, (glyph, colour, tid) in sorted(GLYPHS.items()):
         out += [glyph_text(tid, glyph, 0x000000), glyph_text(tid + 1, glyph, colour), glyph_sprite(sid, tid)]
-    x0, x1, y0, y1 = BOX_RECT
-    out.append(polygon_shape(ENH_SHAPES[81], [(x0, y0), (x1, y0), (x1, y1), (x0, y1)], rgba(*BOX_FILL),
-                             (BOX_LINE_WIDTH, rgba(*BOX_LINE))))
     x0, x1, y0, y1 = WINDOW_LEFT, WINDOW_LEFT + WINDOW_W, WINDOW_TOP, WINDOW_TOP + WINDOW_H
+    m = BOX_MARGIN
+    out.append(polygon_shape(ENH_SHAPES[81], [(x0 - m, y0 - m), (x1 + m, y0 - m), (x1 + m, y1 + m), (x0 - m, y1 + m)],
+                             rgba(*BOX_FILL), (BOX_LINE_WIDTH, rgba(*BOX_LINE))))
     out.append(polygon_shape(ENH_SHAPES[82], [(x0, y0), (x1, y0), (x1, y1), (x0, y1)], rgba(0x223853)))
     h = THREAT_ART_HALF
     out.append(polygon_shape(ENH_SHAPES[127], [(0, -h), (h, 0), (0, h), (-h, 0)], rgba(0xFF0000),

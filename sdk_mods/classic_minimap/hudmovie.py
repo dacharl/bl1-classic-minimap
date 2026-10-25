@@ -24,7 +24,9 @@ HUD_PACKAGE, MENUS_PACKAGE = 'GfxHUD.upk', 'menus_ingame_redux.upk'
 ENHANCED_INPUT = "Enhanced's GfxHUD.upk"
 HUD_MOVIE, MENUS_MOVIE = 'FlashMovie.HUD', 'FlashMovies.status_menu'
 ENHANCED_FOLDER = 'BorderlandsGOTYEnhanced'
-CACHE_NAME, KEY_NAME = 'classic_minimap_hud.gfx', 'classic_minimap_hud.json'
+# One movie cache per "Use Enhanced artwork" choice, so switching back and forth doesn't rebuild (run 21)
+CACHE_NAMES = {True: 'classic_minimap_hud.gfx', False: 'classic_minimap_hud_original.gfx'}
+KEY_NAMES = {True: 'classic_minimap_hud.json', False: 'classic_minimap_hud_original.json'}
 STEAM_VDFS = ('C:/Program Files (x86)/Steam/steamapps/libraryfolders.vdf',
               'C:/Program Files/Steam/steamapps/libraryfolders.vdf')
 PROTON_VDFS = ('.local/share/Steam/steamapps/libraryfolders.vdf', '.steam/steam/steamapps/libraryfolders.vdf')
@@ -131,10 +133,10 @@ def build_movie(hud_package, menus_package, enhanced_package, version):
         raise BuildFailed("couldn't build the HUD movie from your game files (%s)" % describe(ex)) from None
 
 
-def load_cache(settings, key):
+def load_cache(settings, key, use_enhanced):
     try:
-        meta = json.loads((settings / KEY_NAME).read_text(encoding='utf-8'))
-        data = (settings / CACHE_NAME).read_bytes()
+        meta = json.loads((settings / KEY_NAMES[use_enhanced]).read_text(encoding='utf-8'))
+        data = (settings / CACHE_NAMES[use_enhanced]).read_bytes()
         if meta['key'] == key and meta['sha256'] == sha256(data) and meta['art'] in ('enhanced', 'original'):
             return data, meta['art'], list(meta.get('notes', []))
     except (OSError, ValueError, KeyError, TypeError):
@@ -142,10 +144,10 @@ def load_cache(settings, key):
     return None
 
 
-def save_cache(settings, key, data, art, notes):
-    (settings / CACHE_NAME).write_bytes(data)
+def save_cache(settings, key, use_enhanced, data, art, notes):
+    (settings / CACHE_NAMES[use_enhanced]).write_bytes(data)
     meta = dict(key=key, sha256=sha256(data), art=art, notes=notes, size=len(data))
-    (settings / KEY_NAME).write_text(json.dumps(meta, indent=2) + '\n', encoding='utf-8')
+    (settings / KEY_NAMES[use_enhanced]).write_text(json.dumps(meta, indent=2) + '\n', encoding='utf-8')
 
 
 def provide(game, settings, version, use_enhanced=True, enhanced_setting='', rebuild=False, vdfs=None):
@@ -176,14 +178,14 @@ def provide(game, settings, version, use_enhanced=True, enhanced_setting='', reb
     if not recognised:
         notes.append('unrecognised game files (not the Steam files this version was checked against); built anyway.')
     key = sha256(json.dumps([version, use_enhanced, sorted(hashes.items())]).encode())
-    cached = None if rebuild else load_cache(settings, key)
+    cached = None if rebuild else load_cache(settings, key, use_enhanced)
     if cached is not None:
         data, art, saved_notes = cached
         return Result(data, art, True, time.time() - started, enhanced, inputs, recognised, notes + saved_notes)
     data, art, build_notes = build_movie(blobs[HUD_PACKAGE], blobs[MENUS_PACKAGE], blobs.get(ENHANCED_INPUT), version)
     notes += build_notes
     try:
-        save_cache(settings, key, data, art, build_notes)
+        save_cache(settings, key, use_enhanced, data, art, build_notes)
     except OSError as ex:
         notes.append("couldn't save the movie cache (%s); it will be built again next time." % (ex.strerror or ex))
     return Result(data, art, False, time.time() - started, enhanced, inputs, recognised, notes)
