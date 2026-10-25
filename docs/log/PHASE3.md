@@ -484,3 +484,211 @@ The user requested timing/performance telemetry as the next plan, then specified
 The plan covers attach/detach/reload ownership, bounded inclusive aggregates, explicit report/reset buttons, deterministic hook/command and archive-isolation tests, coverage/mutation gates for the optional package, and attached/detached in-game overhead comparisons. F7 reuse is conditional on a verified SDK integration path. Planning only: no runtime/build changes, version bump, build, installation or new behavioral tests. Documentation passes `git diff --check`. Existing uncommitted v0.10 work and installed v0.9 files are unchanged.
 
 The user also pointed to MCP diagnostic formatting in `C:/Users/Charles/Dev/steam-deck-scripts`. Read its BL1 producer, profile registration, reader/JSON validation, current MCP guide and evidence-summary specs. Added source references and a proposed independent performance-report envelope to PLAN_V11, plus a summary in PRIOR_RESEARCH. Plan explicit atomic JSON/text saves, bounded compact summaries, distinct identity/version registration, UTC versus monotonic semantics, immutable revisions and unknown live-state handling. Optional automatic checkpoints belong only to the profiler and must expose their measurement impact. Existing MCP readers are POC-specific; a new provider/adapter needs separate implementation and tests. No files in the earlier research repository were changed, and no MCP compatibility or live transport is claimed.
+
+## 3z. Profiler add-on 0.1.0 and the frozen report contract (2026-10-24, PLAN_V11)
+
+**What exists now:** `sdk_mods/classic_minimap_profiler/` (version 0.1.0, separate from the core, which is untouched at 0.10.0).
+- `profiler.py` (no SDK imports): **Start** checks that `classic_minimap` is already loaded, is version 0.10.0 (decision 14) and has `mod.is_enabled`, then wraps 15 module-level functions plus `mod.on_disable`. The wrappers exist only while a capture runs.
+  - `tick` is timed as a whole. `current_hud_movie` is wrapped only as the admission signal. `cmd` is timed by operation (nine named ops plus `other`). Twelve stage functions are timed by name.
+  - Spans are inclusive, with a depth cap of 32. Values and exceptions pass through unchanged, and a failed call is counted as failed.
+  - The capture stops itself from inside the `tick` wrapper once the chosen length (30/60/120/300 s) is reached, then detaches and saves. Nothing is written during the capture.
+  - **Detach:** restores only the attributes still owned. Anything replaced by another mod becomes a detach conflict, with a restart/disable hint (ADR 0002).
+  - **Abort reasons:** core disable → `core_disabled`; a replaced module or an in-place `importlib.reload` (detected by a new `mod` object) → `unsupported_lifecycle`; failed bookkeeping → `telemetry_error` (one warning, detach, the core keeps running).
+  - **Saving:** temporary files, then archive rotation into `slot-1..8`, then atomic replace. A failed save keeps the previous report.
+- `__init__.py`: MODS options **Capture length**, **Start performance capture**, **Dump performance report** (stop and save, plus one prefixed JSON record in the SDK log) and **Reset performance statistics**. Confirmations go to the in-game console; profiler disable stops a running capture.
+- **Contract (H0 of the handoff):** [PERF_REPORT_V1.md](../research/PERF_REPORT_V1.md) plus `tools/fixtures/perf_reports/` (5 valid, 16 invalid). `tools/make_perf_fixtures.py` regenerates them from the real profiler; a test fails on any drift.
+- **CI wiring:**
+  - `run_tests.py` runs `test_profiler`; coverage includes the profiler.
+  - The repository gate now checks version fields and floors for both mods (it also understands a re-exported `__version__`).
+  - Mutation runs both suites in separate processes (`tools/test_mutants.py`; the per-mutant timeout is now 20 s, up from 10 s, because two suites run).
+  - `run_mutations.py --modules` measures a subset locally.
+  - The release workflow is unchanged: it packages only `classic_minimap`.
+
+**Test-first evidence:** `tools/test_profiler.py` was written before the profiler and failed because the module did not exist. The injectable capture ID and the in-place reload case each failed first too. 35 cases, all passing:
+- **Aggregation:** the plan's literal example (0.1/0.2/0.4 ms gives count 3, total 0.7, mean 0.233333, max 0.4, p95 ≤ 0.5), empty metrics as null, bucket bounds and overflow.
+- **Lifecycle:** refusals, wrappers only while capturing, pass-through, admission, inclusive 2.0 vs 0.5 ms, conflict, disable, replaced module, in-place reload, reset, idle stop, depth cap.
+- **Capture and report:** the timed stop saves once, contract shape and bounds, rotation keeps eight, a failed save keeps the last good file, dump, telemetry failure.
+- **Glue, isolation and fixtures:**
+  - glue buttons and console lines;
+  - the core source has no telemetry words;
+  - the standard and profiling distributions contain byte-identical core archives;
+  - fixture sync and coverage of the handoff.
+- **Integration:** the whole real core scenario (`test_minimap_mod.main`, on the synthetic movie) passes with a capture attached throughout. It observed 241 admitted ticks plus starts, collections, captures, rebuilds and commands, and the original functions were restored afterwards. `test_minimap_mod.main` gained an `on_import` hook for this; the core itself is unchanged.
+
+**Validation:**
+- Ruff and the repository gate pass.
+- 49 unit cases pass in the automatic runner.
+- Coverage: core 90.00%/84.44% (unchanged), profiler `__init__.py` 96.77%/100%, `profiler.py` 97.04%/91.67%.
+- Both suites still pass against the real built movie.
+- Mutation results: see the end of this section.
+
+**Overhead benchmark** (`tools/bench_profiler.py`, local, this PC, game stubs; decision 8):
+- **Collector memory:** 13.1 KB, **met** (limit 64 KiB).
+- **Wrapper cost:** 1.55 µs per wrapped call. The scenario averages 12.8 wrapped calls per admitted update, so about **0.020 ms** per admitted update. The paired per-call median increment is 0.011 ms.
+- **The p95 requirement is unresolved.** The harness's own noise is far wider than the 0.05 ms limit: paired increments run from p05 −0.69 ms to p95 +0.78 ms, and the unpaired p95 difference was 0.15 ms. That noise comes from the Python AS interpreter in the stubs. The benchmark therefore reports `unresolved` (exit 2) rather than passing or failing.
+- A first run showed a large false overhead because `tracemalloc` was active during timing. Memory is now measured in separate runs.
+
+**CI scope change (user request, same day):** mutation testing runs on demand only. The `mutation` job left `ci.yml`, which now runs just the two blocking checks: lint (Ruff, pip check, repository checks, actionlint) and unit tests with coverage floors. The job moved to `.github/workflows/mutation.yml` (`workflow_dispatch` only, 180-minute timeout, the same steps and artifacts). CI.md, README and AGENTS describe the split. The local full run started before this change was allowed to finish.
+
+**Mutation hang (same evening):** that run stalled at 1,200 of 3,866 for an hour with all eight workers stuck.
+- **Cause:** each worker was waiting on a `test_profiler.py` process spinning in a mutant's infinite loop. On Windows Cosmic Ray's timeout falls back from `killpg` to killing its direct child, the venv `python.exe` launcher. That ended `test_mutants.py` (job object) but not the suite, which kept the output pipe open.
+- **Action:** stopped the run and its processes, and removed 16 orphaned `minimap-mutations-*` temporary copies.
+- **Fix:** `tools/watchdog_run.py` runs each suite with an in-process deadline (`os._exit`), and `test_mutants.py` kills each suite's process tree at a 25 s budget, past Cosmic Ray's 20 s timeout, so such mutants are still recorded as timeouts.
+- **Tests (written first):**
+  - a looping grandchild is killed;
+  - a hanging suite ends itself under the watchdog, and exit codes pass through;
+  - the budget outlasts the Cosmic Ray timeout.
+- **End-to-end check:** Cosmic Ray's own `run_tests` with a hanging suite now returns `timeout` after 9.1 s, leaving no processes behind.
+- The full run was restarted.
+
+**Installed (user request, game closed):**
+- **Backup:** v0.9.0 first copied to the worktree's `dist\v090\` (mod `6df0c878…d7d7`, package `dc1292c5…ab9d`).
+- **Installed, each verified by SHA-256 against its build:**
+  - `classic_minimap.sdkmod` v0.10.0 `469b45db01ace82d1d6e4be8f0cc74c2e5d8415841a09a6a0df4c60521755ff7`. This is the same source as the `f27f87fc…` build in §3w; only zip timestamps differ, and the entries match the source byte for byte.
+  - `GfxHUD_Minimap.upk` `5bae8e3fadf52711a8b26265b7572b8df8da6a882e89163b4bf740767dfebc29`.
+  - `classic_minimap_profiler.sdkmod` 0.1.0 `c0fbbd4e3e5766b5ade8a24120a60a7bfb7c39e059db7970b047d9d8bc35d618`.
+- The stock `GfxHUD.upk` is unchanged (`5c515c3e…3ea88`).
+
+**Not verified:** the add-on has not been loaded by the real SDK (relative imports inside an `.sdkmod` package, button behaviour, console text). Captures in game, PresentMon/MangoHud comparisons and the H2 joint check are pending. `steam-deck-scripts` is unchanged. *(Superseded by §3aa: the real SDK loaded it and a capture completed.)*
+
+## 3aa. Run 14 (v0.10.0 + profiler 0.1.0): objective "wobble" at the window edge; first in-game capture
+
+**Seen** (two screenshots, Arid near Bone Head's camp, standing still):
+- An objective near the top-left of the window kept switching between the edge diamond and its in-map icon.
+- The classic compass's objective diamond blinked green/white at the same moments.
+
+**Log** (`unrealsdk.log`):
+- No rebuilds after 00:50:03, so the switching was not the mod re-collecting markers.
+- **F7** (three snapshots): `tint` None; zoom fit raw 286.18 → fitted and final **294.18%** from 2 points (pawn plus one waypoint about 7,140 UU away); `themap_w` 2,293; 28 markers.
+
+**Cause:**
+- The classic objective art is animated. Sprite 1050 holds the diamond (shape 1047, 45.1 units) and a ring (shape 1049, 40.2 units) that scales 1.0 → 2.2 over 12 frames and loops (`tools/swftimeline.py … 1050`). The blink is the same art, which is why the compass blinks too.
+- v0.10's handoff measured the icon's live `_width`, which swings between about 24.8 and 48 units with the pulse. Near the edge the "whole icon fits" test therefore flipped with the animation.
+
+**Fix (movie only):** `MinimapEdges` takes the icon's half-size from its scale, not its live width: `OBJECTIVE_HALF` = 45.1 × 0.55 / 2 = 12.4 units × `o._xscale` / 100 × the `maps` scale. The mod is unchanged at 0.10.0 (so the profiler's version allowlist still applies).
+
+**Test-first evidence:** a new AS scenario pulses the icon's width (24.8 → 48 → 30 → 48 → 24.8) at y = −70, where the static icon fits. It failed at 48 before the fix and passes now; the earlier run-13 cases still hold.
+- Both real-movie suites pass, and the 52 unit cases plus Ruff pass.
+- **Rebuilt package:** `GfxHUD_Minimap.upk` `5eefdf81368d775a3ebd8e9046d1d9666f65c70210998a1fafbd5976fdb76d03` (fresh GUID). The movie extracted from it matches the tested `HUD_minimap.gfx` `fcd05c20…5fc3`.
+- **Installed** (user request, game closed): the previous package `5bae8e3f…bc29` was backed up to the worktree's `dist\v0100\`; the installed copy's SHA-256 matches the build (`5eefdf81…6d03`). The mod and profiler are unchanged.
+
+**Profiler in game, first real evidence:**
+- The SDK loaded the add-on (so relative imports inside the `.sdkmod` work), and Start produced a completed 60 s capture saved to the reports folder.
+- **Summary:**
+  - 872 admitted updates out of 2,524 ticks;
+  - admitted mean 2.19 ms, p95 ≤ 5 ms, slowest tick 25.6 ms;
+  - `objective_key` 2.31 ms mean (100 calls; includes `giver_states` 0.87 ms and 9 `script_count` calls each);
+  - `hidden_reason` 0.47 ms per admitted tick (max 9.9 ms);
+  - `cmd.tick` 0.32 ms (max 11.1 ms);
+  - `threat_string` 0.58 ms (187 calls).
+- These are synchronous elapsed times on the game thread, not frame cost. No frame-time comparison yet. Optimisation candidates for a later plan: `objective_key`/givers and `hidden_reason`.
+
+## 3ab. HUD gradient textures shifted: bright damage indicator, green/red/white box (2026-10-24)
+
+**Seen:**
+- The damage-direction indicator was a bright, opaque yellow wedge instead of a faint one.
+- The minimap box showed green, red and white behind it. Enhanced's box is a faint light blue.
+
+**Cause (from the movies' tags, `scratchpad/gradscan.py`, `gradmap.py`):**
+- GFx keys its external gradient images (`DefineExternalGradient`, tag 1003, e.g. `HUD_G4.tga`) by a gradient's position among all gradient fills in file order. Classic's HUD has exactly 14 gradient fills and 14 records, ids 0–13.
+- The builder inserts its block before the first `ShowFrame`, after 4 of classic's gradients. That block brings 12 gradient fills of its own: Enhanced's box (shape 1307: 4 fills of light blue (6, 182, 249) fading from alpha 127 to 0) and the status-menu map art (shapes 1083, 1093, 1129).
+- **The box** therefore took classic's ids 4–7, the textures of classic shapes 82 (white), 93 (red), 239 (dark red) and 251 (green): the green/red/white.
+- **Classic's later shapes** moved to ids 16–25, which have no record, so they rendered as raw vector gradients. The damage indicator (shape 707, an opaque yellow vector gradient) lost texture 13: the opaque wedge.
+- **History:** the status-menu art has been inserted since the first package, so the indicator has probably been off since then; the box made it visible.
+
+**Fix (builder only):**
+- `swfbuild.shift_gradient_images` counts classic's gradient fills before the insertion point (4) and the inserted ones (12), then adds 12 to every classic 1003 id ≥ 4.
+- Classic shapes keep their own textures. The inserted fills have no record and render as their own vector gradients: the box's faint blue, as in Enhanced.
+- `swfdeps.shape_gradient_count` counts gradient fills, including line fills and inline style changes.
+
+**Test-first:**
+- `test_ci.SourceChecks.test_classic_gradients_keep_their_external_images` builds a synthetic classic HUD: one gradient shape before the first `ShowFrame`, two after, three 1003 records, plus a two-gradient box. It expects each classic shape to keep its own image and the box to have none. It failed on the missing counter, then passes.
+- **On the real build:** every classic shape maps to the same image as in stock classic, and the inserted shapes map to none. The previously installed movie fails the same check.
+- Both real-movie suites, 53 unit cases and Ruff pass.
+
+**Package:** `GfxHUD_Minimap.upk` `e2b687c1936942198b4da8404557a28b7b132fd552776b4719cfcbbd2886ab51` (fresh GUID; it also contains §3aa's handoff fix). The embedded movie matches the tested `HUD_minimap.gfx` `a3e95200…3c55`. **Installed** (user request, game closed): the previous `5eefdf81…6d03` was backed up to the worktree's `dist\v0100-wobblefix\`, and the installed copy's SHA-256 matches the build. The mod is unchanged.
+
+**Unverified:** that Scaleform draws the box's raw vector gradient with its alpha (expected faint blue), and that the damage indicator looks as it did before the minimap.
+
+**In game (run 15):** the box is faint blue, with no green/red/white; the damage indicator has not been checked yet.
+
+## 3ac. Run 15: Tartarus Station showed T-Bone's map → v0.10.1, profiler 0.1.1 (2026-10-24)
+
+**Seen:** after travelling from T-Bone Junction (DLC3) to Tartarus Station (DLC4), the minimap art did not match the full map.
+
+**Log:**
+- The trip kept the same HUD (no "map attached"), so the mod rebuilt in place. Both zones use frame `dlcmap1` (31).
+- F7 and the anchor log show the Tartarus anchor (`DLCMap dlc4_maps.dlcmap_dlc4tartarus`), but art of 249.6 × 500.3 at 100%. That is exactly `dlc3_maps.dlcmap_HUB`'s size, giving CoordScale (2.0045, 1).
+
+**Cause:** frame `dlcmap1` (status-menu sprite 1132 frame 30) loads the DLC movie with a frame action, `getURL(_root.LoadDLCPackage, "themap")`, which runs only when the playhead enters the frame. Already on `dlcmap1`, `InitMapFrame`'s `gotoAndStop` was a no-op, so DLC3's movie stayed.
+
+**Fix (mod 0.10.1):** `collect()` sends `frame~none` before `InitMapFrame` when the anchor's DLC package differs from the previous one. The loader then runs again; the empty placeholder (1131) has zero width, so the capture waits in `framewait` until the new movie loads. A rebuild within the same DLC does not blank the map.
+
+**Test-first:**
+- The mod suite's helper fake now loads a DLC only on frame entry, as the real frame action does.
+- A DLC3 → DLC4 in-place rebuild failed (DLC3 still loaded) before the fix and passes now. A same-DLC rebuild triggers no reload.
+- A new guard test requires the core's version to be in the profiler's allowlist.
+
+**Versions:**
+- Mod 0.10.1 (both fields).
+- Profiler 0.1.1: allowlist `("0.10.0", "0.10.1")`. Report fixtures regenerated; only `producer.version` changed.
+- PowerShell's `Set-Content -Encoding utf8` added a BOM to both mod files during the bump; it was stripped before testing (FRICTION).
+
+**Validation:** Ruff, the repository gate, 54 unit cases and both real-movie suites pass.
+
+**Built, not installed:** `classic_minimap.sdkmod` 0.10.1 `0042d3c4bd00eee60b8182d31ce871b43fb8e1ce5c889f85049732380ea5873c`, `classic_minimap_profiler.sdkmod` 0.1.1 `0f642d3193525dcbe75959cff09bab258c58e6a96337b927ed5e1acf4aa1d5c8`. The package is unchanged (`e2b687c1…ab51`). The mutation run in progress tests the earlier sources.
+
+## 3ad. Threat markers: Enhanced's diamond, counter-rotated (2026-10-24)
+
+**Request:** threat markers looked large and square; the compass and objective waypoints use diamonds.
+
+**Research (E_HUD movie data, `swftimeline.py`, scratchpad `shapedump.py`):**
+- Enhanced's `maps.enemy` (sprite 128) holds shape 127: a red (255, 0, 0) diamond with vertices at ±5.8 units, inside a black diamond outline at ±7.2, 14.45 units across, solid fills only.
+- Its `Minimap.UpdateThreats` duplicates the clip without scaling, and `CancelOutIconRotation` sets every threat's `_rotation` to −`currentRot`.
+- **Ours:** since v0.6, `UpdateThreats` drew a red 10 × 10 square with the drawing API (classic's map art has no enemy clip), with no outline and no counter-rotation.
+
+**Change (movie only; the mod is unchanged):**
+- Shape 127 copied as 1310, with a one-frame wrapper 1311 exported as `bl1mm_enemy`. It has no gradients, so classic's gradient mapping (§3ab) is unaffected (re-checked: classic shapes keep their images).
+- `UpdateThreats` attaches `bl1mm_enemy` into `maps` (Icon size still applies) and sets `_rotation` = −`maps._rotation`. `MinimapRecenter` updates every threat's rotation each tick as the map turns.
+- `THREAT_COLOR`/`THREAT_HALF` removed. Both synthetic Enhanced movies (CI fixture, gradient test) gained a stub shape 127.
+
+**Test-first:** the AS suite failed while dots were drawn squares. It now checks that threats are `bl1mm_enemy` art and not drawn, counter-rotated at placement and after a recentre changes the rotation (and back to 0 when north-up), and that the export points at a wrapper around 1310.
+
+**Validation:**
+- Both real-movie suites, 54 unit cases, Ruff and the repository gate pass.
+- Coverage floors hold: core 90.16%/85.29%, `swfbuild.py` 97.20%/80.30%.
+- **Package:** `GfxHUD_Minimap.upk` `4a840f56b85b61ea9d9bcf86a9fa6f992b2c05f8aae9f1804a4ed9d4d6efcabc`, embedding the tested movie `3b2095bc…a08d`.
+
+**Installed (user request, game closed; previous files backed up to the worktree's `dist\v0100-run15\`, each installed copy's SHA-256 matching its build):**
+- `classic_minimap.sdkmod` 0.10.1 `0042d3c4…873c` (§3ac);
+- `classic_minimap_profiler.sdkmod` 0.1.1 `0f642d31…d5c8`;
+- `GfxHUD_Minimap.upk` `4a840f56…cabc`.
+- The stock `GfxHUD.upk` is unchanged.
+
+**Unverified in game:** the diamonds' look and size next to Enhanced's, counter-rotation with "Rotate with player", the Tartarus fix, and the damage indicator.
+
+## 3ae. Second mutation stall and the floors (2026-10-24)
+
+**Seen:** the restarted full run stopped at 3,850 of 3,866. Six `watchdog_run.py` suites (profiler mutants) had been spinning for an hour past their deadlines, at about 5,000 s CPU each.
+
+**Cause:**
+- These mutants loop inside a single C call that holds the GIL (for example, a mutated integer power in the percentile rank), so the watchdog thread never ran.
+- `test_mutants.py` itself had died with the venv launcher, as before, so nothing enforced the deadline.
+- Separately, the suites ran in a new POSIX session, outside the process group Cosmic Ray kills, which would have allowed the same stall on Linux CI.
+
+**Fix (`tools/test_mutants.py`):**
+- **POSIX:** suites stay in the command's process group.
+- **Windows:** suites run on the base interpreter (`sys._base_executable`) and are assigned to a kill-on-close job object, so they die with the command however it dies.
+- The 25 s budget and the watchdog stay as extra layers.
+- **Test (written first, failed, passes):** `test_runners.test_suites_die_with_a_killed_mutation_command` starts the command with a suite spinning in C code, kills it with Cosmic Ray's own `_kill_process_group`, and requires the output pipe to close and the suite to be gone. All 11 runner cases pass. The POSIX branch runs only in CI.
+
+**Results of the stalled run (3,850/3,866; log kept in `dist/ci/mutations-full-stalled-3850.log`; it tested the sources before §3ab–3ad):**
+
+| File | Killed | Score | Floor |
+|---|---|---|---|
+| core | 2,166 of 2,851 | 75.97% | 70% |
+| packager | 33 of 39 | 84.6% | 80% |
+| profiler `__init__.py` | 31 of 34 | 91.2% | **85%** (new) |
+| profiler `profiler.py` | 759 of 926, 29 timeouts | 82.0% (80.6% if the 16 unfinished count as undetected) | **78%** (new) |
+
+These floors are now in `pyproject.toml` and CI.md. A complete run with the fixed command is still pending; mutation runs are on demand only.

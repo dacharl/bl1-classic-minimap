@@ -6,20 +6,26 @@ This page tracks where the project stands: what works, what's installed, how to 
 
 ## Where it stands
 
-- **Next planned: external timing/performance telemetry.** PLAN_V11 is being grilled: confirmed separate in-process profiler, unchanged standard artifact, required MCP adapter, and explicitly started 60-second captures that stop/save automatically without periodic measurement-window writes. See GLOSSARY and ADR 0001. Planning only; no telemetry code or installation yet.
+- **Profiler add-on 0.1.0 (PLAN_V11, built offline, not installed):** `sdk_mods/classic_minimap_profiler/` attaches reversible wrappers to the core only during a capture, saves schema-v1 reports with an 8-slot archive, and leaves the core artifact byte-identical. The report contract is frozen (PERF_REPORT_V1 + fixtures, handoff H0 done); `steam-deck-scripts` owns the adapter (H1). Memory requirement met; the 0.05 ms p95 requirement is unresolved on the stub harness (wrapper cost ≈ 0.020 ms per admitted update). PHASE3 §3z.
 - **Automatic test workers (2026-10-24):** task branch `test/auto-parallel-workers` adds CPU-based defaults for unit and mutation tests, independent unit processes with merged coverage, and clean mutation-worker shutdown on Python 3.13. CI and local commands use the same defaults; see CI.md and PHASE3 §3s. No runtime or installed files change.
 - **Feature worktree rebase:** v0.10/F7 work is rebased onto main `6f840a6`; both real-movie suites, all 11 automatic unit cases, coverage/mutation gates and lint pass. All 2,898 mutations complete without errors, timeouts or cleanup warnings (PHASE3 §3x).
 
 - **Works in game (confirmed through run 12):** zone art, landmarks, player centring, radar enemy dots, the objective turn-in tint, the Enhanced-style dock with the HUD tilt, ECHO/mission text moved aside, no-flicker rebuilds, DLC3 maps, Enhanced zoom and icon size, the north marker, and hiding during the tunnel, menus and death.
 - **Run 13 (v0.9.0):** box size matches the footage, but the map is ~2.5–3× less zoomed and objectives near the top edge are clipped (PHASE3 §3u).
-- **Built, not installed:** v0.10.0 implements PLAN_V10's objective-fit zoom and switches to the edge diamond before an icon clips. Objective refreshes retain the fit; new anchors and explicit rebuilds refit. F7 reports the inputs and fitted/final zoom, and confirms the log write in the in-game console. Offline validation is recorded in PHASE3 §3v/3w; in-game checks remain pending.
-- **Installed:** v0.9.0 (branch `worktree-enhanced-minimap-box`).
+- **Run 14 (2026-10-24):** the profiler loads and captures in game. An objective near the window edge "wobbled" because the handoff measured the animated icon's live width; fixed in a rebuilt package (`5eefdf81…6d03`, installed; the previous `5bae8e3f…bc29` is in the worktree's `dist\v0100\`), mod unchanged (PHASE3 §3aa).
+- **Installed now, not yet played (2026-10-24):** mod v0.10.1, profiler 0.1.1, package `4a840f56…cabc`; previous files backed up in the worktree's `dist\v0100-run15\` (PHASE3 §3ad).
+  - **Run 15 → v0.10.1:** a DLC-to-DLC trip on the same HUD (T-Bone → Tartarus) kept the old DLC map; fixed by leaving the `dlcmap1` frame when the DLC package changes. Profiler 0.1.1 accepts core 0.10.1 (PHASE3 §3ac).
+  - **Threat markers:** Enhanced's red diamond with a black outline (E shape 127) instead of drawn squares, counter-rotated with the map (PHASE3 §3ad).
+- **Gradient fix (installed; box confirmed faint blue in run 15):** the bright damage indicator and the green/red/white box came from the builder shifting classic's external gradient numbering; package `e2b687c1…ab51` restores it (PHASE3 §3ab).
+- **Played in runs 14–15:** v0.10.0 plus profiler add-on 0.1.0 (PHASE3 §3z). v0.10.0 implements PLAN_V10's objective-fit zoom and switches to the edge diamond before an icon clips. Objective refreshes retain the fit; new anchors and explicit rebuilds refit. F7 reports the inputs and fitted/final zoom, and confirms the log write in the in-game console. Offline validation is recorded in PHASE3 §3v/3w.
+- **Previously installed:** v0.9.0 (played in run 13), now backed up in the worktree's `dist\v090\`.
   - The map clip is now laid out like Enhanced's: its box art, and its 207.95 × 173.65 window instead of v0.8's squeezed 220 × 141.
   - Docking and icon size use Enhanced's own values; its fixed 108% zoom is corrected in v0.10 (PHASE3 §3t).
   - It includes v0.8.1's fixes: the edge diamond handoff, and the mission-giver calls ("!" and turn-in icons, still unplayed).
 - **Earlier event:** run 11 crashed at startup because drive C: was full, not because of the mod (PHASE3 §3m).
 - **Repository setup (2026-10-24):** Git initialized for a source-only initial commit; AGENTS now requires test-first behavior changes, Conventional Commits and no agent attribution. Build outputs and extracted game packages are ignored (PHASE3 §3o).
 - **Release workflow (2026-10-24):** local branch renamed to `main`; manual GitHub Actions workflow packages the Python source as `.sdkmod` and publishes a version-tagged release. Hosted execution is pending; see README and PHASE3 §3p.
+- **CI scope change (2026-10-24, user request):** only lint and unit tests with coverage run continuously and block; mutation testing moved to the on-demand `mutation.yml` workflow (PHASE3 §3z).
 - **Source-only CI (2026-10-24):** lint, per-file line/branch coverage, all mod/packager mutants, workflow lint and repository/archive checks. Both existing suites pass against an asset-free fixture; hosted runs remain pending. See [CI.md](CI.md), PLAN_CI and PHASE3 §3q.
 - **Worktree workflow (2026-10-24):** AGENTS requires a fresh worktree and a descriptive task branch for new coding tasks, with explicit user overrides for direct work on `main`. Branch names and worktree paths follow the no-attribution rule. CI/release setup was committed directly to `main` at the user's request (PHASE3 §3r).
 
@@ -37,7 +43,7 @@ This page tracks where the project stands: what works, what's installed, how to 
 | v0.8 | Enhanced zoom and icon size, north/objective edge indicators, "!"/turn-in mission givers | Run 11: disk-full crash (§3m). Run 12: zoom, icons, tilt and north confirmed; double marker and giver calls fixed in v0.8.1 (§3n) |
 | v0.9 | Enhanced's box art and 207.95 × 173.65 window, dock/icon values, edge indicators on the box border | Run 13: box matches; fixed zoom and clipped icons need correction (§3u) |
 | v0.10 | Native-style objective-fit zoom, full-icon edge handoff, F7 zoom diagnostics and console confirmation | Built; not installed or played (§3v/3w) |
-| v0.11 | Planned: separate optional profiler, telemetry-free core artifact, overhead validation | Not implemented; PLAN_V11 |
+| v0.11 | Separate optional profiler add-on 0.1.0, telemetry-free core artifact, frozen report contract, overhead benchmark | Built offline; not installed (§3z). Adapter in `steam-deck-scripts` pending |
 
 ## Doc map
 
@@ -48,6 +54,7 @@ Docs are cited across the code and docs by bare name (e.g. "PHASE3 §3l", "PLAN_
 | **research/** | |
 | [REPORT.md](research/REPORT.md) | Original REA/static analysis of how Enhanced's minimap works, plus the first classic plan (§3 is partly superseded; see the notes inside) |
 | [ENHANCED_NATIVE.md](research/ENHANCED_NATIVE.md) | Ghidra decomp of Enhanced and classic map natives: pipeline, side-by-side map, Step B matrix, radar-sourced threats, objective icon types |
+| [PERF_REPORT_V1.md](research/PERF_REPORT_V1.md) | Frozen performance report schema v1 (the report contract with `steam-deck-scripts`); fixtures in `tools/fixtures/perf_reports/` |
 | [PRIOR_RESEARCH.md](research/PRIOR_RESEARCH.md) | How the `steam-deck-scripts` research (decrypted-exe Ghidra analysis, Canvas POC) maps onto this |
 | [evidence/](research/evidence/) | Script/Flash disassembly and native exec tables cited by REPORT |
 | **plans/** | |
@@ -63,15 +70,16 @@ Docs are cited across the code and docs by bare name (e.g. "PHASE3 §3l", "PLAN_
 | [PHASE0.md](log/PHASE0.md) | SDK on classic, probe runs: world→map formula, centring formula, `Angle` = yaw°, tick hook |
 | [PHASE1.md](log/PHASE1.md) | `upkpatch.py` (movie swap, export and bulk-offset relocation). **§3's in-game "pass" was invalid** (see below) |
 | [PHASE2.md](log/PHASE2.md) | `swfbuild.py`: the minimap movie (status-menu map tree copied in, root AS functions) |
-| [PHASE3.md](log/PHASE3.md) | SDK mod, in-game runs, CI/release setup and v0.10 offline implementation (§3b–3x) |
+| [PHASE3.md](log/PHASE3.md) | SDK mod, in-game runs, CI/release setup, v0.10 offline implementation, PLAN_V11 and the profiler add-on (§3b–3z) |
 | [FRICTION.md](log/FRICTION.md) | What slowed work down (wrong assumptions, environment, agent shell/tool quirks, process) and ranked improvement suggestions |
 
 ## Installed right now (classic game folder)
 
 | File | Version / SHA-256 |
 |---|---|
-| `WillowGame\CookedPC\Packages\Interface\GfxHUD_Minimap.upk` | `dc1292c5…ab9d` (built on the `worktree-enhanced-minimap-box` worktree; Enhanced box and window layout, turnin/newmission/north art, `MinimapEdges` on the box border) |
-| `sdk_mods\classic_minimap.sdkmod` | **v0.9.0** `6df0c878…d7d7`, played in run 13 (PHASE3 §3u). v0.10.0 is built only. v0.8.1 backup is in the worktree's `dist\v081\`; older backups are in the main checkout's `dist\v080\`, `dist\v070\`, `dist\v060\`, `dist\v051\` |
+| `WillowGame\CookedPC\Packages\Interface\GfxHUD_Minimap.upk` | **v0.10 + run-14/15 fixes** `4a840f56…cabc` (handoff sized from the icon's scale, §3aa; classic's gradient textures kept, §3ab; Enhanced threat diamonds, §3ad). Backups in the worktree: gradient-fix package `e2b687c1…ab51` in `dist\v0100-run15\`, wobble-fix package `5eefdf81…6d03` in `dist\v0100-wobblefix\`, first v0.10 package `5bae8e3f…bc29` in `dist\v0100\`; v0.9 package `dc1292c5…ab9d` in `dist\v090\` |
+| `sdk_mods\classic_minimap.sdkmod` | **v0.10.1** `0042d3c4…873c`, not yet played (PHASE3 §3ac). Backups: v0.10.0 in the worktree's `dist\v0100-run15\`, v0.9.0 in `dist\v090\`, v0.8.1 in `dist\v081\`; older ones in the main checkout's `dist\v080\`, `dist\v070\`, `dist\v060\`, `dist\v051\` |
+| `sdk_mods\classic_minimap_profiler.sdkmod` | **profiler 0.1.1** `0f642d31…d5c8`, optional (0.1.0 loaded and captured in run 14; backup in `dist\v0100-run15\`). Delete it to remove |
 | `sdk_mods\minimap_probe.sdkmod` | probe v0.2. Leave it disabled; it's not needed any more |
 | `WillowGame\CookedPC\Packages\Interface\GfxHUD.upk` | **stock** `5c515c3e…3ea88` (backup: `dist\phase1\GfxHUD.orig.upk`) |
 
@@ -133,6 +141,12 @@ That's one zone so far. **The decomp (ENHANCED_NATIVE.md §3) shows that the tru
 ## Open items
 
 - Hosted CI verification of automatic workers remains pending; local validation is recorded in PHASE3 §3s.
+- **Threat markers (installed, not yet played):** Enhanced's diamond (E shape 127, copied as 1310) replaces the drawn square; it counter-rotates with the map (PHASE3 §3ad). Check its size against Enhanced and with "Rotate with player".
+- **Profiler 0.1.0 (v0.11):**
+  - Decide how decision 8's p95 requirement is accepted: the stub harness's noise (±0.7 ms paired) cannot resolve 0.05 ms.
+  - In game, check that the SDK loads the add-on (relative imports inside the `.sdkmod`), the buttons and console lines work, and a 60 s capture saves.
+  - Then run the PresentMon/MangoHud comparison runs (PLAN_V11 in-game validation).
+  - H1 (adapter in `steam-deck-scripts`) and H2 (joint check) are pending.
 
 - **v0.10.0:** install only when requested, with the game closed; compare fitted zoom with Enhanced, verify F8 refits and objective refreshes preserve zoom, check full-icon handoff at normal/enlarged icon sizes and while rotating, and verify F7's confirmation appears in the in-game console. North/objective overlap intentionally remains. No v0.10 in-game verification yet.
 - **v0.9.0 in-game check** (PLAN_V09):

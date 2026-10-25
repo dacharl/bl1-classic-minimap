@@ -1,6 +1,9 @@
 # v0.11 plan: optional external performance telemetry (2026-10-24)
 
-**Planning only.** No runtime, build configuration or installed files changed. User requirement:
+**Implemented offline as profiler add-on 0.1.0 (PHASE3 §3z); not installed or played.** Report contract
+frozen in [PERF_REPORT_V1.md](../research/PERF_REPORT_V1.md) (handoff H0). Open: decision 8's p95
+requirement is unresolved on the stub harness, in-game validation, and the `steam-deck-scripts` adapter
+(H1/H2). The text below is the plan as agreed. User requirement:
 timing must be optional and removable from the built artifact entirely; prefer a fully external profiler.
 This supersedes the initial proposal for timing branches inside the minimap.
 
