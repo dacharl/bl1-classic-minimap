@@ -1140,129 +1140,134 @@ def main(gfx_path, on_import=None):
         assert WORLD.loaded_dlc is None and mod.S.phase == 'running'
     finally:
         FakeAnchor.MapFrame, FakeAnchor.DLCMap, WORLD.zone_frame = saved_anchor
-    # PLAN_V12: another HUD mod (Extended UI) replaces the template's movie after our redirect. We merge our
-    # block into its movie at runtime instead of fighting for the template (ADR 0003: never override).
-    mod.on_disable()
-    OBJECTS['GfxHUD.FlashMovie.HUD'] = STOCK_INFO
-    TEMPLATE.MovieInfo = STOCK_INFO
-    mod.on_enable()
-    assert TEMPLATE.MovieInfo is MINIMAP_INFO
-    foreign_bytes = foreign_from(gfx)
-    foreign = Struct(name="GFxMovieInfo'GfxHUD_MOD.FlashMovie.HUD'", RawData=foreign_bytes, Outer='GfxHUD_MOD',
-                     texture_refs=['their textures'])
-    expected = swfmerge.merge(foreign_bytes, gfx, mod.__version__)
-    constructed_before = len(MOVIE_INFOS)
-    console_lines.clear()
-    hook_menu = HOOKS['Engine.WorldInfo:IsMenuLevel']
-
-    # 1. their patch() runs first (PRE), then our POST hook merges into their movie
-    TEMPLATE.MovieInfo = foreign
-    buf = _io.StringIO()
-    with contextlib.redirect_stdout(buf):
-        hook_menu(None, None, None, None)
-    merged = TEMPLATE.MovieInfo
-    assert merged is not foreign and merged is not MINIMAP_INFO and MOVIE_INFOS[-1] is merged
-    assert len(MOVIE_INFOS) == constructed_before + 1
-    assert merged.RawData == list(expected) or bytes(merged.RawData) == expected, 'merged movie bytes'
-    assert merged.ObjectFlags & KEEP_ALIVE, 'objects constructed from Python must be KEEP_ALIVE (fact 3)'
-    assert merged.texture_refs == foreign.texture_refs, 'the merged info keeps their properties'
-    assert mod.Redirect.original is foreign and mod.Redirect.template is TEMPLATE
-    status = mod.Redirect.status
-    assert 'Merged' in status and 'next level load' in status, status
-    assert status in buf.getvalue(), 'the status reaches the SDK log'
-    assert console_lines == ['[Classic Minimap] ' + status], console_lines
-    assert status in mod.mod.description and mod.BASE_DESCRIPTION in mod.mod.description
-    assert 'merged in' in buf.getvalue()                   # timing is logged (decision 6)
-
-    # 2. already merged: the hook returns at once, nothing is constructed
-    hook_menu(None, None, None, None)
-    assert TEMPLATE.MovieInfo is merged and len(MOVIE_INFOS) == constructed_before + 1
-
-    # 3. a HUD that spawned before the merge keeps their movie: idle with an honest message; the next one runs
-    spawned = Movie(gfx, patched=False, info=foreign)
-    pc.myHUD = HUD(spawned)
-    mod.S.reset()
-    step(); step()
-    assert mod.S.phase == 'stockhud' and spawned.invokes == []
-    next_level = Movie(gfx, info=merged)
-    pc.myHUD = HUD(next_level)
-    mod.S.reset()
-    WORLD.anchor_loaded = True
-    for _ in range(3):
-        step(0.6)
-    assert isinstance(next_level.root.get('map'), asvm.Clip) and mod.S.phase in ('framewait', 'running')
-
-    # 4. disable restores their movie, only while the template still points at the merged object
-    mod.on_disable()
-    assert TEMPLATE.MovieInfo is foreign
-    mod.on_enable()                                        # same session, same foreign movie: reuse the merge
-    assert TEMPLATE.MovieInfo is merged and len(MOVIE_INFOS) == constructed_before + 1
-    other = Struct(name="GFxMovieInfo'Other.FlashMovie.HUD'", RawData=b'')
-    TEMPLATE.MovieInfo = other                             # someone else took the template after us
-    buf = _io.StringIO()
-    with contextlib.redirect_stdout(buf):
+    # A movie already merged with another mod's HUD (the local-only Extended UI check) carries no block
+    # manifest, so the merge scenarios below can't run on it; everything above still did.
+    if any(c == swfmerge.METADATA for c, _, _ in swfmerge.split(gfx)[1]):
+        # PLAN_V12: another HUD mod (Extended UI) replaces the template's movie after our redirect. We merge our
+        # block into its movie at runtime instead of fighting for the template (ADR 0003: never override).
         mod.on_disable()
-    assert TEMPLATE.MovieInfo is other and 'left the template alone' in buf.getvalue()
-
-    # 5. enabled after their mod: the template already holds their movie
-    TEMPLATE.MovieInfo = foreign
-    mod.on_enable()
-    assert TEMPLATE.MovieInfo is merged and len(MOVIE_INFOS) == constructed_before + 1
-    mod.on_disable()
-    assert TEMPLATE.MovieInfo is foreign
-
-    # 6. a changed foreign movie (their update) is merged afresh, not served from the old merge
-    foreign2 = Struct(name="GFxMovieInfo'GfxHUD_MOD.FlashMovie.HUD2'", RawData=foreign_from(gfx, 5001), Outer='x')
-    TEMPLATE.MovieInfo = foreign2
-    mod.on_enable()
-    assert TEMPLATE.MovieInfo is not merged and TEMPLATE.MovieInfo is MOVIE_INFOS[-1]
-    assert len(MOVIE_INFOS) == constructed_before + 2
-    mod.on_disable()
-    assert TEMPLATE.MovieInfo is foreign2
-
-    # 7. refusals: the template keeps their movie, nothing is constructed, the message says why
-    block_id = swfmerge.read_block(gfx)[0]['characters'][0]
-    for label, bad_bytes, why in (
-            ('id clash', foreign_from(gfx, block_id), 'character id clash at %d' % block_id),
-            ('prefix', foreign_from(gfx, prefix_tag=True), 'differs from the stock'),
-            ('unreadable', b'CWS' + foreign_from(gfx)[3:], 'unsupported movie signature')):
-        bad = Struct(name="GFxMovieInfo'Bad.%s'" % label, RawData=bad_bytes, Outer='x')
-        TEMPLATE.MovieInfo = bad
-        count = len(MOVIE_INFOS)
+        OBJECTS['GfxHUD.FlashMovie.HUD'] = STOCK_INFO
+        TEMPLATE.MovieInfo = STOCK_INFO
+        mod.on_enable()
+        assert TEMPLATE.MovieInfo is MINIMAP_INFO
+        foreign_bytes = foreign_from(gfx)
+        foreign = Struct(name="GFxMovieInfo'GfxHUD_MOD.FlashMovie.HUD'", RawData=foreign_bytes, Outer='GfxHUD_MOD',
+                         texture_refs=['their textures'])
+        expected = swfmerge.merge(foreign_bytes, gfx, mod.__version__)
+        constructed_before = len(MOVIE_INFOS)
         console_lines.clear()
-        mod.on_enable()
-        assert TEMPLATE.MovieInfo is bad and len(MOVIE_INFOS) == count, label
-        assert mod.Redirect.status.startswith('Refused: ') and why in mod.Redirect.status, (label, mod.Redirect.status)
-        assert console_lines == ['[Classic Minimap] ' + mod.Redirect.status]
-        assert mod.Redirect.status in mod.mod.description
-        hook_menu(None, None, None, None)                   # asked again: still refused, status line not duplicated
-        assert TEMPLATE.MovieInfo is bad
+        hook_menu = HOOKS['Engine.WorldInfo:IsMenuLevel']
+
+        # 1. their patch() runs first (PRE), then our POST hook merges into their movie
+        TEMPLATE.MovieInfo = foreign
+        buf = _io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            hook_menu(None, None, None, None)
+        merged = TEMPLATE.MovieInfo
+        assert merged is not foreign and merged is not MINIMAP_INFO and MOVIE_INFOS[-1] is merged
+        assert len(MOVIE_INFOS) == constructed_before + 1
+        assert merged.RawData == list(expected) or bytes(merged.RawData) == expected, 'merged movie bytes'
+        assert merged.ObjectFlags & KEEP_ALIVE, 'objects constructed from Python must be KEEP_ALIVE (fact 3)'
+        assert merged.texture_refs == foreign.texture_refs, 'the merged info keeps their properties'
+        assert mod.Redirect.original is foreign and mod.Redirect.template is TEMPLATE
+        status = mod.Redirect.status
+        assert 'Merged' in status and 'next level load' in status, status
+        assert status in buf.getvalue(), 'the status reaches the SDK log'
+        assert console_lines == ['[Classic Minimap] ' + status], console_lines
+        assert status in mod.mod.description and mod.BASE_DESCRIPTION in mod.mod.description
+        assert 'merged in' in buf.getvalue()                   # timing is logged (decision 6)
+
+        # 2. already merged: the hook returns at once, nothing is constructed
+        hook_menu(None, None, None, None)
+        assert TEMPLATE.MovieInfo is merged and len(MOVIE_INFOS) == constructed_before + 1
+
+        # 3. a HUD that spawned before the merge keeps their movie: idle with an honest message; the next one runs
+        spawned = Movie(gfx, patched=False, info=foreign)
+        pc.myHUD = HUD(spawned)
+        mod.S.reset()
+        step(); step()
+        assert mod.S.phase == 'stockhud' and spawned.invokes == []
+        next_level = Movie(gfx, info=merged)
+        pc.myHUD = HUD(next_level)
+        mod.S.reset()
+        WORLD.anchor_loaded = True
+        for _ in range(3):
+            step(0.6)
+        assert isinstance(next_level.root.get('map'), asvm.Clip) and mod.S.phase in ('framewait', 'running')
+
+        # 4. disable restores their movie, only while the template still points at the merged object
         mod.on_disable()
-        assert TEMPLATE.MovieInfo is bad, 'a refused movie was never ours to restore'
-    # a refused HUD leaves the minimap idle, with a message that is not the old "load a save" hint
-    pc.myHUD = HUD(Movie(gfx, patched=False, info=bad))
-    mod.on_enable()
-    mod.S.reset()
-    step(); step()
-    assert mod.S.phase == 'stockhud'
+        assert TEMPLATE.MovieInfo is foreign
+        mod.on_enable()                                        # same session, same foreign movie: reuse the merge
+        assert TEMPLATE.MovieInfo is merged and len(MOVIE_INFOS) == constructed_before + 1
+        other = Struct(name="GFxMovieInfo'Other.FlashMovie.HUD'", RawData=b'')
+        TEMPLATE.MovieInfo = other                             # someone else took the template after us
+        buf = _io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            mod.on_disable()
+        assert TEMPLATE.MovieInfo is other and 'left the template alone' in buf.getvalue()
 
-    # 8. the package built for another mod version is a refusal that says to reinstall it
-    TEMPLATE.MovieInfo = foreign
-    real_version = mod.__version__
-    mod.__version__ = '0.0.1'
-    try:
+        # 5. enabled after their mod: the template already holds their movie
+        TEMPLATE.MovieInfo = foreign
         mod.on_enable()
-        assert TEMPLATE.MovieInfo is foreign and 'reinstall GfxHUD_Minimap.upk' in mod.Redirect.status
-    finally:
-        mod.__version__ = real_version
-    mod.on_disable()
+        assert TEMPLATE.MovieInfo is merged and len(MOVIE_INFOS) == constructed_before + 1
+        mod.on_disable()
+        assert TEMPLATE.MovieInfo is foreign
 
-    # 9. nothing foreign: the stock path is unchanged
-    TEMPLATE.MovieInfo = STOCK_INFO
-    mod.on_enable()
-    assert TEMPLATE.MovieInfo is MINIMAP_INFO and not mod.Redirect.status.startswith('Refused')
-    hook_menu(None, None, None, None)
-    assert TEMPLATE.MovieInfo is MINIMAP_INFO
+        # 6. a changed foreign movie (their update) is merged afresh, not served from the old merge
+        foreign2 = Struct(name="GFxMovieInfo'GfxHUD_MOD.FlashMovie.HUD2'", RawData=foreign_from(gfx, 5001), Outer='x')
+        TEMPLATE.MovieInfo = foreign2
+        mod.on_enable()
+        assert TEMPLATE.MovieInfo is not merged and TEMPLATE.MovieInfo is MOVIE_INFOS[-1]
+        assert len(MOVIE_INFOS) == constructed_before + 2
+        mod.on_disable()
+        assert TEMPLATE.MovieInfo is foreign2
+
+        # 7. refusals: the template keeps their movie, nothing is constructed, the message says why
+        block_id = swfmerge.read_block(gfx)[0]['characters'][0]
+        for label, bad_bytes, why in (
+                ('id clash', foreign_from(gfx, block_id), 'character id clash at %d' % block_id),
+                ('prefix', foreign_from(gfx, prefix_tag=True), 'differs from the stock'),
+                ('unreadable', b'CWS' + foreign_from(gfx)[3:], 'unsupported movie signature')):
+            bad = Struct(name="GFxMovieInfo'Bad.%s'" % label, RawData=bad_bytes, Outer='x')
+            TEMPLATE.MovieInfo = bad
+            count = len(MOVIE_INFOS)
+            console_lines.clear()
+            mod.on_enable()
+            assert TEMPLATE.MovieInfo is bad and len(MOVIE_INFOS) == count, label
+            assert mod.Redirect.status.startswith('Refused: ') and why in mod.Redirect.status, (label, mod.Redirect.status)
+            assert console_lines == ['[Classic Minimap] ' + mod.Redirect.status]
+            assert mod.Redirect.status in mod.mod.description
+            hook_menu(None, None, None, None)                   # asked again: still refused, status line not duplicated
+            assert TEMPLATE.MovieInfo is bad
+            mod.on_disable()
+            assert TEMPLATE.MovieInfo is bad, 'a refused movie was never ours to restore'
+        # a refused HUD leaves the minimap idle, with a message that is not the old "load a save" hint
+        pc.myHUD = HUD(Movie(gfx, patched=False, info=bad))
+        mod.on_enable()
+        mod.S.reset()
+        step(); step()
+        assert mod.S.phase == 'stockhud'
+
+        # 8. the package built for another mod version is a refusal that says to reinstall it
+        TEMPLATE.MovieInfo = foreign
+        real_version = mod.__version__
+        mod.__version__ = '0.0.1'
+        try:
+            mod.on_enable()
+            assert TEMPLATE.MovieInfo is foreign and 'reinstall GfxHUD_Minimap.upk' in mod.Redirect.status
+        finally:
+            mod.__version__ = real_version
+        mod.on_disable()
+
+        # 9. nothing foreign: the stock path is unchanged
+        TEMPLATE.MovieInfo = STOCK_INFO
+        mod.on_enable()
+        assert TEMPLATE.MovieInfo is MINIMAP_INFO and not mod.Redirect.status.startswith('Refused')
+        hook_menu(None, None, None, None)
+        assert TEMPLATE.MovieInfo is MINIMAP_INFO
+    else:
+        print('no block manifest in this movie: skipped the runtime merge scenarios')
     mod.on_disable()
     print('all minimap mod integration checks passed')
 

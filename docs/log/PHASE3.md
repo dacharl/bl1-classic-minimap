@@ -823,7 +823,18 @@ refusals, status lines, version mismatch, stock path unchanged). `test_workflow.
 movie suites, all 107 unit tests, the coverage floors (swfmerge 98.9% line / 95.7% branch; floors 90/80) and Ruff
 pass. Mutation testing was not run (a swfmerge floor of 70 is configured).
 
-**Unverified:** the spike (a constructed `GFxMovieInfo` honoured by GFx; `bytes(RawData)` / `RawData = list(...)`
+**Real Extended UI HUD (local-only check, same day):** `GfxHUD_MOD.upk` (SHA-256 `6a6e29d1…e489`, from the earlier
+research session's scratchpad) → `upkpatch extract` → `swfmerge.merge` against our v0.12.0 movie: accepted, 840,389
+bytes (the size PLAN_V12 measured), 1.6 s in CPython. `test_minimap_as.py` and `test_minimap_mod.py` both pass on
+the merged movie (the mod suite skips its runtime-merge scenarios there, since a merged movie carries no manifest).
+The merged file is kept under ignored `dist/` only.
+
+**Spike built, not installed:** throwaway `dist/spike/classic_minimap_spike.sdkmod` (ignored by Git, never
+committed; source in `dist/spike/classic_minimap_spike/`). F6 builds a `GFxMovieInfo` from GfxHUD_Minimap's own movie
+with timings for every step, points the template at it and logs `SPIKE PASS` when the next HUD runs it (`mmfallback`
+exists); F5 restores. Only checked against fakes.
+
+**Still unverified:** the spike (a constructed `GFxMovieInfo` honoured by GFx; `bytes(RawData)` / `RawData = list(...)`
 speed and typing in pyunrealsdk; `template_obj` copying their texture references); the merge against the real
 Extended UI HUD (its package was not at hand, so only the synthetic fixture and the stock HUD were tested); the Deck
 run (plan step 4). If the spike fails, switch the install to the package fallback (decision 9).
