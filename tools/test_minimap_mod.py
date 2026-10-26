@@ -1201,12 +1201,29 @@ def main(gfx_path, on_import=None):
     table = [0.0, 0.0, 0.0, 95.0, 40.0]
     location = Struct(_type='ParticleModuleLocation', StartLocation=Struct(
         Distribution=None, Type=0, Op=1, LookupTableNumElements=1, LookupTableChunkSize=3, LookupTable=table))
-    emitter = Struct(EmitterName='VoG_Screen', LODLevels=[Struct(Modules=[location], RequiredModule=Struct(
-        bUseLocalSpace=True, ScreenAlignment=0, Material="Material'FX.VoG'"))])
+    # Run 28: the start location is ~0 and the component sits on the camera's view axis, yet Angel shows top right,
+    # so the placement must be in the material: dump the per-call material instance (the PSC's VoGMaterial instance
+    # parameter) and the template material, each with its scalar/vector/texture parameters and parent chain, and
+    # the size module's table.
+    size = Struct(_type='ParticleModuleSize', StartSize=Struct(Distribution=None, LookupTableChunkSize=3,
+                                                               LookupTable=[0.0, 0.0, 16.0, 9.0, 1.0]))
+    vog_mat = Obj(_name="Material'fx_PostProcess.VoG.VoG_Mat'", Class=Struct(Name='Material'))
+    mati = Obj(_name="MaterialInstanceConstant'fx_PostProcess.VoG.VoG_Mati'", Class=Struct(Name='MaterialInstanceConstant'),
+               Parent=vog_mat, ScalarParameterValues=[Struct(ParameterName='OffsetU', ParameterValue=0.7)],
+               VectorParameterValues=[Struct(ParameterName='Tint', ParameterValue=Struct(R=1.0, G=1.0, B=1.0, A=1.0))],
+               TextureParameterValues=[])
+    instance = Obj(_name="MaterialInstanceConstant'Transient.MaterialInstanceConstant_9'",
+                   Class=Struct(Name='MaterialInstanceConstant'), Parent=mati, ScalarParameterValues=[],
+                   VectorParameterValues=[], TextureParameterValues=[
+                       Struct(ParameterName='Movie', ParameterValue="BinkMovie'vog_binks.Angel_01'")])
+    emitter = Struct(EmitterName='VoG_Screen', LODLevels=[Struct(Modules=[location, size], RequiredModule=Struct(
+        bUseLocalSpace=True, ScreenAlignment=0, Material=mati))])
     psc = Struct(Translation=vec(100.0, 0.0, 0.0), Rotation=Struct(Pitch=0, Yaw=0, Roll=0), Scale=1.0,
-                 Scale3D=vec(1.0, 1.0, 1.0), AbsoluteTranslation=True, AbsoluteRotation=True, DepthPriorityGroup=2)
+                 Scale3D=vec(1.0, 1.0, 1.0), AbsoluteTranslation=True, AbsoluteRotation=True, DepthPriorityGroup=2,
+                 InstanceParameters=[Struct(Name='Other', Material=None),
+                                     Struct(Name='VoGMaterial', Material=instance)])
     template = Obj(Emitters=[emitter], _name="ParticleSystem'fx_PostProcess.VoG.part_VoG_Pulse'")
-    pc.ScreenParticleRecords = [Struct(Template=template, Component=psc, MatParamName='Movie')]
+    pc.ScreenParticleRecords = [Struct(Template=template, Component=psc, MatParamName='VoGMaterial')]
     pc.GetPlayerViewPoint = lambda loc, rot, *a: (None, vec(90.0, 0.0, 0.0), Struct(Pitch=-5894, Yaw=-3997, Roll=0))
     buf = _io.StringIO()
     with contextlib.redirect_stdout(buf):
@@ -1218,6 +1235,11 @@ def main(gfx_path, on_import=None):
     assert 'screen particle (SetUpVoGScreenParticle)' in out and 'VoG_Screen' in out, out
     assert 'ParticleModuleLocation' in out and "'DepthPriorityGroup': 2" in out, out
     assert "'table': [0.0, 0.0, 0.0, 95.0, 40.0]" in out and "'chunk': 3" in out, out
+    assert "'StartSize': {" in out and '[0.0, 0.0, 16.0, 9.0, 1.0]' in out, out
+    assert "'instance': {'name': \"MaterialInstanceConstant'Transient.MaterialInstanceConstant_9'\"" in out, out
+    assert "'textures': {'Movie': \"BinkMovie'vog_binks.Angel_01'\"}" in out, out
+    assert "'scalars': {'OffsetU': 0.7}" in out and "'vectors': {'Tint': (1.0, 1.0, 1.0, 1.0)}" in out, out
+    assert "Material'fx_PostProcess.VoG.VoG_Mat'" in out, 'the parent chain reaches the base material'
     assert 'screen particle at (150.0, 0.0, 0.0) rotation (0, 0, 0), camera at (90.0, 0.0, 0.0) rotation (-5894, -3997, 0)' \
         in out, out
     assert "'screen_particles': [" in out, out

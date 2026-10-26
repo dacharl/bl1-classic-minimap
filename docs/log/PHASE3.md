@@ -1431,5 +1431,47 @@ profiler 0.1.10 `84ab5543…c2de`.
 - whether pyunrealsdk's struct access edits the template in place (the code also writes the struct back);
 - whether an edited table survives a level load (it re-applies every call).
 
+**Committed** as `ef478e1`.
+
+**Installed on the PC (2026-10-26 22:45 UTC, game closed):** `classic_minimap.sdkmod` 0.14.4 `4a6d7886…a9ed` and the
+profiler 0.1.10 `84ab5543…c2de`, SHA-256 verified. v0.14.3 (`48d426bb…d8fc`, `2c63f50f…b60f`) is backed up in the
+main checkout's `dist\v0.14.3-20261026T224549.606761Z\`. The stock `GfxHUD.upk` is unchanged (`5c515c3e…`).
+
 **Next run:** set "Angel position (experiment)" to Enhanced, trigger an Angel call, and check her position and the
 `Angel's video centred` line.
+
+## 3as. Run 28: v0.14.4 on the PC; Angel's particle is on the view axis → v0.14.5 material dump (2026-10-26)
+
+**Run (PC, Arid, 22:49 UTC; log only):** the user reported "it didn't work".
+- **The experiment never ran:** the saved option was still `Classic`, and there was no `Angel's video centred`
+  line.
+- **It couldn't have worked anyway:** the location module's table is `[0.0, 0.01, 0.01, 0.0, 0.0, 0.01, 0.0, 0.0]`
+  (op 1, chunk 3). Both entries are ≈ (0.01, 0, 0), so the emitter has no sideways start offset to remove.
+
+**Evidence from the watch lines:**
+- **The component's rotation equals the camera's:** (−3349, −32593, 0).
+- **It sits on the view axis.** The offset from the camera is (−494.3, −8.2, −164.5), 521 units at yaw −179.05°
+  and pitch −18.4°, which is the camera's own direction.
+- **Distance scales with size:** 521 / 26.98 = 307.8 / 15.93 (run 27) = 19.3.
+- So the native code places the particle at screen centre, scaled to the view, and her top-right placement must
+  come from the material: VoG_Mati or its parent, through screen-space UVs or parameters.
+
+**Change → v0.14.5 + profiler 0.1.11 (diagnostic):**
+- **Material dump:** the record now includes the per-call material instance (the PSC's `InstanceParameters` entry
+  named by `MatParamName`), and the emitter's `Material`. Each is dumped as name, class, scalar/vector/texture
+  parameters and parent chain (up to 4 levels).
+- **Modules:** the dump adds the `StartSize`, `StartVelocity` and `Lifetime` tables.
+- **The option:** the v0.14.4 Y-zero code stays but is a known no-op. Its description now says the experiment
+  "has no visible effect yet".
+
+**Tests (red first):** the size table, the instance and template materials with scalar, vector and texture
+parameters, and the parent chain reaching the base material. Both suites pass on both art variants; 129 unit
+tests, coverage, ruff and repository checks pass. `release.py --game --enhanced`: the in-mod build matches
+(`2123bbc0…42e8`).
+
+**Built (not installed):** `dist/releases/0.14.5/` holds `classic_minimap.sdkmod` 0.14.5 `45828006…1191` and the
+profiler 0.1.11 `c4b1d19f…f7d5`.
+
+**Next:** at Angel's next call, look for a position-like scalar or vector parameter (offset, UV, screen position),
+which could be set on the per-call instance. If there is none, the placement is in the material graph: compare
+Enhanced's handling, or consider a different fix.

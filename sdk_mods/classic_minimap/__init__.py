@@ -55,7 +55,7 @@ from . import hudmovie
 from .swfmerge import MergeRefused
 from .swfmerge import merge as merge_movie
 
-__version__ = "0.14.4"
+__version__ = "0.14.5"
 
 
 STAGE_W = 1280.0                       # classic HUD stage is 1280x720
@@ -151,8 +151,8 @@ opt_enhanced_art = BoolOption("Use Enhanced artwork", True,
                               on_change_while_enabled=lambda _, value: remake_movie(use_enhanced=value))
 opt_angel_position = SpinnerOption("Angel position (experiment)", "Classic", ["Classic", "Enhanced"],
                                    description="Where Angel's video appears. Classic: top right, behind the minimap. "
-                                               "Enhanced: centred at the top, like GOTY Enhanced. Experimental; "
-                                               "applies from her next call.")
+                                               "Enhanced: an experiment towards GOTY Enhanced's top-centre placement; "
+                                               "it has no visible effect yet.")
 opt_enhanced_folder = HiddenOption("Enhanced folder", "",
                                    description="GOTY Enhanced's game folder, if the mod doesn't find it itself.")
 
@@ -1681,20 +1681,57 @@ def safe_fields(o: Any, names: tuple[str, ...]) -> dict[str, Any]:
     return out
 
 
+def distribution_state(raw: Any) -> Any:
+    table = getattr(raw, "LookupTable", None)
+    if table is not None:                       # cooked: only the baked lookup table is left (run 27)
+        dist = getattr(raw, "Distribution", None)
+        return {"dist": type_name(dist) if dist is not None else None, "op": str(getattr(raw, "Op", "")),
+                "chunk": getattr(raw, "LookupTableChunkSize", None), "table": [round(float(v), 2) for v in table]}
+    dist = getattr(raw, "Distribution", raw)
+    const = getattr(dist, "Constant", None)
+    return vec_tuple(const) if const is not None else type_name(dist)
+
+
 def module_state(m: Any) -> Any:
     name = type_name(m)
-    start = getattr(m, "StartLocation", None)
-    if start is None:
+    dists = {p: distribution_state(getattr(m, p)) for p in ("StartLocation", "StartSize", "StartVelocity", "Lifetime")
+             if getattr(m, p, None) is not None}
+    if not dists:
         return name
-    table = getattr(start, "LookupTable", None)
-    if table is not None:                       # cooked: only the baked lookup table is left (run 27)
-        dist = getattr(start, "Distribution", None)
-        return {name: {"dist": type_name(dist) if dist is not None else None, "op": str(getattr(start, "Op", "")),
-                       "chunk": getattr(start, "LookupTableChunkSize", None),
-                       "table": [round(float(v), 2) for v in table]}}
-    dist = getattr(start, "Distribution", start)
-    const = getattr(dist, "Constant", None)
-    return {name: vec_tuple(const) if const is not None else type_name(dist)}
+    return {name: dists["StartLocation"] if list(dists) == ["StartLocation"] else dists}
+
+
+# Run 28: the start location is ~0 and the component sits on the camera's view axis, yet Angel shows top right, so the
+# placement must be in the material. Dump each material with its parameters and parent chain.
+
+def material_state(m: Any, depth: int = 0) -> Any:
+    if m is None:
+        return None
+    out: dict[str, Any] = {"name": str(m), "class": type_name(m)}
+    for key, prop in (("scalars", "ScalarParameterValues"), ("vectors", "VectorParameterValues"),
+                      ("textures", "TextureParameterValues")):
+        values = {}
+        for p in list(getattr(m, prop, None) or []):
+            v = p.ParameterValue
+            if hasattr(v, "R"):
+                v = (round(float(v.R), 3), round(float(v.G), 3), round(float(v.B), 3), round(float(v.A), 3))
+            elif isinstance(v, float):
+                v = round(v, 4)
+            elif not isinstance(v, (int, bool)):
+                v = str(v)
+            values[str(p.ParameterName)] = v
+        out[key] = values
+    parent = getattr(m, "Parent", None)
+    if parent is not None and depth < 4:
+        out["parent"] = material_state(parent, depth + 1)
+    return out
+
+
+def instance_material(component: Any, param: Any) -> Any:
+    for p in list(getattr(component, "InstanceParameters", None) or []):
+        if str(p.Name) == str(param):
+            return p.Material
+    return None
 
 
 def particle_record(rec: Any) -> dict[str, Any]:
@@ -1702,13 +1739,21 @@ def particle_record(rec: Any) -> dict[str, Any]:
     out["component"] = safe_fields(getattr(rec, "Component", None), (
         "Translation", "Rotation", "Scale", "Scale3D", "AbsoluteTranslation", "AbsoluteRotation", "AbsoluteScale",
         "DepthPriorityGroup", "bOnlyOwnerSee"))
+    try:
+        out["instance"] = material_state(instance_material(getattr(rec, "Component", None), out["param"]))
+    except Exception as ex:
+        out["instance"] = f"<{type(ex).__name__}: {ex}>"
     emitters = []
     for e in list(getattr(getattr(rec, "Template", None), "Emitters", None) or []):
         lods = list(getattr(e, "LODLevels", None) or [])
         lod = lods[0] if lods else None
-        emitters.append({"name": str(getattr(e, "EmitterName", "")),
-                         "required": safe_fields(getattr(lod, "RequiredModule", None), (
-                             "bUseLocalSpace", "ScreenAlignment", "Material", "bOrientZAxisTowardCamera")),
+        required = getattr(lod, "RequiredModule", None)
+        req = safe_fields(required, ("bUseLocalSpace", "ScreenAlignment", "bOrientZAxisTowardCamera"))
+        try:
+            req["Material"] = material_state(getattr(required, "Material", None))
+        except Exception as ex:
+            req["Material"] = f"<{type(ex).__name__}: {ex}>"
+        emitters.append({"name": str(getattr(e, "EmitterName", "")), "required": req,
                          "modules": [module_state(m) for m in list(getattr(lod, "Modules", None) or [])]})
     out["emitters"] = emitters
     return out
