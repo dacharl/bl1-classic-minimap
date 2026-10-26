@@ -1117,10 +1117,9 @@ def main(gfx_path, on_import=None):
         assert "'%s'" % field in diag, field
     # PLAN_V13 decision 8: F7 says which art is in use and where the inputs came from
     assert "'art': 'original'" in diag and 'GfxHUD.upk' in diag and "'enhanced_folder': None" in diag, diag[-600:]
-    # Run 23 spike (PHASE3 3an): Angel's video is a 3D screen mesh (GFxUIManager.ScreenMesh) that PlayVoGEchoCall
-    # attaches to the camera; classic places it top right. Log its placement on every call; "Angel position
-    # (experiment)" = Enhanced applies Enhanced's VoGSinglePlayerPosition (X, Y, Z) and re-applies it if the native
-    # moves it back during the watch window.
+    # Run 23 spike (PHASE3 3an): if PlayVoGEchoCall ever runs, log its 3D screen mesh (GFxUIManager.ScreenMesh) and
+    # any move of it during the watch window. Classic never used it (runs 24-30: Angel is a screen particle), so the
+    # mod no longer moves the mesh: "Angel position" acts on the particle only (v0.14.7).
     class Mesh:
         def __init__(self):
             self.Translation = vec(10.0, 20.0, 30.0)
@@ -1138,17 +1137,14 @@ def main(gfx_path, on_import=None):
     with contextlib.redirect_stdout(buf):
         vog_hook(pc, None, None, None)
     assert mesh.sets == [] and 'Angel call: screen mesh' in buf.getvalue() and '(10.0, 20.0, 30.0)' in buf.getvalue()
-    mod.opt_angel_position.value = 'Enhanced'
+    assert mod.opt_angel_position.value == 'Centered', 'Angel is centred by default (v0.14.7)'
     with contextlib.redirect_stdout(buf):
-        vog_hook(pc, None, None, None)
-        assert mesh.sets == [(-2.1, -0.4, 0.14)], mesh.sets
-        mesh.Translation = vec(10.0, 20.0, 30.0)               # the native puts it back
+        mesh.Translation = vec(12.0, 20.0, 30.0)               # the native moves it
         step(1.1)
-    assert mesh.sets[-1] == (-2.1, -0.4, 0.14) and len(mesh.sets) == 2 and 'moved back' in buf.getvalue()
+    assert mesh.sets == [] and 'the screen mesh moved to (12.0, 20.0, 30.0)' in buf.getvalue(), buf.getvalue()
     with contextlib.redirect_stdout(buf):
         KEYBINDS['Minimap diagnostics']()
     assert "'angel':" in buf.getvalue()
-    mod.opt_angel_position.value = 'Classic'
     pc.GFxUIManager = None                                     # no UI manager: no crash, one warning
     with contextlib.redirect_stdout(io.StringIO()):
         vog_hook(pc, None, None, None)
@@ -1226,6 +1222,7 @@ def main(gfx_path, on_import=None):
     template = Obj(Emitters=[emitter], _name="ParticleSystem'fx_PostProcess.VoG.part_VoG_Pulse'")
     pc.ScreenParticleRecords = [Struct(Template=template, Component=psc, MatParamName='VoGMaterial')]
     pc.GetPlayerViewPoint = lambda loc, rot, *a: (None, vec(90.0, 0.0, 0.0), Struct(Pitch=-5894, Yaw=-3997, Roll=0))
+    pc.GetFOVAngle = lambda: 90.0
     buf = _io.StringIO()
     with contextlib.redirect_stdout(buf):
         HOOKS['WillowGame.WillowPlayerController:SetUpVoGScreenParticle'](pc, Struct(Template=template), None, None)
@@ -1241,27 +1238,29 @@ def main(gfx_path, on_import=None):
     assert "'textures': {'Movie': \"BinkMovie'vog_binks.Angel_01'\"}" in out, out
     assert "'scalars': {'OffsetU': 0.7}" in out and "'vectors': {'Tint': (1.0, 1.0, 1.0, 1.0)}" in out, out
     assert "Material'fx_PostProcess.VoG.VoG_Mat'" in out, 'the parent chain reaches the base material'
+    # Invariance check (run 30): the overlay keeps a fixed angle only if distance/scale stays ~19.3; the FOV is the one
+    # thing that can still change where she appears, so log both on every watch line.
     assert 'screen particle at (150.0, 0.0, 0.0) rotation (0, 0, 0), camera at (90.0, 0.0, 0.0) rotation (-5894, -3997, 0)' \
-        in out, out
+        ', fov 90.0, distance/scale 60.0' in out, out
     assert "'screen_particles': [" in out, out
     buf = _io.StringIO()
     with contextlib.redirect_stdout(buf):            # other screen effects (burning, shock) repeat: log each once
         for _ in range(3):
             HOOKS['WillowGame.WillowPlayerController:ShowScreenParticle:post'](pc, Struct(Template=template), None, None)
     assert buf.getvalue().count('screen particle (ShowScreenParticle)') == 1, buf.getvalue()
-    # Run 29: the VoG particle is a 17.76 x 10 overlay centred on the view (local space, X forward, Y right, Z up) and
-    # the "PostLook" videos draw Angel in their top-right corner (about 75% across). "Angel position (experiment)" =
-    # Enhanced shifts the overlay left by a quarter of its width (Y start location) before the effect starts (PRE
-    # ShowScreenParticle), putting her top centre like Enhanced; Classic puts the authored values back. Other effects
-    # are left alone.
+    # Runs 29-30: the VoG particle is a 17.76 x 10 overlay (local space, X forward, Y right, Z up) that classic shows top
+    # right; Angel is centred in every video frame. "Angel position" = Centered (the default) shifts the overlay left
+    # by 0.28 of its width (Y start location) before the effect starts (PRE ShowScreenParticle): 0.25 moved her from
+    # about 75% to 53% across in run 30, so 0.28 puts her top centre. Classic puts the authored values back. Other
+    # effects are left alone.
     show_pre = HOOKS['WillowGame.WillowPlayerController:ShowScreenParticle:pre']
-    mod.opt_angel_position.value = 'Enhanced'
+    mod.opt_angel_position.value = 'Centered'
     buf = _io.StringIO()
     with contextlib.redirect_stdout(buf):
         show_pre(pc, Struct(Template=template), None, None)
         show_pre(pc, Struct(Template=template), None, None)            # idempotent
-    assert table == [0.0, 0.01, 0.01, -4.44, 0.0, 0.01, -4.44, 0.0], table
-    assert buf.getvalue().count("Angel's video moved left by 4.44") == 1, buf.getvalue()
+    assert table == [0.0, 0.01, 0.01, -4.97, 0.0, 0.01, -4.97, 0.0], table
+    assert buf.getvalue().count("Angel's video moved left by 4.97") == 1, buf.getvalue()
     other_table = [0.0, 0.0, 0.0, 30.0, 0.0]
     other = Obj(_name="ParticleSystem'fx_PostProcess.Burn'", Emitters=[Struct(EmitterName='Burn', LODLevels=[Struct(RequiredModule=None, Modules=[Struct(
         _type='ParticleModuleLocation', StartLocation=Struct(Distribution=None, LookupTableChunkSize=3,
@@ -1275,7 +1274,7 @@ def main(gfx_path, on_import=None):
                                                              LookupTable=wide))])])], _name="ParticleSystem'VoG_Range'")
     with contextlib.redirect_stdout(io.StringIO()):
         show_pre(pc, Struct(Template=rng), None, None)
-    assert wide == [0.0, 0.0, 0.0, 85.56, 40.0, 0.0, 95.56, 50.0], wide   # no size module: Main_VOG's 17.76
+    assert wide == [0.0, 0.0, 0.0, 85.03, 40.0, 0.0, 95.03, 50.0], wide   # no size module: Main_VOG's 17.76
     mod.opt_angel_position.value = 'Classic'
     with contextlib.redirect_stdout(io.StringIO()):
         show_pre(pc, Struct(Template=template), None, None)
@@ -1284,7 +1283,7 @@ def main(gfx_path, on_import=None):
     with contextlib.redirect_stdout(io.StringIO()):
         HOOKS['WillowGame.WillowPlayerController:SetUpVoGScreenParticle'](pc, None, None, None)
         step(mod.VOG_WATCH_SECONDS + 1.0)
-    del pc.ScreenParticleRecords, pc.GetPlayerViewPoint
+    del pc.ScreenParticleRecords, pc.GetPlayerViewPoint, pc.GetFOVAngle
     # Feedback is optional when there is no viewport console; the diagnostic still reaches the log.
     console = pc.Player.ViewportClient.ViewportConsole
     pc.Player.ViewportClient.ViewportConsole = None

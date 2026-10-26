@@ -55,7 +55,7 @@ from . import hudmovie
 from .swfmerge import MergeRefused
 from .swfmerge import merge as merge_movie
 
-__version__ = "0.14.6"
+__version__ = "0.14.7"
 
 
 STAGE_W = 1280.0                       # classic HUD stage is 1280x720
@@ -99,8 +99,7 @@ RADAR_PROBE_EVERY = 8                  # probe every Nth empty radar read (THREA
 MS_NOT_STARTED, MS_READY_TO_TURN_IN = 0, 2     # IMission.EMissionStatus
 STATUS_FRAME = {MS_NOT_STARTED: "newmission", MS_READY_TO_TURN_IN: "turnin"}   # Enhanced's objective icon types
 STATUS_TINT = {MS_NOT_STARTED: 0x50E050, MS_READY_TO_TURN_IN: 0xFFC420}   # "Tint objective diamonds" (v0.6 style)
-VOG_ENHANCED = (-2.1, -0.4, 0.14)      # Enhanced's GlobalsDefinition.VoGSinglePlayerPosition X, Y, Z (W = 0); spike
-VOG_WATCH_SECONDS = 10.0               # after an Angel call: log (and with "Enhanced", undo) native moves of the mesh
+VOG_WATCH_SECONDS = 10.0               # after an Angel call: log her screen mesh / particle once a second
 VOG_FAST_SECONDS = 15.0                # after an ECHO call: watch the root vog clip every tick (run 24 diagnostic)
 VOG_NUMBERS = ("_x", "_y", "_width", "_height", "_xscale", "_yscale", "_alpha", "_currentframe", "_totalframes")
 GIVER_OBJECTIVE_UU = 500.0             # a giver this close to an objective is its NPC: one mark there (PHASE3 3ak)
@@ -149,10 +148,10 @@ opt_enhanced_art = BoolOption("Use Enhanced artwork", True,
                               description="Use GOTY Enhanced's minimap artwork when it is installed; off uses the "
                                           "mod's own art. Takes effect from the next level load.",
                               on_change_while_enabled=lambda _, value: remake_movie(use_enhanced=value))
-opt_angel_position = SpinnerOption("Angel position (experiment)", "Classic", ["Classic", "Enhanced"],
-                                   description="Where Angel's video appears. Classic: top right, behind the minimap. "
-                                               "Enhanced: shifted to the top centre, like GOTY Enhanced. Experimental; "
-                                               "applies from her next call.")
+opt_angel_position = SpinnerOption("Angel position", "Centered", ["Classic", "Centered"],
+                                   description="Where Angel's ECHO video appears. Centered: top centre, clear of the "
+                                               "minimap, like GOTY Enhanced. Classic: top right, partly behind the "
+                                               "minimap. Applies from her next call.")
 opt_enhanced_folder = HiddenOption("Enhanced folder", "",
                                    description="GOTY Enhanced's game folder, if the mod doesn't find it itself.")
 
@@ -1563,11 +1562,6 @@ def vog_state(mesh: Any) -> dict[str, Any]:
     return out
 
 
-def apply_vog_position(mesh: Any) -> None:
-    x, y, z = VOG_ENHANCED
-    mesh.SetTranslation(unrealsdk.make_struct("Vector", X=x, Y=y, Z=z))
-
-
 @hook("WillowGame.WillowPlayerController:PlayVoGEchoCall", Type.POST)
 def on_vog_call(obj: Any, args: Any, ret: Any, func: Any) -> None:
     try:
@@ -1576,16 +1570,13 @@ def on_vog_call(obj: Any, args: Any, ret: Any, func: Any) -> None:
             warn_once("vog:nomesh", "Angel call: no GFxUIManager.ScreenMesh to inspect")
             return
         log(f"Angel call: screen mesh {vog_state(mesh)}")
-        if opt_angel_position.value == "Enhanced":
-            apply_vog_position(mesh)
-            log(f"Angel call: moved the screen mesh to Enhanced's placement {VOG_ENHANCED}")
         S.vog_last, S.vog_until, S.vog_next = vog_translation(mesh), time.time() + VOG_WATCH_SECONDS, time.time() + 1.0
     except Exception as ex:  # an experiment must never break the call
         warn_once("vog:" + type(ex).__name__, f"Angel call inspection failed ({type(ex).__name__}: {ex})")
 
 
 def watch_vog(pc: Any, now: float) -> None:
-    """During the watch window: log native moves of Angel's mesh and, with "Enhanced", put it back."""
+    """During the watch window: log native moves of the screen mesh (never seen in classic; runs 24-30)."""
     S.vog_next = now + 1.0
     try:
         mesh = vog_mesh(pc)
@@ -1594,10 +1585,7 @@ def watch_vog(pc: Any, now: float) -> None:
         S.vog_until = 0.0
         return
     if t != S.vog_last:
-        log(f"Angel call: the screen mesh moved back to {t} (was {S.vog_last})")
-        if opt_angel_position.value == "Enhanced":
-            apply_vog_position(mesh)
-            t = vog_translation(mesh)
+        log(f"Angel call: the screen mesh moved to {t} (was {S.vog_last})")
         S.vog_last = t
 
 
@@ -1767,14 +1755,25 @@ def rot_tuple(r: Any) -> tuple[int, int, int]:
     return int(r.Pitch), int(r.Yaw), int(r.Roll)
 
 
-def view_point(pc: Any) -> str:
+def view_point(pc: Any) -> tuple[tuple[float, float, float], tuple[int, int, int]]:
+    out = pc.GetPlayerViewPoint(unrealsdk.make_struct("Vector"), unrealsdk.make_struct("Rotator"))
+    return next(vec_tuple(v) for v in out if hasattr(v, "X")), next(rot_tuple(v) for v in out if hasattr(v, "Pitch"))
+
+
+def particle_view(pc: Any, component: Any) -> str:
+    """Camera, FOV and distance/scale for one watch line: the overlay keeps a fixed angle while distance/scale stays
+    constant (~19.3, runs 27-30), so only the FOV can still change where Angel appears."""
     try:
-        out = pc.GetPlayerViewPoint(unrealsdk.make_struct("Vector"), unrealsdk.make_struct("Rotator"))
-        loc = next(vec_tuple(v) for v in out if hasattr(v, "X"))
-        rot = next(rot_tuple(v) for v in out if hasattr(v, "Pitch"))
-        return f"{loc} rotation {rot}"
+        loc, rot = view_point(pc)
     except Exception as ex:
         return f"<{type(ex).__name__}>"
+    try:
+        fov: Any = round(float(pc.GetFOVAngle()), 1)
+    except Exception as ex:
+        fov = f"<{type(ex).__name__}>"
+    t, scale = vec_tuple(component.Translation), float(component.Scale)
+    ratio = round(math.dist(t, loc) / scale, 2) if scale else None
+    return f"{loc} rotation {rot}, fov {fov}, distance/scale {ratio}"
 
 
 def on_screen_particle(pc: Any, name: str) -> None:
@@ -1791,21 +1790,21 @@ def watch_particles(pc: Any, now: float) -> None:
         for rec in particle_records(pc):
             c = rec.Component
             log(f"screen particle at {vec_tuple(c.Translation)} rotation {rot_tuple(c.Rotation)}, "
-                f"camera at {view_point(pc)}")
+                f"camera at {particle_view(pc, c)}")
     except Exception as ex:
         S.sp_until = 0.0
         warn_once("spwatch:" + type(ex).__name__, f"screen particle watch failed ({type(ex).__name__}: {ex})")
 
 
-# Runs 27-29: the VoG particle (fx_PostProcess.VoG.part_VoG_Pulse) is a 17.76 x 10 overlay centred on the camera's view
-# axis (local space: X forward, Y right, Z up), and the "PostLook" videos draw Angel in their top-right corner, about
-# 75% across. "Angel position (experiment)" = Enhanced shifts the overlay left by a quarter of its width before the
-# effect starts (the emitter's start location, cooked into StartLocation.LookupTable as [min in, time scale, then
-# LookupTableChunkSize floats per entry: XYZ, or min XYZ + max XYZ]), putting her top centre like Enhanced; Classic
-# restores the authored values.
+# Runs 27-30: the VoG particle (fx_PostProcess.VoG.part_VoG_Pulse; part_VoG_SimpleFade is 20 x 10) is a 17.76 x 10
+# overlay whose component the native keeps on the camera's view axis, scaled with its distance (local space: X forward,
+# Y right, Z up). Classic shows it top right although Angel is centred in every video frame (all 14 PostLook videos
+# measured). "Angel position" = Centered shifts the overlay left by VOG_SHIFT of its width before the effect starts
+# (the emitter's start location, cooked into StartLocation.LookupTable as [min value, max value, then
+# LookupTableChunkSize floats per entry: XYZ, or min XYZ + max XYZ]); Classic restores the authored values.
 VOG_ORIGINAL: dict[tuple[str, int, int], list[float]] = {}
 VOG_WIDTH = 17.76                      # Main_VOG's StartSize X (run 29), if the template has no size table
-VOG_SHIFT = 0.25                       # Angel's centre sits a quarter of the overlay's width right of its centre
+VOG_SHIFT = 0.28                       # 0.25 moved her from ~75% to ~53% across (run 30): 0.28 centres her
 
 
 def overlay_width(template: Any) -> float:
@@ -1836,7 +1835,7 @@ def place_vog_particle(template: Any) -> None:
     shift = round(VOG_SHIFT * overlay_width(template), 2)
     for key, module, start, table in vog_location_tables(template):
         chunk = int(getattr(start, "LookupTableChunkSize", 3) or 3)
-        if opt_angel_position.value == "Enhanced":
+        if opt_angel_position.value == "Centered":
             if key in VOG_ORIGINAL:
                 continue
             VOG_ORIGINAL[key] = [float(v) for v in table]

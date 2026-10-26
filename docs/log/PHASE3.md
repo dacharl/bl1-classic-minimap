@@ -1533,3 +1533,81 @@ profiler 0.1.12 `3f748e50…e33f`.
 - the vertical position (unchanged).
 
 If she lands off-centre, the logged shift and her new position give the scale for one adjustment.
+
+**Committed** as `b9072eb`.
+
+**Installed on the PC (2026-10-26 23:08 UTC, game closed):** `classic_minimap.sdkmod` 0.14.6 `e4fbda70…0ee1` and the
+profiler 0.1.12 `3f748e50…e33f`, SHA-256 verified. v0.14.5 (`45828006…1191`, `c4b1d19f…f7d5`) is backed up in the
+main checkout's `dist\v0.14.5-20261026T230836.401181Z\`. The stock `GfxHUD.upk` is unchanged (`5c515c3e…`). The
+user's "Angel position (experiment)" is already Enhanced.
+
+## 3au. Run 30: v0.14.6 moves Angel to the top centre → v0.14.7 "Angel position", Classic / Centered (2026-10-26)
+
+**Run (PC, Arid, 23:09 UTC; screenshot and log provided by the user):** "It's not perfectly centered, but it
+WORKED".
+- The log has `Angel's video moved left by 4.44` before the effect started, and the table entries' Y read −4.44.
+- In the screenshot Angel spans about 820–1300 px of 2000 (centre ≈ 53%), at the top and clear of the minimap.
+- The last watch line shows the component's rotation following the camera's, (−3669, −32012) → (−2881, −30917),
+  so the game keeps the overlay on the view and the shift holds while looking around.
+- distance/scale = 476.8 / 24.69 = 19.3, as in runs 27–29.
+
+**Tuning:** 0.25 of the width (4.44) moved her from ≈ 75% (run 26) to ≈ 53%, about 5% of the screen per unit.
+Centring needs about 0.6 more: 0.28 of the width, 4.97 for Main_VOG.
+
+**Are some Angel calls already centred? (user's question):**
+- **Videos:** `WillowGame\Movies` has 14 `NAR_Echo_Vog_*-ALT_PostLook*.bik`.
+  - Bink headers: 11 are 284×160 at 30 fps; `Vog_1a` (the template default, her first contact) and `Vog_83` are
+    746×420; `Vog_70…_C` is 160×90 at 13 fps.
+  - Frames decoded with a static ffmpeg 9.0.2 (gyan.dev essentials, SHA-256 checked, in `C:\Users\Charles\Tools\
+    ffmpeg`; downloaded with the user's permission): all 14 are full-frame portraits, brightness centre x 0.48–0.56,
+    y 0.46–0.50.
+  - So no video places Angel differently: classic's top-right offset is the overlay's, the same for every call.
+    Contact sheets were checked for Vog_170 and Vog_83.
+- **Templates:** `fx_PostProcess.upk` (uncompressed) holds two VoG particle systems, `part_VoG_Pulse` (seen in
+  every run) and `part_VoG_SimpleFade`.
+  - Neither sets an emitter origin, and both start at location ≈ 0.
+  - SimpleFade's LOD0 overlay is 20 × 10. Its LOD1 adds a small random location (0.01, −2…0, −2…0.5) and size jitter.
+  - The shift is a fraction of each template's own width, so SimpleFade would get 5.6. Which behaviour uses it is
+    unknown (cooked map packages).
+- **The full-screen Angel movies** (`VoG_Transition_Movie`, 1280×720) play through `Movie_Play` at story points,
+  not this overlay, so the mod doesn't touch them. These are likely the "centred" calls the user remembers.
+
+**Invariance (user's question):**
+- **Holds:** the overlay, classic's unexplained offset and our shift are all in the particle's local space. The
+  game keeps that on the view axis, rotated with the camera, at distance ≈ 19.3 × scale (runs 27–30), so it fills
+  a fixed angle of the view whatever the scale, distance or camera direction.
+- **Could break:** a different FOV (aiming down sights, `fov`) or aspect ratio (Deck 16:10, 4:3).
+  - If classic's offset is in local space, the shift cancels it at any FOV.
+  - If it is a screen-space offset, the shift only cancels it at the tested FOV.
+- v0.14.7 logs the FOV and distance/scale on every watch line, so screenshots under those conditions can settle it.
+
+**Change → v0.14.7 + profiler 0.1.13:**
+- **The option** is now **"Angel position"** with **Classic / Centered**, default Centered (the user chose the
+  American spelling).
+  - Its description: "Centered: top centre, clear of the minimap, like GOTY Enhanced. Classic: top right, partly
+    behind the minimap. Applies from her next call."
+  - The rename resets saved values once. README updated.
+- **The shift** is `VOG_SHIFT` 0.28.
+- **The v0.14.1 screen-mesh spike's move is retired** (`VOG_ENHANCED`, `apply_vog_position`), since classic never
+  used the mesh. Its logging stays, now logging "the screen mesh moved to …".
+- **Watch lines** add `fov` (`GetFOVAngle`) and `distance/scale`.
+
+**Tests (red first):**
+- Centered is the default; the mesh is never moved, and a native move is logged;
+- Centered shifts the real Pulse table by −4.97 once, and a 6-float table without a size module by 4.97;
+- Classic restores the table;
+- the watch line has FOV and distance/scale.
+
+Both suites pass on both art variants; 129 unit tests, coverage, ruff and repository checks pass.
+`release.py --game --enhanced`: the in-mod build matches (`d2fc0fa9…275f`).
+
+**Built (not installed):** `dist/releases/0.14.7/` holds `classic_minimap.sdkmod` 0.14.7 `cca615b0…6664` and the
+profiler 0.1.13 `9a15ba1f…cda9`.
+
+**To confirm invariance (next runs):** screenshot Angel's calls in each condition, each with the matching watch
+lines:
+- normal play;
+- aiming down sights during a call;
+- `fov 110` in the console;
+- the Steam Deck at 16:10;
+- a later mission's call, to see a different video and maybe SimpleFade.

@@ -61,7 +61,7 @@ Open **MODS → Classic Minimap**:
 | Show mission givers | "!" and turn-in marks at mission givers. |
 | Tint objective diamonds | Off (default, like Enhanced): a mission ready to hand in shows the turn-in mark, and one not started shows "!", in place of the objective diamond. On: the diamond stays and turns gold (ready to hand in) or green (not started), as in earlier versions. |
 | Hide compass | Hide the classic compass strip at the bottom. |
-| Angel position (experiment) | **Classic** (default): Angel's video appears top right, partly behind the minimap. **Enhanced**: tries to move it to Enhanced's placement (top centre). Experimental: each call logs where her screen sits, for tuning. |
+| Angel position | **Centered** (default): Angel's ECHO video appears top centre, clear of the minimap, like GOTY Enhanced. **Classic**: top right, partly behind the minimap. Takes effect from her next call. |
 | Use Enhanced artwork | On (default): Enhanced's artwork when Enhanced is installed. Off: the mod's own art. Takes effect from the next level load. |
 | Refresh map markers | Re-collect landmarks and objectives and refit the zoom (same as F8). |
 | Rebuild HUD movie from game files | Build the minimap's HUD movie from your game files again, for example after installing Enhanced. Takes effect from the next level load. |
