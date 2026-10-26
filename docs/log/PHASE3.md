@@ -1472,6 +1472,64 @@ tests, coverage, ruff and repository checks pass. `release.py --game --enhanced`
 **Built (not installed):** `dist/releases/0.14.5/` holds `classic_minimap.sdkmod` 0.14.5 `45828006…1191` and the
 profiler 0.1.11 `c4b1d19f…f7d5`.
 
+**Committed** as `1b9a6af`.
+
+**Installed on the PC (2026-10-26 22:56 UTC, game closed):** `classic_minimap.sdkmod` 0.14.5 `45828006…1191` and the
+profiler 0.1.11 `c4b1d19f…f7d5`, SHA-256 verified. v0.14.4 (`4a6d7886…a9ed`, `84ab5543…c2de`) is backed up in the
+main checkout's `dist\v0.14.4-20261026T225604.292541Z\`. The stock `GfxHUD.upk` is unchanged (`5c515c3e…`).
+
 **Next:** at Angel's next call, look for a position-like scalar or vector parameter (offset, UV, screen position),
 which could be set on the per-call instance. If there is none, the placement is in the material graph: compare
 Enhanced's handling, or consider a different fix.
+
+## 3at. Run 29: v0.14.5 on the PC; the material has no position → v0.14.6 shifts the overlay (2026-10-26)
+
+**Run (PC, Arid, 23:03 UTC; log only):** "Angel position (experiment)" was set to Enhanced this time.
+- The v0.14.4 edit ran before the effect started (`Angel's video centred` came before `ShowScreenParticle`), but
+  it changed nothing: Y was already 0.
+
+**Dump:**
+- **Per-call material instance** (`…ParticleSystemComponent_156.MaterialInstanceConstant_224`): it only sets the
+  texture `VoGMovie` to `TextureMovie'vog_binks.HiQuality.Vog_170-ALT_PostLook'`, the call's video.
+- **Parent `fx_PostProcess.VoG.VoG_Mati`:** scalars `ScanLinesAmount` 0.2 and `StaticAmount` 0.8, and the default
+  `VoGMovie` (`Vog_1a-ALT_V02_PostLook`).
+- **Base `Material'fx_PostProcess.VoG.VoG_Master_Shader'`:** no parameters.
+- **`StartSize`:** `[0.0, 17.76, 17.76, 10.0, 0.0, 17.76, 10.0, 0.0]`, a 17.76 × 10 (16:9) sprite. `Lifetime` is
+  a particle parameter (VoGMovieDuration).
+- **Component:** on the view axis again (rotation = camera's (−3273, −32249, 0); 527 units; scale 27.59; ratio
+  19.1).
+
+**Conclusion:**
+- There is no position parameter anywhere in the material chain.
+- The particle is a 16:9 overlay centred on the view, from `fx_PostProcess`.
+- The "PostLook" videos must draw Angel in their own top-right corner. In run 26's screenshot she spans about
+  65–85% of the width (centre ≈ 75%) and 0–30% of the height.
+- So moving her means moving the whole overlay. Shifting it left by a quarter of its width (if it about fills the
+  screen) puts her centre at ≈ 50%: top centre, like Enhanced.
+
+**Change → v0.14.6 + profiler 0.1.12:**
+- **"Angel position (experiment)" = Enhanced** subtracts `0.25 × overlay width` from the Y (sideways) value of each
+  start-location entry of VoG templates, before the effect starts (PRE `ShowScreenParticle`). The width is read
+  from the template's `StartSize` X, or 17.76.
+  - For Main_VOG that is −4.44, logged as `Angel's video moved left by 4.44: …`.
+  - Classic restores the authored values; the edit is in memory only.
+- The option's description is back to promising the move ("shifted to the top centre, like GOTY Enhanced.
+  Experimental; applies from her next call").
+
+**Tests (red first):** the stubs now use the real run-28/29 tables. The checks:
+- Enhanced shifts Y by −4.44 once (idempotent), for both 3- and 6-float entries;
+- a non-VoG template is untouched;
+- Classic restores the table.
+
+Both suites pass on both art variants; 129 unit tests, coverage, ruff and repository checks pass.
+`release.py --game --enhanced`: the in-mod build matches (`8924ba37…dc43`).
+
+**Built (not installed):** `dist/releases/0.14.6/` holds `classic_minimap.sdkmod` 0.14.6 `e4fbda70…0ee1` and the
+profiler 0.1.12 `3f748e50…e33f`.
+
+**Unverified:**
+- that the overlay about fills the screen, so a quarter of its width is a quarter of the screen;
+- that +Y is screen-right in this local space;
+- the vertical position (unchanged).
+
+If she lands off-centre, the logged shift and her new position give the scale for one adjustment.

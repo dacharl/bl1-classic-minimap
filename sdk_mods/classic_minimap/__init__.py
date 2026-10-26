@@ -55,7 +55,7 @@ from . import hudmovie
 from .swfmerge import MergeRefused
 from .swfmerge import merge as merge_movie
 
-__version__ = "0.14.5"
+__version__ = "0.14.6"
 
 
 STAGE_W = 1280.0                       # classic HUD stage is 1280x720
@@ -151,8 +151,8 @@ opt_enhanced_art = BoolOption("Use Enhanced artwork", True,
                               on_change_while_enabled=lambda _, value: remake_movie(use_enhanced=value))
 opt_angel_position = SpinnerOption("Angel position (experiment)", "Classic", ["Classic", "Enhanced"],
                                    description="Where Angel's video appears. Classic: top right, behind the minimap. "
-                                               "Enhanced: an experiment towards GOTY Enhanced's top-centre placement; "
-                                               "it has no visible effect yet.")
+                                               "Enhanced: shifted to the top centre, like GOTY Enhanced. Experimental; "
+                                               "applies from her next call.")
 opt_enhanced_folder = HiddenOption("Enhanced folder", "",
                                    description="GOTY Enhanced's game folder, if the mod doesn't find it itself.")
 
@@ -1797,11 +1797,25 @@ def watch_particles(pc: Any, now: float) -> None:
         warn_once("spwatch:" + type(ex).__name__, f"screen particle watch failed ({type(ex).__name__}: {ex})")
 
 
-# Run 27: the VoG particle (fx_PostProcess.VoG.part_VoG_Pulse) sits on the camera's view axis; its top-right offset is
-# the emitter's local start location (X forward, Y right, Z up), cooked into StartLocation.LookupTable as
-# [min in, time scale, then LookupTableChunkSize floats per entry: XYZ, or min XYZ + max XYZ]. "Angel position
-# (experiment)" = Enhanced zeroes Y before the effect starts, centring her like Enhanced; Classic restores it.
+# Runs 27-29: the VoG particle (fx_PostProcess.VoG.part_VoG_Pulse) is a 17.76 x 10 overlay centred on the camera's view
+# axis (local space: X forward, Y right, Z up), and the "PostLook" videos draw Angel in their top-right corner, about
+# 75% across. "Angel position (experiment)" = Enhanced shifts the overlay left by a quarter of its width before the
+# effect starts (the emitter's start location, cooked into StartLocation.LookupTable as [min in, time scale, then
+# LookupTableChunkSize floats per entry: XYZ, or min XYZ + max XYZ]), putting her top centre like Enhanced; Classic
+# restores the authored values.
 VOG_ORIGINAL: dict[tuple[str, int, int], list[float]] = {}
+VOG_WIDTH = 17.76                      # Main_VOG's StartSize X (run 29), if the template has no size table
+VOG_SHIFT = 0.25                       # Angel's centre sits a quarter of the overlay's width right of its centre
+
+
+def overlay_width(template: Any) -> float:
+    for e in list(getattr(template, "Emitters", None) or []):
+        for lod in list(getattr(e, "LODLevels", None) or [])[:1]:
+            for m in list(getattr(lod, "Modules", None) or []):
+                table = getattr(getattr(m, "StartSize", None), "LookupTable", None)
+                if table is not None and len(table) > 2 and float(table[2]) > 0:
+                    return float(table[2])
+    return VOG_WIDTH
 
 
 def vog_location_tables(template: Any) -> list[tuple[tuple[str, int, int], Any, Any, Any]]:
@@ -1819,6 +1833,7 @@ def vog_location_tables(template: Any) -> list[tuple[tuple[str, int, int], Any, 
 def place_vog_particle(template: Any) -> None:
     if "vog" not in str(template).lower():
         return
+    shift = round(VOG_SHIFT * overlay_width(template), 2)
     for key, module, start, table in vog_location_tables(template):
         chunk = int(getattr(start, "LookupTableChunkSize", 3) or 3)
         if opt_angel_position.value == "Enhanced":
@@ -1827,8 +1842,8 @@ def place_vog_particle(template: Any) -> None:
             VOG_ORIGINAL[key] = [float(v) for v in table]
             sideways = [i for k in range(2, len(table) - 1, chunk) for i in (k + 1, k + 4) if i < min(k + chunk, len(table))]
             for i in sideways:
-                table[i] = 0.0
-            log(f"Angel's video centred: start location {VOG_ORIGINAL[key]} -> {[float(v) for v in table]}")
+                table[i] = round(float(table[i]) - shift, 4)
+            log(f"Angel's video moved left by {shift}: start location {VOG_ORIGINAL[key]} -> {[float(v) for v in table]}")
         elif key in VOG_ORIGINAL:
             for i, v in enumerate(VOG_ORIGINAL.pop(key)):
                 table[i] = v

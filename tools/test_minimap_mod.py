@@ -1198,7 +1198,7 @@ def main(gfx_path, on_import=None):
     # placement and each emitter's modules, then the component against the camera once a second for a while.
     # Cooked start locations have no Distribution object, only the baked lookup table: [min in, time scale, then
     # LookupTableChunkSize floats per entry] (X forward, Y right, Z up in the camera-aligned local space)
-    table = [0.0, 0.0, 0.0, 95.0, 40.0]
+    table = [0.0, 0.01, 0.01, 0.0, 0.0, 0.01, 0.0, 0.0]                 # run 28's VoG table: (0.01, 0, 0) twice
     location = Struct(_type='ParticleModuleLocation', StartLocation=Struct(
         Distribution=None, Type=0, Op=1, LookupTableNumElements=1, LookupTableChunkSize=3, LookupTable=table))
     # Run 28: the start location is ~0 and the component sits on the camera's view axis, yet Angel shows top right,
@@ -1206,7 +1206,8 @@ def main(gfx_path, on_import=None):
     # parameter) and the template material, each with its scalar/vector/texture parameters and parent chain, and
     # the size module's table.
     size = Struct(_type='ParticleModuleSize', StartSize=Struct(Distribution=None, LookupTableChunkSize=3,
-                                                               LookupTable=[0.0, 0.0, 16.0, 9.0, 1.0]))
+                                                               LookupTable=[0.0, 17.76, 17.76, 10.0, 0.0, 17.76,
+                                                                            10.0, 0.0]))     # run 29: 17.76 x 10
     vog_mat = Obj(_name="Material'fx_PostProcess.VoG.VoG_Mat'", Class=Struct(Name='Material'))
     mati = Obj(_name="MaterialInstanceConstant'fx_PostProcess.VoG.VoG_Mati'", Class=Struct(Name='MaterialInstanceConstant'),
                Parent=vog_mat, ScalarParameterValues=[Struct(ParameterName='OffsetU', ParameterValue=0.7)],
@@ -1234,8 +1235,8 @@ def main(gfx_path, on_import=None):
     out = buf.getvalue()
     assert 'screen particle (SetUpVoGScreenParticle)' in out and 'VoG_Screen' in out, out
     assert 'ParticleModuleLocation' in out and "'DepthPriorityGroup': 2" in out, out
-    assert "'table': [0.0, 0.0, 0.0, 95.0, 40.0]" in out and "'chunk': 3" in out, out
-    assert "'StartSize': {" in out and '[0.0, 0.0, 16.0, 9.0, 1.0]' in out, out
+    assert "'table': [0.0, 0.01, 0.01, 0.0, 0.0, 0.01, 0.0, 0.0]" in out and "'chunk': 3" in out, out
+    assert "'StartSize': {" in out and '[0.0, 17.76, 17.76, 10.0, 0.0, 17.76, 10.0, 0.0]' in out, out
     assert "'instance': {'name': \"MaterialInstanceConstant'Transient.MaterialInstanceConstant_9'\"" in out, out
     assert "'textures': {'Movie': \"BinkMovie'vog_binks.Angel_01'\"}" in out, out
     assert "'scalars': {'OffsetU': 0.7}" in out and "'vectors': {'Tint': (1.0, 1.0, 1.0, 1.0)}" in out, out
@@ -1248,17 +1249,19 @@ def main(gfx_path, on_import=None):
         for _ in range(3):
             HOOKS['WillowGame.WillowPlayerController:ShowScreenParticle:post'](pc, Struct(Template=template), None, None)
     assert buf.getvalue().count('screen particle (ShowScreenParticle)') == 1, buf.getvalue()
-    # Run 27: the particle sits on the camera's view axis and its top-right offset is the emitter's local start
-    # location. "Angel position (experiment)" = Enhanced zeroes the sideways (Y) part before the effect starts (PRE
-    # ShowScreenParticle), centring her like Enhanced; Classic puts the authored values back. Other effects are left alone.
+    # Run 29: the VoG particle is a 17.76 x 10 overlay centred on the view (local space, X forward, Y right, Z up) and
+    # the "PostLook" videos draw Angel in their top-right corner (about 75% across). "Angel position (experiment)" =
+    # Enhanced shifts the overlay left by a quarter of its width (Y start location) before the effect starts (PRE
+    # ShowScreenParticle), putting her top centre like Enhanced; Classic puts the authored values back. Other effects
+    # are left alone.
     show_pre = HOOKS['WillowGame.WillowPlayerController:ShowScreenParticle:pre']
     mod.opt_angel_position.value = 'Enhanced'
     buf = _io.StringIO()
     with contextlib.redirect_stdout(buf):
         show_pre(pc, Struct(Template=template), None, None)
         show_pre(pc, Struct(Template=template), None, None)            # idempotent
-    assert table == [0.0, 0.0, 0.0, 0.0, 40.0], table
-    assert buf.getvalue().count("Angel's video centred") == 1, buf.getvalue()
+    assert table == [0.0, 0.01, 0.01, -4.44, 0.0, 0.01, -4.44, 0.0], table
+    assert buf.getvalue().count("Angel's video moved left by 4.44") == 1, buf.getvalue()
     other_table = [0.0, 0.0, 0.0, 30.0, 0.0]
     other = Obj(_name="ParticleSystem'fx_PostProcess.Burn'", Emitters=[Struct(EmitterName='Burn', LODLevels=[Struct(RequiredModule=None, Modules=[Struct(
         _type='ParticleModuleLocation', StartLocation=Struct(Distribution=None, LookupTableChunkSize=3,
@@ -1272,11 +1275,11 @@ def main(gfx_path, on_import=None):
                                                              LookupTable=wide))])])], _name="ParticleSystem'VoG_Range'")
     with contextlib.redirect_stdout(io.StringIO()):
         show_pre(pc, Struct(Template=rng), None, None)
-    assert wide == [0.0, 0.0, 0.0, 0.0, 40.0, 0.0, 0.0, 50.0], wide
+    assert wide == [0.0, 0.0, 0.0, 85.56, 40.0, 0.0, 95.56, 50.0], wide   # no size module: Main_VOG's 17.76
     mod.opt_angel_position.value = 'Classic'
     with contextlib.redirect_stdout(io.StringIO()):
         show_pre(pc, Struct(Template=template), None, None)
-    assert table == [0.0, 0.0, 0.0, 95.0, 40.0], 'Classic restores the authored offset'
+    assert table == [0.0, 0.01, 0.01, 0.0, 0.0, 0.01, 0.0, 0.0], 'Classic restores the authored offset'
     pc.ScreenParticleRecords = None                             # missing property: no crash
     with contextlib.redirect_stdout(io.StringIO()):
         HOOKS['WillowGame.WillowPlayerController:SetUpVoGScreenParticle'](pc, None, None, None)
