@@ -92,6 +92,14 @@ _Avoid_: Quest marker, exclamation icon
 The mark shown at a mission giver where a finished mission can be handed in.
 _Avoid_: Completion icon, reward marker
 
+**Zoom mode**:
+When the minimap fits its zoom to the player and objectives: once per level load as in Enhanced, or also whenever the tracked mission changes.
+_Avoid_: Auto-zoom, refit (unqualified)
+
+**Angel's screen**:
+The hologram on which Angel's video calls play, part of the 3D scene rather than the HUD, so HUD elements always draw over it.
+_Avoid_: Angel overlay, VoG clip
+
 **Public release**:
 A version offered to other players on GitHub; the first is 1.0.0, and every earlier version is a private build for the author's own testing.
 _Avoid_: Release (unqualified), launch

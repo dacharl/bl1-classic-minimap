@@ -116,6 +116,23 @@ Items already logged above as they happened: the profiler benchmark and coverage
 [usage](../TOOLS.md)). Real installation through the tool is unverified; optional Deck SSH deployment
 is deferred. Item 4 is now the highest-ranked pending tool.
 
+**2026-10-26 status (after v0.13–v0.14.1, five installs):**
+- `install.py` has now done five real installs, each hash-verified (PHASE3 §3aj–§3an).
+- Since v0.13 there's no package: `release.py` builds both art variants and checks the in-mod build against
+  the game folders.
+- Item 9's visible status is partly done: status lines in the log, the console and the MODS description
+  since v0.12 and v0.13.
+- Item 11 is done.
+
+Pending tools, in priority order:
+1. item 14 (`check_all.py`);
+2. item 15 (a ship pipeline);
+3. item 5 (`swfinspect.py`: a start exists, uncommitted);
+4. item 16 (a `diag.py` timeline);
+5. item 4 (resumable mutations);
+6. item 17 (REA recipes);
+7. item 18 (zone scales, post 1.0).
+
 1. **Release and install tooling — implemented offline** (six manual installs motivated this).
    - `tools/release.py`: bump `__version__` and `pyproject.toml` together, run both suites, build the package (`--new-guid`) and `.sdkmod`.
    - `tools/install.py`: refuse while `Borderlands.exe` runs, back up the installed files to `dist/vNNN/`, copy, verify SHA-256, and run the package bulk-data check.
@@ -141,6 +158,17 @@ is deferred. Item 4 is now the highest-ranked pending tool.
    - `frames` (which frames change a sprite's size or colour).
 
    Also add the "classic shapes keep their gradient images" check to the real-movie AS suite when `HUD_classic.gfx` is present.
+
+   **2026-10-26:** an uncommitted start exists in `.worktrees/mutation-swf-tools` (`tools/swfinspect.py`, its tests,
+   `docs/plans/PLAN_MUTATION_SWF_TOOLS.md`); finish that rather than starting again. This session added scratch
+   helpers to fold in:
+   - fonts and glyphs (`fontscan`, `fontpos`);
+   - named-clip placement matrices at the root and in sprites (`placements`, `spriteplacements`);
+   - per-frame placements with children (`frames112`, `spritekids`);
+   - shape fills and bounds that skip same-id GFx records (`shapeinfo`).
+
+   Also: `upkprops` should decode common structs (`Vector`, `Vector4`, `Rotator`, `Color`), not show
+   `<16 bytes>` (`vogpos.py` did it by hand).
 6. **One shared input cache for every checkout and worktree.** `tools/inputs.py` would extract the classic HUD and status-menu movies and the Enhanced HUD from the game installs into a cache outside the repo (e.g. `%LOCALAPPDATA%\bl1-classic-minimap\inputs`, overridable). The build commands would read from there, and backups would go there too.
 7. **Fix the GFx ID collision for inspection tools.** Make the `swfdeps.Movie` lookup prefer standard SWF definitions over GFx extension tags, behind a flag, and verify that `swfbuild`'s closure is unchanged byte for byte before switching it on.
 8. **Check fake signatures against the packages.** Add a test helper that reads a script function's parameters (including `out`) with `uedis`/`upk`, and asserts each fake's Python signature matches. It would have caught run 12 offline.
@@ -152,6 +180,34 @@ is deferred. Item 4 is now the highest-ranked pending tool.
 11. **Agent shell rules in AGENTS.md** (done in the previous session; this session added the `-I`/`PYTHONIOENCODING` note): use the Write tool for scripts (no heredocs with backslashes), the Edit tool for text, literal paths in worktrees, PowerShell when Bash's wrapper fails, and `PYTHONIOENCODING=utf-8`.
 12. **Commit per version** on the feature branch once the user approves, so each in-game run maps to a commit and diffs stay reviewable. This session showed the cost of batching: one five-commit split of 33 changed files.
 13. **A Steam Deck testing section in the README:** log and settings paths under Proton (including the SD card), F7 through Steam Input or the on-screen keyboard, and known HUD-mod conflicts.
+14. **`tools/check_all.py`** (every change this session ran the scratch `checkall.ps1`):
+   - build both art variants from `dist/phase2`, and run both real-movie suites on each;
+   - run the unit tests with coverage, then `coverage json`, the coverage gate, Ruff and the repository gate;
+   - print one pass/fail summary.
+
+   Cross-platform Python avoids PowerShell's exit-code quirks (`Select-Object -First`, `NativeCommandError` on
+   stderr).
+15. **A ship pipeline** (`tools/ship.py`; the same sequence ran five times, v0.13.0 → v0.14.1):
+   1. `bump_version.py`;
+   2. `release.py` with `--game` both with and without `--enhanced`, so both in-mod builds are checked against
+      the real files;
+   3. the install dry run, then `install.py`, still refusing while the game runs;
+   4. independent SHA-256 checks of the installed files and backups;
+   5. print the PHASE3 install lines and PROGRESS rows.
+
+   Commits stay manual and per version (item 12).
+16. **A `diag.py` timeline** (the SDK log was grepped by hand repeatedly):
+   - `--timeline`: HUD-movie build and cache lines with timings, merges and refusals, map shown and hidden with
+     reasons, map ready and rebuilds, and Angel-call lines;
+   - F7 fields beyond `zoom_fit`: `hud_movie`, `angel`, `echo_x` and `hud_shifted`.
+17. **REA recipes in `rea_client.py`:**
+   - read arguments from a JSON file, so PowerShell can't strip the quotes;
+   - `native <name>`: string → table slot (`search_bytes`) → the startup `mov` that fills it → the function
+     address;
+   - close the target and stop the server automatically on exit or idle.
+18. **Zone scale tool (post 1.0, for the fixed zoom mode):** promote the scratch `zonescale.py`. It reports metres
+   across the window at 100% per recorded anchor, and the art size at 100% per zone frame from the movie rather
+   than from `ClipSize`.
 
 ## Maintenance tooling implementation (2026-10-25)
 
@@ -169,3 +225,15 @@ is deferred. Item 4 is now the highest-ranked pending tool.
 | The check script reported "FAILED: build" although the build succeeded | `Select-Object -First 1` after a native command makes PowerShell report exit 255 (a known quirk) | Captured output with `Out-String` and printed its first line | Never pipe a native command into `Select-Object -First` when its exit code matters |
 | A mod-suite edit raised `UnboundLocalError` for `contextlib` | A later `import contextlib` inside `main()` made the name local to the whole function | Moved the imports to the module top | Import at module level in the long scenario functions |
 | A workflow test pinned the current profiler version (`... and 0.1.3`) and failed after the bump | The bump scenario reused the live version numbers | Read the current version from the source and bump to versions above it | Version-independent bump scenarios |
+
+## Runs 21–23 and PLAN_V14 (2026-10-25/26, v0.13.1 → v0.14.1)
+
+| What happened | Cause | Workaround | Fix |
+|---|---|---|---|
+| The session's REA tools failed with `provider_unavailable` | That MCP server started without `GHIDRA_INSTALL_DIR`/`JAVA_HOME` | Used `tools/rea_client.py`, which sets them | AGENTS REA notes: prefer `rea_client.py` |
+| `rea_client.py call` from PowerShell failed to parse its JSON | PowerShell 5.1 strips double quotes from arguments to native programs | Ran the calls from Git Bash | AGENTS REA notes |
+| A REA decompile of a native failed ("no procedure starts at") | The exec thunk is reached only through a table slot filled at startup, so Ghidra created no function | Found the slot via `search_bytes` and the startup `mov`, then stopped: the fix didn't need the draw code | AGENTS REA notes |
+| Angel's overlay was misread twice (map depth, then the HUD's `vog` clip) before the cause was found: a 3D screen mesh | It was assumed to be a HUD clip because it looked like one | Searched the script for the feature (`PlayVoGEchoCall`) | Before tuning a HUD element's depth or position, check that it is in the movie at all |
+| A "match Enhanced" colour claim was wrong (gold turn-in) | The v0.6 tint was our own choice, later taken as Enhanced's | Read Enhanced's landmark frames and fills | Check Enhanced's movie art before calling a behaviour Enhanced's |
+| Two similar button names ("Rebuild now", "Rebuild HUD movie") confused the user | Names written without comparing them side by side | Renamed both (PLAN_V14 decision 6) | Review option names together when adding one |
+| A mod-suite scenario guessed a giver position and failed | The guess didn't match the live objective slot | Read the slot's location in the test | Derive fixture positions from the state under test |

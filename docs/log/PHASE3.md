@@ -1180,6 +1180,12 @@ counter-rotation fix; leave the autosave open, without hiding the minimap.
   - whether classic's native code moves the mesh back.
 
   The first Angel call's log answers all three. The autosave stays open (user).
+- **Committed** as `d20cdfa`.
+- **Installed on the PC (2026-10-26 02:56 UTC, game closed):** `classic_minimap.sdkmod` 0.14.1 `0f6ca48f…8d3c` and the
+  profiler 0.1.7 `f4c7d39e…0147`, SHA-256 verified.
+- **Backups:** v0.14.0 (`a2ea341d…f327`, `fb723b37…1467`) in the main checkout's
+  `dist\v0.14.0-20261026T025655.020528Z\`.
+- **Game files:** stock `GfxHUD.upk` unchanged. Not yet played.
 
 **Not yet seen:**
 - the Enhanced green turn-in mark at a ready objective (the turn-in was done in original art);

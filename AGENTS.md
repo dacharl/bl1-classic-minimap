@@ -102,6 +102,8 @@ These come from PROGRESS's hard-won facts. Don't break them:
 - **REA with Ghidra:**
   - Ghidra 12.1.4 and JDK 21 live in `C:\Users\Charles\Tools\`.
   - Each import takes 15–18 minutes. Use `tools/rea_client.py serve/call` to keep one server per binary.
+  - **Prefer `rea_client.py` to the session's own REA tools:** a session's REA MCP server can start without the Ghidra environment (`provider_unavailable`, "GHIDRA_INSTALL_DIR is not set"), while `rea_client.py` sets it. Run `rea_client.py call` from Git Bash: PowerShell 5.1 strips the double quotes from JSON arguments to native programs.
+  - Natives registered at runtime (exec thunks whose table slots startup code fills) have no Ghidra function. Find the slot with `search_bytes` on the name string's address, then the startup `mov` that fills it.
   - **Close targets (`close_binary`) and stop the servers when done:** their Java heaps and temporary projects contributed to a disk-full crash (PHASE3 run 11).
 - **Package and Flash inspection:**
   - packages: `tools/upk.py`, `tools/upkprops.py` (class defaults), `tools/uedis.py` (script disassembly);
