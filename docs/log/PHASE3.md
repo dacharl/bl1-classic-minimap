@@ -1299,5 +1299,68 @@ profiler 0.1.8 `23018d24…1139`. The earlier tick-only build `776cf659…569f` 
 - whether `onEnterFrame` fires here, which would end the flicker;
 - what triggers the reset.
 
+**Committed** as `c4b5cf6`.
+
+**Installed on the PC (2026-10-26 11:21 UTC, game closed):** `classic_minimap.sdkmod` 0.14.2 `5d2380c3…0547` and the
+profiler 0.1.8 `23018d24…1139`, SHA-256 verified. v0.14.1 (`0f6ca48f…8d3c`, `f4c7d39e…0147`) is backed up in the
+main checkout's `dist\v0.14.1-20261026T112120.130786Z\`. The stock `GfxHUD.upk` is unchanged (`5c515c3e…`).
+
+**Run 26 result (§3aq):** no resets were logged on the PC; the remaining overlap is Angel's video, a different element.
+
 **Next run:** the log should show `moved it again` lines where the panel used to stay behind the map, and F7
 `hud_fixes` > 0.
+
+## 3aq. Run 26: v0.14.2 on the PC; Angel's video is a screen particle → v0.14.3 diagnostic (2026-10-26)
+
+**Run (PC, Enhanced art, Extended UI, Arid, 22:24–22:28 UTC; screenshot and log provided by the user):** Angel's
+ECHO video (blue, glitchy) covered the area right of centre to the top right, and its right part was behind the
+minimap. The user reported it as "still not adjusted properly".
+
+**Evidence:**
+- **The ECHO panel was fine.** F7 read `echo_x` 610.0 with the shift on, and `hud_fixes` was `inf` (never set), so
+  the game never reset the panel in this session.
+- **The ECHO hooks fired:** `Behavior_PlayEchoCall` and `ClientPlayEchoCall` at 22:27:52.
+  `WillowHUDGFxMovie.PlayEchoCall` and `PlayVoGEchoCall` didn't log (native-to-native, or not used).
+- **Root `vog` clip:** `_width`/`_height` 0, frame 1 of 2, visible. It didn't change during the 15 s every-tick
+  watch, so it is empty and isn't Angel.
+- **`'angel': None`:** there is still no `GFxUIManager.ScreenMesh`.
+- The movie was built in 3.60 s (Enhanced art) and merged into Extended UI's movie in 3.03 s.
+
+**Finding (static, classic script):** Angel's video is a **screen particle**.
+- `Behavior_VoGScreenParticle` calls `ShowScreenParticle`, which creates a `ParticleSystemComponent` on the pawn:
+  absolute transform, depth priority group 2, owner-only, from the behaviour's template.
+- It then calls `SetUpVoGScreenParticle`, which sets the ECHO video (`CurrentEchoCall.Video`) as a texture parameter
+  of the particle's material and sets its lifetime.
+- It is drawn in the 3D scene, so every HUD clip, our map included, is drawn over it. Its screen position comes
+  from the particle template or the component placement.
+- The template lives in cooked map packages, so it can't be found by a name scan without decompressing them.
+
+**Change → v0.14.3 + profiler 0.1.9 (diagnostic only):**
+- Hooks (POST) on `WillowPlayerController:ShowScreenParticle` and `:SetUpVoGScreenParticle` log every
+  `ScreenParticleRecords` entry:
+  - template and material parameter;
+  - component translation, rotation, scale, absolute flags, depth priority group and owner-only;
+  - per emitter: name, required module (local space, screen alignment, material) and modules, with each start
+    location constant.
+  - `ShowScreenParticle` logs each template only once (burning or shock effects repeat).
+- For 10 s after either hook, the component's translation is logged against the camera's view point once a second,
+  to see whether it follows the camera.
+- F7 adds `screen_particles`.
+
+**Tests (red first):** a mod-suite scenario with a stub record (template, emitter, location module, component)
+checks:
+- the dump and the camera comparison line;
+- F7's field;
+- `ShowScreenParticle` logging a repeated template once;
+- no crash without `ScreenParticleRecords`.
+
+Both suites pass on both art variants; 129 unit tests, coverage, ruff and repository checks pass.
+`release.py --game --enhanced`: the in-mod build matches (`3d5b2638…e0a1`).
+
+**Built (not installed):** `dist/releases/0.14.3/` holds `classic_minimap.sdkmod` 0.14.3 `48d426bb…d8fc` and the
+profiler 0.1.9 `2c63f50f…b60f`.
+
+**Next:** at Angel's next call, read the dump. Moving her video needs one of these, which the dump should show:
+- the component follows the camera and has an offset we can change;
+- a location module whose start location sets the offset;
+- or a material or screen-alignment setting that places it in screen space.

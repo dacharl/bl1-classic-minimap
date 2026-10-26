@@ -55,7 +55,7 @@ from . import hudmovie
 from .swfmerge import MergeRefused
 from .swfmerge import merge as merge_movie
 
-__version__ = "0.14.2"
+__version__ = "0.14.3"
 
 
 STAGE_W = 1280.0                       # classic HUD stage is 1280x720
@@ -220,6 +220,8 @@ class State:
         self.vog_clip: Any = ()            # root vog clip state last logged (() = not read yet; run 24 diagnostic)...
         self.vog_clip_next = 0.0           # ...next once-a-second read...
         self.vog_fast_until = 0.0          # ...and the end of the every-tick watch after an ECHO call
+        self.sp_until = 0.0                # screen-particle watch window end (run 26 diagnostic)...
+        self.sp_next = 0.0                 # ...and its next once-a-second log
         self.mission_key: Any = None       # tracked mission and status at the last collect (Objective zoom mode)
         self.fit_mission: Any = None       # ... and at the last fit
         # docking (PLAN_V07 3): layout name when docked, p1 signature it was computed for, HUD column state
@@ -1394,6 +1396,8 @@ def tick(pc: Any) -> None:
         check_dock(movie)
     if S.vog_until > now and now >= S.vog_next:
         watch_vog(pc, now)
+    if S.sp_until > now and now >= S.sp_next:
+        watch_particles(pc, now)
     if S.vog_fast_until > now or now >= S.vog_clip_next:
         S.vog_clip_next = now + DOCK_CHECK_INTERVAL
         watch_vog_clip(movie)
@@ -1486,6 +1490,10 @@ def on_diag_key() -> None:
     mesh = vog_mesh(pc) if pc is not None else None
     info["angel"] = vog_state(mesh) if mesh is not None else None
     info["vog"] = vog_clip_state(movie) if movie is not None else None
+    try:
+        info["screen_particles"] = [particle_record(r) for r in particle_records(pc)] if pc is not None else None
+    except Exception as ex:
+        info["screen_particles"] = f"<{type(ex).__name__}: {ex}>"
     r = Redirect.result
     info["hud_movie"] = None if r is None else {
         "art": r.art, "cached": r.cached, "seconds": round(r.seconds, 2), "bytes": len(r.data),
@@ -1640,6 +1648,112 @@ def on_client_echo_call(obj: Any, args: Any, ret: Any, func: Any) -> None:
 @hook("WillowGame.WillowHUDGFxMovie:PlayEchoCall", Type.PRE)
 def on_hud_echo_call(obj: Any, args: Any, ret: Any, func: Any) -> None:
     on_echo_call("PlayEchoCall")
+
+
+# Run 26 (PHASE3 3aq): with the root vog clip 0 x 0 and no screen mesh, Angel's video still sat behind the map.
+# Classic shows it as a screen particle: ShowScreenParticle attaches a ParticleSystemComponent to the pawn and
+# SetUpVoGScreenParticle puts the ECHO video into its material. Log the records (template, component placement,
+# each emitter's modules) and, for a while, the component against the camera, to find what places it.
+
+def type_name(o: Any) -> str:
+    cls = getattr(o, "Class", None)
+    return str(getattr(cls, "Name", None) or getattr(o, "_type", None) or type(o).__name__)
+
+
+def vec_tuple(v: Any) -> tuple[float, float, float]:
+    return round(float(v.X), 1), round(float(v.Y), 1), round(float(v.Z), 1)
+
+
+def safe_fields(o: Any, names: tuple[str, ...]) -> dict[str, Any]:
+    out: dict[str, Any] = {}
+    for name in names:
+        try:
+            v = getattr(o, name)
+            if hasattr(v, "X"):
+                v = vec_tuple(v)
+            elif hasattr(v, "Pitch"):
+                v = (int(v.Pitch), int(v.Yaw), int(v.Roll))
+            elif not isinstance(v, (bool, int, float)):
+                v = str(v)
+            out[name] = v
+        except Exception as ex:
+            out[name] = f"<{type(ex).__name__}>"
+    return out
+
+
+def module_state(m: Any) -> Any:
+    name = type_name(m)
+    start = getattr(m, "StartLocation", None)
+    if start is None:
+        return name
+    dist = getattr(start, "Distribution", start)
+    const = getattr(dist, "Constant", None)
+    return {name: vec_tuple(const) if const is not None else type_name(dist)}
+
+
+def particle_record(rec: Any) -> dict[str, Any]:
+    out: dict[str, Any] = {"template": str(getattr(rec, "Template", None)), "param": str(getattr(rec, "MatParamName", ""))}
+    out["component"] = safe_fields(getattr(rec, "Component", None), (
+        "Translation", "Rotation", "Scale", "Scale3D", "AbsoluteTranslation", "AbsoluteRotation", "AbsoluteScale",
+        "DepthPriorityGroup", "bOnlyOwnerSee"))
+    emitters = []
+    for e in list(getattr(getattr(rec, "Template", None), "Emitters", None) or []):
+        lods = list(getattr(e, "LODLevels", None) or [])
+        lod = lods[0] if lods else None
+        emitters.append({"name": str(getattr(e, "EmitterName", "")),
+                         "required": safe_fields(getattr(lod, "RequiredModule", None), (
+                             "bUseLocalSpace", "ScreenAlignment", "Material", "bOrientZAxisTowardCamera")),
+                         "modules": [module_state(m) for m in list(getattr(lod, "Modules", None) or [])]})
+    out["emitters"] = emitters
+    return out
+
+
+def particle_records(pc: Any) -> list[Any]:
+    return list(getattr(pc, "ScreenParticleRecords", None) or [])
+
+
+def view_location(pc: Any) -> Any:
+    try:
+        for v in pc.GetPlayerViewPoint(unrealsdk.make_struct("Vector"), unrealsdk.make_struct("Rotator")):
+            if hasattr(v, "X"):
+                return vec_tuple(v)
+    except Exception as ex:
+        return f"<{type(ex).__name__}>"
+    return None
+
+
+def on_screen_particle(pc: Any, name: str) -> None:
+    try:
+        log(f"screen particle ({name}): {[particle_record(r) for r in particle_records(pc)]}")
+        S.sp_until, S.sp_next = time.time() + VOG_WATCH_SECONDS, time.time() + 1.0
+    except Exception as ex:  # a diagnostic must never break the call
+        warn_once("sp:" + type(ex).__name__, f"screen particle inspection failed ({type(ex).__name__}: {ex})")
+
+
+def watch_particles(pc: Any, now: float) -> None:
+    S.sp_next = now + 1.0
+    try:
+        for rec in particle_records(pc):
+            log(f"screen particle at {vec_tuple(rec.Component.Translation)}, camera at {view_location(pc)}")
+    except Exception as ex:
+        S.sp_until = 0.0
+        warn_once("spwatch:" + type(ex).__name__, f"screen particle watch failed ({type(ex).__name__}: {ex})")
+
+
+SEEN_PARTICLES: set[str] = set()     # ShowScreenParticle also runs for repeating effects (burning, shock): log each once
+
+
+@hook("WillowGame.WillowPlayerController:ShowScreenParticle", Type.POST)
+def on_show_screen_particle(obj: Any, args: Any, ret: Any, func: Any) -> None:
+    template = str(getattr(args, "Template", None))
+    if template not in SEEN_PARTICLES:
+        SEEN_PARTICLES.add(template)
+        on_screen_particle(obj, "ShowScreenParticle")
+
+
+@hook("WillowGame.WillowPlayerController:SetUpVoGScreenParticle", Type.POST)
+def on_vog_screen_particle(obj: Any, args: Any, ret: Any, func: Any) -> None:
+    on_screen_particle(obj, "SetUpVoGScreenParticle")
 
 
 def apply_layout_now(movie: Any) -> None:

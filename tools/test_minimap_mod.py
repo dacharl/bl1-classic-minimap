@@ -1184,6 +1184,39 @@ def main(gfx_path, on_import=None):
         step(mod.TICK_INTERVAL + 0.01)
     assert "Angel's screen" not in buf.getvalue()
     movie2.root.children.pop('vog')
+    # Run 26 (PC): Angel's video sat top right behind the map while the root vog clip stayed 0 x 0 and there was no
+    # screen mesh. Classic shows it as a screen particle (ShowScreenParticle attaches a ParticleSystemComponent to the
+    # pawn; SetUpVoGScreenParticle puts the ECHO video in its material). Log every record: template, component
+    # placement and each emitter's modules, then the component against the camera once a second for a while.
+    location = Struct(_type='ParticleModuleLocation', StartLocation=Struct(Constant=vec(0.0, 0.0, 0.0)))
+    emitter = Struct(EmitterName='VoG_Screen', LODLevels=[Struct(Modules=[location], RequiredModule=Struct(
+        bUseLocalSpace=True, ScreenAlignment=0, Material="Material'FX.VoG'"))])
+    psc = Struct(Translation=vec(100.0, 0.0, 0.0), Rotation=Struct(Pitch=0, Yaw=0, Roll=0), Scale=1.0,
+                 Scale3D=vec(1.0, 1.0, 1.0), AbsoluteTranslation=True, AbsoluteRotation=True, DepthPriorityGroup=2)
+    template = Struct(Emitters=[emitter], _name="ParticleSystem'FX_VoG.VoG_Screen'")
+    pc.ScreenParticleRecords = [Struct(Template=template, Component=psc, MatParamName='Movie')]
+    pc.GetPlayerViewPoint = lambda loc, rot, *a: (None, vec(90.0, 0.0, 0.0), Struct(Pitch=0, Yaw=0, Roll=0))
+    buf = _io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        HOOKS['WillowGame.WillowPlayerController:SetUpVoGScreenParticle'](pc, Struct(Template=template), None, None)
+        psc.Translation = vec(150.0, 0.0, 0.0)
+        step(1.1)
+        KEYBINDS['Minimap diagnostics']()
+    out = buf.getvalue()
+    assert 'screen particle (SetUpVoGScreenParticle)' in out and 'VoG_Screen' in out, out
+    assert 'ParticleModuleLocation' in out and "'DepthPriorityGroup': 2" in out, out
+    assert 'screen particle at (150.0, 0.0, 0.0), camera at (90.0, 0.0, 0.0)' in out, out
+    assert "'screen_particles': [" in out, out
+    buf = _io.StringIO()
+    with contextlib.redirect_stdout(buf):            # other screen effects (burning, shock) repeat: log each once
+        for _ in range(3):
+            HOOKS['WillowGame.WillowPlayerController:ShowScreenParticle'](pc, Struct(Template=template), None, None)
+    assert buf.getvalue().count('screen particle (ShowScreenParticle)') == 1, buf.getvalue()
+    pc.ScreenParticleRecords = None                             # missing property: no crash
+    with contextlib.redirect_stdout(io.StringIO()):
+        HOOKS['WillowGame.WillowPlayerController:SetUpVoGScreenParticle'](pc, None, None, None)
+        step(mod.VOG_WATCH_SECONDS + 1.0)
+    del pc.ScreenParticleRecords, pc.GetPlayerViewPoint
     # Feedback is optional when there is no viewport console; the diagnostic still reaches the log.
     console = pc.Player.ViewportClient.ViewportConsole
     pc.Player.ViewportClient.ViewportConsole = None
