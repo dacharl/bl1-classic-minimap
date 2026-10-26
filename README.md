@@ -11,7 +11,7 @@ A minimap for **Borderlands Game of the Year (classic)**, modelled on the one in
 
 The ECHO panel (including the Angel videos), the mission title and the objective checklist move left to make room while the minimap is shown, as they do in Enhanced. The minimap hides itself during the travel tunnel, in menus, in cutscenes and when you're down.
 
-> **Status:** v0.13.1 is a private test build: one-file install, with the HUD movie built from your own game files. v0.13.0 played well on the PC (with and without Enhanced's art, and with Extended UI). v0.13.1 adds Enhanced-style objective marks and refines the mod's own art. The Steam Deck run is next. The first public release will be 1.0.0.
+> **Status:** v0.14.0 is a private test build: one-file install, with the HUD movie built from your own game files. v0.13.x played well on the PC (with and without Enhanced's art, and with Extended UI). v0.14.0 adds a zoom mode that keeps Enhanced's zoom when you switch missions. The Steam Deck run is next. The first public release will be 1.0.0.
 
 ## Requirements
 
@@ -52,7 +52,8 @@ Open **MODS → Classic Minimap**:
 | Position | **Docked** (default): where Enhanced puts it, tilted like the HUD, with ECHO and the mission text moved aside. **Custom**: uses the size and margin sliders below, with no tilt and no HUD changes. |
 | Docked size (%) | Size of the docked minimap. |
 | Size (%), Right margin, Top margin | Placement when Position is Custom. |
-| Zoom (vs Enhanced) | 100% uses Enhanced's objective-fit zoom, captured on map initialization or a rebuild; lower shows more of the map. Objective changes keep the fit; F8 recalculates it. |
+| Zoom (vs Enhanced) | 100% uses Enhanced's objective-fit zoom; lower shows more of the map. Applies in either zoom mode. |
+| Zoom mode | **Enhanced** (default): the zoom is fitted to you and your objectives once per level load, as in Enhanced; switching missions keeps it. **Objective**: also refits when your tracked mission or its status changes. **F8** refits in both modes. |
 | Icon size (%) | Size of landmark, player and enemy icons; 100% matches Enhanced. |
 | Rotate with player | Rotate the map so you always face up (north marker moves around the edge). |
 | Show enemies | Red dots for enemies the radar tracks. |
@@ -61,12 +62,12 @@ Open **MODS → Classic Minimap**:
 | Tint objective diamonds | Off (default, like Enhanced): a mission ready to hand in shows the turn-in mark, and one not started shows "!", in place of the objective diamond. On: the diamond stays and turns gold (ready to hand in) or green (not started), as in earlier versions. |
 | Hide compass | Hide the classic compass strip at the bottom. |
 | Use Enhanced artwork | On (default): Enhanced's artwork when Enhanced is installed. Off: the mod's own art. Takes effect from the next level load. |
-| Rebuild now | Re-collect landmarks and objectives (same as F8). |
-| Rebuild HUD movie | Build the HUD movie from your game files again, for example after installing Enhanced. Takes effect from the next level load. |
+| Refresh map markers | Re-collect landmarks and objectives and refit the zoom (same as F8). |
+| Rebuild HUD movie from game files | Build the minimap's HUD movie from your game files again, for example after installing Enhanced. Takes effect from the next level load. |
 
 **Keys:** **F8** rebuilds the minimap's markers. **F7** writes a diagnostic snapshot to the SDK log and confirms it in the in-game console; it includes which art is in use and which game files the movie was built from. Please include the snapshot with bug reports.
 
-**Enhanced installed somewhere unusual?** Set `"Enhanced folder"` in `…\sdk_mods\settings\classic_minimap.json` to Enhanced's game folder, then press **Rebuild HUD movie**.
+**Enhanced installed somewhere unusual?** Set `"Enhanced folder"` in `…\sdk_mods\settings\classic_minimap.json` to Enhanced's game folder, then press **Rebuild HUD movie from game files**.
 
 ## Art
 

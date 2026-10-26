@@ -1136,9 +1136,38 @@ def main(gfx_path, on_import=None):
     slots[0].WaypointLocation = vec(2000, 3000, 0)
     step(0.6)
     close(fitted_art.get('_xscale'), 185.27, 0.02)
+    # PLAN_V14: "Zoom mode" Enhanced (default) keeps the HUD's fit like Enhanced does: closing the status menu, where
+    # missions are switched, rebuilds the markers only (RebuildMinimapObjects), and a new tracked mission keeps it too
+    assert mod.opt_zoom_mode.value == 'Enhanced'
+    slots[0].WaypointLocation = vec(20000, 30000, 0)       # far: a refit would give 108%
+    HOOKS['WillowGame.StatusMenuExGFxMovie:OnClose'](None, None, None, None)
+    step(); step(0.6)
+    close(fitted_art.get('_xscale'), 185.27, 0.02)
+    tracker.ActiveMission = mission_b
+    step(0.6); step()
+    close(fitted_art.get('_xscale'), 185.27, 0.02)
+    # Objective mode refits when the tracked mission or its status changes, not when a waypoint moves within it
+    mod.opt_zoom_mode.value = 'Objective'
+    tracker.ActiveMission = mission_a
+    step(0.6); step()
+    close(fitted_art.get('_xscale'), 108, 0.02)
+    slots[0].WaypointLocation = vec(6000, 9000, 0)
+    step(0.6); step()
+    close(fitted_art.get('_xscale'), 108, 0.02)
+    status_a.Status = 2                                    # ready to hand in: a status change refits
+    step(0.6); step()
+    close(fitted_art.get('_xscale'), 185.27, 0.02)
+    mod.opt_zoom_mode.value = 'Enhanced'
+    status_a.Status = 1
+    slots[0].WaypointLocation = vec(2000, 3000, 0)
+    step(0.6); step()
+    close(fitted_art.get('_xscale'), 185.27, 0.02)
+    # F8 ("Refresh map markers") refits in either mode
     KEYBINDS['Rebuild minimap']()
     step()
     close(fitted_art.get('_xscale'), 400)
+    assert mod.opt_rebuild.identifier == 'Refresh map markers'
+    assert mod.opt_rebuild_movie.identifier == 'Rebuild HUD movie from game files'
     for offset, expected in ((None, 108), ((20000, 30000, 0), 108), ((6000, 9000, 0), 185.27)):
         slots[0].WaypointLocation = vec(*offset) if offset else vec(0, 0, 0)
         KEYBINDS['Rebuild minimap']()

@@ -55,7 +55,7 @@ from . import hudmovie
 from .swfmerge import MergeRefused
 from .swfmerge import merge as merge_movie
 
-__version__ = "0.13.1"
+__version__ = "0.14.0"
 
 
 STAGE_W = 1280.0                       # classic HUD stage is 1280x720
@@ -118,6 +118,10 @@ opt_margin_x = SliderOption("Right margin", 24, 0, 400, description="Custom posi
 opt_margin_y = SliderOption("Top margin", 20, 0, 600, description="Custom position: distance from the top.")
 opt_zoom = SpinnerOption("Zoom (vs Enhanced)", "100%", ZOOM_CHOICES,
                          description="Map zoom; 100% matches the Enhanced edition's minimap.")
+opt_zoom_mode = SpinnerOption("Zoom mode", "Enhanced", ["Enhanced", "Objective"],
+                              description="Enhanced: fit the zoom to you and your objectives once per level load, "
+                                          "like Enhanced. Objective: also refit when your tracked mission or its "
+                                          "status changes. F8 refits in both.")
 opt_icon_size = SliderOption("Icon size (%)", 100, 50, 200,
                              description="Landmark, player and enemy icon size; 100% matches Enhanced.")
 opt_givers = BoolOption("Show mission givers", True,
@@ -200,7 +204,10 @@ class State:
         self.anchor_attempts = 0
         self.shown: Any = None             # last map._visible we set (None = unknown, set next tick)
         self.last_hidden_reason = "start"
-        self.rebuild_pending = False       # explicit rebuild: refresh the fit and markers on the next tick
+        self.rebuild_pending = False       # rebuild the markers on the next tick...
+        self.rebuild_refit = False         # ...and refit the zoom (F8, option changes; not the status menu)
+        self.mission_key: Any = None       # tracked mission and status at the last collect (Objective zoom mode)
+        self.fit_mission: Any = None       # ... and at the last fit
         # docking (PLAN_V07 3): layout name when docked, p1 signature it was computed for, HUD column state
         self.dock: Any = None
         self.p1_sig: Any = None
@@ -564,7 +571,7 @@ def redirect() -> bool:
 
 
 def remake_movie(rebuild: bool = False, use_enhanced: Any = None) -> None:
-    """"Use Enhanced artwork" or "Rebuild HUD movie": build again, then re-point the template (or re-merge into
+    """"Use Enhanced artwork" or "Rebuild HUD movie from game files": build again, then re-point the template (or re-merge into
     the other mod's movie). HUDs already up keep their movie; the next level load uses the new one."""
     tmpl = Redirect.template
     if Redirect.merged_active and tmpl is not None and tmpl.MovieInfo == Redirect.merged:
@@ -713,6 +720,7 @@ def collect(pc: Any, movie: Any) -> bool:
         except Exception:
             S.objective_key = None
         S.objective_frame, S.tint = objective_style(pc)
+        S.mission_key = mission_key(pc)
         # DLC zones share the dlcmap1 frame, whose action loads the DLC movie only when the playhead enters it.
         # A new DLC on the same HUD (T-Bone -> Tartarus, run 14) would keep the old art, so leave the frame first.
         if S.anchor["DLCMap"] not in ("None", old_dlc):
@@ -886,14 +894,16 @@ def capture(movie: Any, in_place: bool = False) -> bool:
         return False
     S.cs = coord_scale(S.anchor["TextureSize"], w, h)    # ratio only: same at any zoom
     fit_anchor = {k: v for k, v in S.anchor.items() if k != "fields"}
-    if S.fit_anchor != fit_anchor:
+    # Enhanced fits once per HUD (PLAN_V14); "Objective" zoom mode also refits for a new tracked mission or status
+    new_mission = opt_zoom_mode.value == "Objective" and S.fit_mission != S.mission_key
+    if S.fit_anchor != fit_anchor or new_mission:
         scale = get_num(movie, "map.maps.themap._xscale")
         if not finite_positive(scale):
             return False
         S.fit_points, S.fit_has_pawn = S.zoom_points[:], S.zoom_has_pawn
         S.fit_art = (w * 100 / scale, h * 100 / scale)
         S.fit_raw, S.fit = fit_zoom(S.fit_points, S.xf, S.cs, *S.fit_art)
-        S.fit_anchor = fit_anchor
+        S.fit_anchor, S.fit_mission = fit_anchor, S.mission_key
         S.fit_pending = True              # confirm once the map is shown (refit_when_shown)
     S.frame = get_num(movie, "map.maps._currentframe")
     S.marks = []
@@ -1122,6 +1132,16 @@ def mission_status(pc: Any, mission: Any) -> Any:
             if entry.MissionDef == mission:
                 return int(entry.Status)
     return None
+
+
+def mission_key(pc: Any) -> tuple[str, str]:
+    """The tracked mission and its status: what the "Objective" zoom mode refits on (PLAN_V14 decision 2)."""
+    mission = tracked_mission()
+    try:
+        status = mission_status(pc, mission)
+    except Exception:
+        status = None
+    return str(mission), str(status)
 
 
 def objective_style(pc: Any) -> tuple[str, Any]:
@@ -1353,8 +1373,9 @@ def tick(pc: Any) -> None:
         S.next_dock_check = now + DOCK_CHECK_INTERVAL
         check_dock(movie)
     if S.rebuild_pending:
-        S.rebuild_pending = False
-        S.fit_anchor = None
+        if S.rebuild_refit:
+            S.fit_anchor = None
+        S.rebuild_pending = S.rebuild_refit = False
         rebuild_in_place(pc, movie)
     elif now >= S.next_objective_check:
         S.next_objective_check = now + OBJECTIVE_CHECK_INTERVAL
@@ -1403,11 +1424,13 @@ def on_player_tick(obj: Any, args: Any, ret: Any, func: Any) -> None:
         S.reset()
 
 
-def rebuild() -> None:
+def rebuild(refit: bool = True) -> None:
     """Re-collect landmarks/objectives on the next tick: in place while the map runs (no blank map);
-    otherwise start over."""
+    otherwise start over. refit=False keeps the zoom (closing the status menu, like Enhanced's
+    RebuildMinimapObjects; PLAN_V14)."""
     if S.phase == "running":
         S.rebuild_pending = True
+        S.rebuild_refit = S.rebuild_refit or refit
         return
     movie = S.movie
     teardown_hud = S.hud_on
@@ -1474,7 +1497,7 @@ def on_diag_key() -> None:
 
 @hook("WillowGame.StatusMenuExGFxMovie:OnClose", Type.POST)
 def on_status_menu_close(obj: Any, args: Any, ret: Any, func: Any) -> None:
-    rebuild()  # missions/waypoints may have changed while the menu was open
+    rebuild(refit=False)  # missions/waypoints may have changed while the menu was open; the zoom mode decides refits
 
 
 def apply_layout_now(movie: Any) -> None:
@@ -1494,9 +1517,9 @@ for _opt in (opt_position, opt_dock_size, opt_scale, opt_margin_x, opt_margin_y,
 opt_givers.on_change_while_enabled = lambda *_: rebuild()
 opt_objective_tint.on_change_while_enabled = lambda *_: rebuild()     # deferred: runs after the value is set
 
-opt_rebuild = ButtonOption("Rebuild now", on_press=lambda _: rebuild(),
-                           description="Re-collect landmarks and objectives.")
-opt_rebuild_movie = ButtonOption("Rebuild HUD movie", on_press=lambda _: remake_movie(rebuild=True),
+opt_rebuild = ButtonOption("Refresh map markers", on_press=lambda _: rebuild(),
+                           description="Re-collect landmarks and objectives and refit the zoom (same as F8).")
+opt_rebuild_movie = ButtonOption("Rebuild HUD movie from game files", on_press=lambda _: remake_movie(rebuild=True),
                                  description="Build the minimap's HUD movie from your game files again (for "
                                              "example after installing GOTY Enhanced). Takes effect from the next "
                                              "level load.")
@@ -1525,7 +1548,8 @@ def on_disable() -> None:
     unredirect()
 
 
-mod = build_mod(options=[opt_position, opt_dock_size, opt_scale, opt_margin_x, opt_margin_y, opt_zoom, opt_icon_size,
+mod = build_mod(options=[opt_position, opt_dock_size, opt_scale, opt_margin_x, opt_margin_y, opt_zoom, opt_zoom_mode,
+                         opt_icon_size,
                          opt_rotate, opt_rotation_offset, opt_threats, opt_threat_range, opt_givers, opt_objective_tint,
                          opt_hide_compass,
                          opt_enhanced_art, opt_rebuild, opt_rebuild_movie, opt_enhanced_folder])

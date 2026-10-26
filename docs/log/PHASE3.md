@@ -1018,4 +1018,87 @@ Findings for tuning:
 - **Real files (`release.py --game`):** the in-mod builds match. Enhanced art `9c8bb84c…3ab3`, original art
   `7825b499…a08b`; bundle `dist/releases/0.13.1` (`classic_minimap.sdkmod` `e3669056…62b5`, profiler
   `adb5d942…4287`).
+- **Gates:** 129 unit tests, both real-movie suites on both variants, and the gates pass. Committed as `c4ba0d6`.
+
+**v0.13.1 installed on the PC (2026-10-25 23:56 UTC, game closed):** `tools/install.py dist/releases/0.13.1 --profiler
+--backups <main checkout>/dist`.
+- **Installed:** `classic_minimap.sdkmod` 0.13.1 `e3669056…62b5` and `classic_minimap_profiler.sdkmod` 0.1.5
+  `adb5d942…4287`, SHA-256 verified against the bundle.
+- **Backups:** v0.13.0 (`4181461e…c013`, `370e2658…a0bd`) in the main checkout's
+  `dist\v0.13.0-20261025T235646.137461Z\`.
+- **Game files:** stock `GfxHUD.upk` unchanged (`5c515c3e…`). The old `GfxHUD_Minimap.upk` is no longer in the
+  Interface folder (removed by the user). Played in run 22 (§3al).
+
+## 3al. Run 22: v0.13.1 on the PC (2026-10-25 23:57–23:59 UTC)
+
+User screenshots at Claptrap in Fyrestone and `unrealsdk.log`.
+
+**Works:**
+- **Original art turn-in:** the tracked "Get A Little Blood On The Tires" was ready to hand in at Claptrap, and
+  the map showed **one** green "X" there: no gold diamond under it, no second giver mark.
+- **New mission:** after the turn-in, the gold "!" for the next mission appeared at Claptrap.
+- **Box:** the original art's box is a tight frame around the window.
+- **Enhanced art:** after switching "Use Enhanced artwork" on and quitting to load, Enhanced's art showed.
+- **The log:**
+  - the original-art movie built in 2.16 s and the Enhanced movie in 1.95 s; both were cache misses, because
+    0.13.1 changed the version in the key;
+  - the merge into Extended UI's movie worked;
+  - there were no errors or refusals;
+  - the user had removed the old `GfxHUD_Minimap.upk`, so no note appeared.
+
+**Research after run 22: zoom changes on mission switching (2026-10-26).** The user saw the zoom change when
+switching the tracked mission: out when the new waypoint leads to another map, in when it is in the same map.
+- **Enhanced script** (`uedis.py E`):
+  - `WillowHUDGFxMovie.extInitComplete`, which runs when the HUD movie initialises (level load), is the only
+    HUD path that fits: `ApplyScale`, `QuickAccessInit()`, then `AnalogScale(self, 1.0)`;
+  - `WillowHUDGFxMovie.RebuildMinimapObjects`, its objective-change event, only clears and rebuilds markers
+    (`ClearMapObjects`, `AS_ClearLandmarks`, `BuildMapObjects`), with no scale call;
+  - `StatusMenuExGFxMovie.extInitComplete` fits the status menu's own map, and only on the quick-access screen
+    (`QuickAccessScreen == 4`).
+- **Enhanced native (REA, Ghidra 12.1.4 on the decoded `BorderlandsGOTY` `92b53f7f…`, evidence
+  `ev_ccef4228…`):**
+  - `QuickAccessInit`'s body `0x14139a970` has **no direct callers**;
+  - its only references are two data words (`0x141ebae20`, `0x141ed1328`: inferred to be the vtable slots of the
+    two helper classes) and unwind data;
+  - native virtual calls to it are unresolved (unknown), but nothing at the script level calls it outside the
+    two `extInitComplete`s.
+- **Conclusion: Enhanced keeps the HUD's zoom until the next level load.** A mission switch changes the markers,
+  not the zoom.
+- **Our deviation:** `on_status_menu_close` calls `rebuild()`. While the map runs, that sets `rebuild_pending`,
+  which clears `fit_anchor` and refits to the new mission's waypoints. Mission switching happens in the status
+  menu, so every switch refits. The zoom grows for a nearby waypoint and shrinks for a far one: a waypoint
+  leading to another map points somewhere distant in this one. Not a v0.13 regression; it dates from v0.10's
+  "explicit rebuilds refit" combined with the status-menu hook (v0.6+).
+- **Open:** what `ActiveWaypointData` holds for an objective in another map (native waypoint resolution,
+  `WillowWaypoint.ResolveWaypointsFromScript`/`FindWaypoint`, not traced). It affects the level-load fit in both
+  editions alike; F7's `zoom_fit.points` in such a zone answers it in game.
+
+## 3am. v0.14.0: zoom mode (PLAN_V14 decisions 1–6; 2026-10-26, offline only)
+
+- **"Zoom mode"** (spinner):
+  - **Enhanced** (default): fits once per HUD, plus F8;
+  - **Objective:** also refits when `mission_key(pc)` (the tracked mission and its status) differs from the one
+    at the last fit.
+
+  `capture` compares `S.fit_mission` with `S.mission_key` (set in `collect`).
+- **Closing the status menu** now calls `rebuild(refit=False)`, which rebuilds the markers only, as Enhanced's
+  `RebuildMinimapObjects` does. `rebuild()` with the default `refit=True` (F8, the markers button, option changes)
+  still clears `fit_anchor`. `S.rebuild_refit` carries the choice to the next tick.
+- **Renamed buttons:** "Rebuild now" is now "Refresh map markers" and "Rebuild HUD movie" is "Rebuild HUD movie
+  from game files"; the merge refusal messages name the new button. The F8 keybind identifier is unchanged.
+- **Test (failed first):** the mod-suite PLAN_V10 block.
+  - **Enhanced:** a far waypoint plus closing the status menu keeps 185.27%, and so does a new tracked mission.
+  - **Objective:** a new tracked mission refits (108%); a waypoint moving within the same mission keeps it; a
+    status change refits (185.27%).
+  - F8 refits, and the new button names hold.
+- **Versions:** core 0.14.0, profiler 0.1.6 (`bump_version.py`).
+- **Real files (`release.py --game`):** the in-mod builds match. Enhanced art `3dda7ae2…6b72`, original art
+  `78740fd7…e178`; bundle `dist/releases/0.14.0` (`classic_minimap.sdkmod` `a2ea341d…f327`, profiler
+  `fb723b37…1467`).
 - **Gates:** 129 unit tests, both real-movie suites on both variants, and the gates pass. Not installed or played.
+
+**Not yet seen:**
+- the Enhanced green turn-in mark at a ready objective (the turn-in was done in original art);
+- "Tint objective diamonds" in game;
+- a cache hit after switching back to an art that is already cached;
+- the Steam Deck.
