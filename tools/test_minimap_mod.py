@@ -34,6 +34,13 @@ class Struct(types.SimpleNamespace):
     pass
 
 
+class Obj(Struct):
+    """A UObject stand-in: str() is its stable path name, as in pyunrealsdk (not its fields)."""
+
+    def __str__(self):
+        return self._name
+
+
 HOOKS, KEYBINDS, CONSTRUCTED = {}, {}, []
 OBJECTS = {}            # path -> object, for find_object
 PACKAGES = {}           # package name -> {path: object} added by load_package
@@ -161,7 +168,8 @@ def install_stubs(helper_factory, get_pc):
 
     def hook(name, typ='PRE', **kw):
         def deco(f):
-            HOOKS[name] = f
+            HOOKS.setdefault(name, f)                   # the first hook on a function, by name...
+            HOOKS['%s:%s' % (name, str(typ).lower())] = f   # ...and every hook by name and type
             return f
         return deco
 
@@ -1188,14 +1196,18 @@ def main(gfx_path, on_import=None):
     # screen mesh. Classic shows it as a screen particle (ShowScreenParticle attaches a ParticleSystemComponent to the
     # pawn; SetUpVoGScreenParticle puts the ECHO video in its material). Log every record: template, component
     # placement and each emitter's modules, then the component against the camera once a second for a while.
-    location = Struct(_type='ParticleModuleLocation', StartLocation=Struct(Constant=vec(0.0, 0.0, 0.0)))
+    # Cooked start locations have no Distribution object, only the baked lookup table: [min in, time scale, then
+    # LookupTableChunkSize floats per entry] (X forward, Y right, Z up in the camera-aligned local space)
+    table = [0.0, 0.0, 0.0, 95.0, 40.0]
+    location = Struct(_type='ParticleModuleLocation', StartLocation=Struct(
+        Distribution=None, Type=0, Op=1, LookupTableNumElements=1, LookupTableChunkSize=3, LookupTable=table))
     emitter = Struct(EmitterName='VoG_Screen', LODLevels=[Struct(Modules=[location], RequiredModule=Struct(
         bUseLocalSpace=True, ScreenAlignment=0, Material="Material'FX.VoG'"))])
     psc = Struct(Translation=vec(100.0, 0.0, 0.0), Rotation=Struct(Pitch=0, Yaw=0, Roll=0), Scale=1.0,
                  Scale3D=vec(1.0, 1.0, 1.0), AbsoluteTranslation=True, AbsoluteRotation=True, DepthPriorityGroup=2)
-    template = Struct(Emitters=[emitter], _name="ParticleSystem'FX_VoG.VoG_Screen'")
+    template = Obj(Emitters=[emitter], _name="ParticleSystem'fx_PostProcess.VoG.part_VoG_Pulse'")
     pc.ScreenParticleRecords = [Struct(Template=template, Component=psc, MatParamName='Movie')]
-    pc.GetPlayerViewPoint = lambda loc, rot, *a: (None, vec(90.0, 0.0, 0.0), Struct(Pitch=0, Yaw=0, Roll=0))
+    pc.GetPlayerViewPoint = lambda loc, rot, *a: (None, vec(90.0, 0.0, 0.0), Struct(Pitch=-5894, Yaw=-3997, Roll=0))
     buf = _io.StringIO()
     with contextlib.redirect_stdout(buf):
         HOOKS['WillowGame.WillowPlayerController:SetUpVoGScreenParticle'](pc, Struct(Template=template), None, None)
@@ -1205,13 +1217,44 @@ def main(gfx_path, on_import=None):
     out = buf.getvalue()
     assert 'screen particle (SetUpVoGScreenParticle)' in out and 'VoG_Screen' in out, out
     assert 'ParticleModuleLocation' in out and "'DepthPriorityGroup': 2" in out, out
-    assert 'screen particle at (150.0, 0.0, 0.0), camera at (90.0, 0.0, 0.0)' in out, out
+    assert "'table': [0.0, 0.0, 0.0, 95.0, 40.0]" in out and "'chunk': 3" in out, out
+    assert 'screen particle at (150.0, 0.0, 0.0) rotation (0, 0, 0), camera at (90.0, 0.0, 0.0) rotation (-5894, -3997, 0)' \
+        in out, out
     assert "'screen_particles': [" in out, out
     buf = _io.StringIO()
     with contextlib.redirect_stdout(buf):            # other screen effects (burning, shock) repeat: log each once
         for _ in range(3):
-            HOOKS['WillowGame.WillowPlayerController:ShowScreenParticle'](pc, Struct(Template=template), None, None)
+            HOOKS['WillowGame.WillowPlayerController:ShowScreenParticle:post'](pc, Struct(Template=template), None, None)
     assert buf.getvalue().count('screen particle (ShowScreenParticle)') == 1, buf.getvalue()
+    # Run 27: the particle sits on the camera's view axis and its top-right offset is the emitter's local start
+    # location. "Angel position (experiment)" = Enhanced zeroes the sideways (Y) part before the effect starts (PRE
+    # ShowScreenParticle), centring her like Enhanced; Classic puts the authored values back. Other effects are left alone.
+    show_pre = HOOKS['WillowGame.WillowPlayerController:ShowScreenParticle:pre']
+    mod.opt_angel_position.value = 'Enhanced'
+    buf = _io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        show_pre(pc, Struct(Template=template), None, None)
+        show_pre(pc, Struct(Template=template), None, None)            # idempotent
+    assert table == [0.0, 0.0, 0.0, 0.0, 40.0], table
+    assert buf.getvalue().count("Angel's video centred") == 1, buf.getvalue()
+    other_table = [0.0, 0.0, 0.0, 30.0, 0.0]
+    other = Obj(_name="ParticleSystem'fx_PostProcess.Burn'", Emitters=[Struct(EmitterName='Burn', LODLevels=[Struct(RequiredModule=None, Modules=[Struct(
+        _type='ParticleModuleLocation', StartLocation=Struct(Distribution=None, LookupTableChunkSize=3,
+                                                             LookupTable=other_table))])])])
+    with contextlib.redirect_stdout(io.StringIO()):
+        show_pre(pc, Struct(Template=other), None, None)
+    assert other_table == [0.0, 0.0, 0.0, 30.0, 0.0], 'only the VoG template is changed'
+    wide = [0.0, 0.0, 0.0, 90.0, 40.0, 0.0, 100.0, 50.0]                 # random range: min XYZ, max XYZ
+    rng = Obj(Emitters=[Struct(EmitterName='Main_VOG', LODLevels=[Struct(RequiredModule=None, Modules=[Struct(
+        _type='ParticleModuleLocation', StartLocation=Struct(Distribution=None, LookupTableChunkSize=6,
+                                                             LookupTable=wide))])])], _name="ParticleSystem'VoG_Range'")
+    with contextlib.redirect_stdout(io.StringIO()):
+        show_pre(pc, Struct(Template=rng), None, None)
+    assert wide == [0.0, 0.0, 0.0, 0.0, 40.0, 0.0, 0.0, 50.0], wide
+    mod.opt_angel_position.value = 'Classic'
+    with contextlib.redirect_stdout(io.StringIO()):
+        show_pre(pc, Struct(Template=template), None, None)
+    assert table == [0.0, 0.0, 0.0, 95.0, 40.0], 'Classic restores the authored offset'
     pc.ScreenParticleRecords = None                             # missing property: no crash
     with contextlib.redirect_stdout(io.StringIO()):
         HOOKS['WillowGame.WillowPlayerController:SetUpVoGScreenParticle'](pc, None, None, None)

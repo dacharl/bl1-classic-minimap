@@ -1360,7 +1360,76 @@ Both suites pass on both art variants; 129 unit tests, coverage, ruff and reposi
 **Built (not installed):** `dist/releases/0.14.3/` holds `classic_minimap.sdkmod` 0.14.3 `48d426bb…d8fc` and the
 profiler 0.1.9 `2c63f50f…b60f`.
 
+**Committed** as `187392d`.
+
+**Installed on the PC (2026-10-26 22:35 UTC, game closed):** `classic_minimap.sdkmod` 0.14.3 `48d426bb…d8fc` and the
+profiler 0.1.9 `2c63f50f…b60f`, SHA-256 verified. v0.14.2 (`5d2380c3…0547`, `23018d24…1139`) is backed up in the
+main checkout's `dist\v0.14.2-20261026T223549.859286Z\`. The stock `GfxHUD.upk` is unchanged (`5c515c3e…`).
+
+**Run 27 result and the next step:** §3ar.
+
 **Next:** at Angel's next call, read the dump. Moving her video needs one of these, which the dump should show:
 - the component follows the camera and has an offset we can change;
 - a location module whose start location sets the offset;
 - or a material or screen-alignment setting that places it in screen space.
+
+## 3ar. Run 27: v0.14.3 on the PC, Angel's particle dumped → v0.14.4 placement experiment (2026-10-26)
+
+**Run (PC, Enhanced art, Extended UI, Arid, 22:37–22:38 UTC; log only):** one Angel call at 22:37:53. Three F7s
+were taken during the call (two) and after it (one, `screen_particles: []`).
+
+**Dump:**
+- **Template:** `ParticleSystem'fx_PostProcess.VoG.part_VoG_Pulse'`, material parameter `VoGMaterial`.
+- **Component:**
+  - At `ShowScreenParticle`: translation (0, 0, 0).
+  - During the call: translation (−16831.3, 31912.1, −81.9), rotation (−5894, −3997, 0), scale 15.93.
+  - Flags: absolute translation, rotation and scale; `SDPG_Foreground`; owner-only.
+- **Camera** (still for 6 s): (−17072.3, 32009.3, 83.0).
+  - The offset (241.0, −97.2, −164.9) is 307.8 units long, at yaw −21.96° and pitch −32.4°. Those are exactly the
+    component's rotation.
+  - So the engine places the effect on a ray out from the camera, along the component's rotation (most likely the
+    camera's own rotation), and scales it by 15.93.
+- **Emitter `Main_VOG`:** local space, `PSA_Rectangle` (camera-facing), material
+  `fx_PostProcess.VoG.VoG_Mati`.
+  - Modules: `ParticleModuleLocation` (cooked: `StartLocation.Distribution` is None), `Size`, `Lifetime`, `Color`,
+    `ColorScaleOverLife`, `MaterialByParameter`.
+  - `ScreenParticleModifier` holds only `ScalarParams` (material parameters), so it doesn't place the effect.
+
+**Inference:** with the component on the view axis, her top-right placement comes from the emitter's local start
+location (X forward, Y right, Z up). It is baked into `StartLocation.LookupTable`, which v0.14.3 didn't print.
+The camera rotation wasn't logged either, so "component rotation = camera rotation" is still unconfirmed.
+
+**Change → v0.14.4 + profiler 0.1.10:**
+- **Logging:** the dump prints each start location's lookup table (`dist`, `op`, `chunk`, `table`), and the watch
+  lines add the component's and the camera's rotation.
+- **"Angel position (experiment)" = Enhanced** now acts on this particle. A PRE hook on `ShowScreenParticle`
+  edits the template before the effect starts:
+  - only templates whose name contains `VoG`;
+  - it zeroes the Y (sideways) value of every lookup-table entry (index 2 + k·chunk + 1, and + 4 for min/max
+    entries), which should centre her horizontally at the same height, like Enhanced's top centre;
+  - it keeps the original table, and Classic restores it on the next call.
+  - The edit is in memory only (no game file changes), and it logs before → after once.
+- The option's description now says "centred at the top, like GOTY Enhanced… applies from her next call". The
+  ScreenMesh part of the v0.14.1 spike stays but never fires in classic.
+- The test stubs register hooks by name and type (`name:pre` / `name:post`). UObject stand-ins (`Obj`) print as
+  their path, like pyunrealsdk objects.
+
+**Tests (red first):**
+- the lookup-table dump and the rotation watch line;
+- Enhanced zeroes Y once (idempotent) and handles 3- and 6-float entries;
+- a non-VoG template is untouched;
+- Classic restores the table.
+
+Both suites pass on both art variants; 129 unit tests, coverage, ruff and repository checks pass.
+`release.py --game --enhanced`: the in-mod build matches (`00928658…860f`).
+
+**Built (not installed):** `dist/releases/0.14.4/` holds `classic_minimap.sdkmod` 0.14.4 `4a6d7886…a9ed` and the
+profiler 0.1.10 `84ab5543…c2de`.
+
+**Unverified:**
+- whether the lookup table holds the offset and Y is the sideways axis;
+- whether pyunrealsdk's struct access edits the template in place (the code also writes the struct back);
+- whether an edited table survives a level load (it re-applies every call).
+
+**Next run:** set "Angel position (experiment)" to Enhanced, trigger an Angel call, and check her position and the
+`Angel's video centred` line.

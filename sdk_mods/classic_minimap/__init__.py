@@ -55,7 +55,7 @@ from . import hudmovie
 from .swfmerge import MergeRefused
 from .swfmerge import merge as merge_movie
 
-__version__ = "0.14.3"
+__version__ = "0.14.4"
 
 
 STAGE_W = 1280.0                       # classic HUD stage is 1280x720
@@ -151,8 +151,8 @@ opt_enhanced_art = BoolOption("Use Enhanced artwork", True,
                               on_change_while_enabled=lambda _, value: remake_movie(use_enhanced=value))
 opt_angel_position = SpinnerOption("Angel position (experiment)", "Classic", ["Classic", "Enhanced"],
                                    description="Where Angel's video appears. Classic: top right, behind the minimap. "
-                                               "Enhanced: tries Enhanced's placement (top centre). Experimental; "
-                                               "each call logs where her screen sits.")
+                                               "Enhanced: centred at the top, like GOTY Enhanced. Experimental; "
+                                               "applies from her next call.")
 opt_enhanced_folder = HiddenOption("Enhanced folder", "",
                                    description="GOTY Enhanced's game folder, if the mod doesn't find it itself.")
 
@@ -1686,6 +1686,12 @@ def module_state(m: Any) -> Any:
     start = getattr(m, "StartLocation", None)
     if start is None:
         return name
+    table = getattr(start, "LookupTable", None)
+    if table is not None:                       # cooked: only the baked lookup table is left (run 27)
+        dist = getattr(start, "Distribution", None)
+        return {name: {"dist": type_name(dist) if dist is not None else None, "op": str(getattr(start, "Op", "")),
+                       "chunk": getattr(start, "LookupTableChunkSize", None),
+                       "table": [round(float(v), 2) for v in table]}}
     dist = getattr(start, "Distribution", start)
     const = getattr(dist, "Constant", None)
     return {name: vec_tuple(const) if const is not None else type_name(dist)}
@@ -1712,14 +1718,18 @@ def particle_records(pc: Any) -> list[Any]:
     return list(getattr(pc, "ScreenParticleRecords", None) or [])
 
 
-def view_location(pc: Any) -> Any:
+def rot_tuple(r: Any) -> tuple[int, int, int]:
+    return int(r.Pitch), int(r.Yaw), int(r.Roll)
+
+
+def view_point(pc: Any) -> str:
     try:
-        for v in pc.GetPlayerViewPoint(unrealsdk.make_struct("Vector"), unrealsdk.make_struct("Rotator")):
-            if hasattr(v, "X"):
-                return vec_tuple(v)
+        out = pc.GetPlayerViewPoint(unrealsdk.make_struct("Vector"), unrealsdk.make_struct("Rotator"))
+        loc = next(vec_tuple(v) for v in out if hasattr(v, "X"))
+        rot = next(rot_tuple(v) for v in out if hasattr(v, "Pitch"))
+        return f"{loc} rotation {rot}"
     except Exception as ex:
         return f"<{type(ex).__name__}>"
-    return None
 
 
 def on_screen_particle(pc: Any, name: str) -> None:
@@ -1734,10 +1744,59 @@ def watch_particles(pc: Any, now: float) -> None:
     S.sp_next = now + 1.0
     try:
         for rec in particle_records(pc):
-            log(f"screen particle at {vec_tuple(rec.Component.Translation)}, camera at {view_location(pc)}")
+            c = rec.Component
+            log(f"screen particle at {vec_tuple(c.Translation)} rotation {rot_tuple(c.Rotation)}, "
+                f"camera at {view_point(pc)}")
     except Exception as ex:
         S.sp_until = 0.0
         warn_once("spwatch:" + type(ex).__name__, f"screen particle watch failed ({type(ex).__name__}: {ex})")
+
+
+# Run 27: the VoG particle (fx_PostProcess.VoG.part_VoG_Pulse) sits on the camera's view axis; its top-right offset is
+# the emitter's local start location (X forward, Y right, Z up), cooked into StartLocation.LookupTable as
+# [min in, time scale, then LookupTableChunkSize floats per entry: XYZ, or min XYZ + max XYZ]. "Angel position
+# (experiment)" = Enhanced zeroes Y before the effect starts, centring her like Enhanced; Classic restores it.
+VOG_ORIGINAL: dict[tuple[str, int, int], list[float]] = {}
+
+
+def vog_location_tables(template: Any) -> list[tuple[tuple[str, int, int], Any, Any, Any]]:
+    out = []
+    for ei, e in enumerate(list(getattr(template, "Emitters", None) or [])):
+        for lod in list(getattr(e, "LODLevels", None) or [])[:1]:
+            for mi, m in enumerate(list(getattr(lod, "Modules", None) or [])):
+                start = getattr(m, "StartLocation", None)
+                table = getattr(start, "LookupTable", None)
+                if table is not None:
+                    out.append(((str(template), ei, mi), m, start, table))
+    return out
+
+
+def place_vog_particle(template: Any) -> None:
+    if "vog" not in str(template).lower():
+        return
+    for key, module, start, table in vog_location_tables(template):
+        chunk = int(getattr(start, "LookupTableChunkSize", 3) or 3)
+        if opt_angel_position.value == "Enhanced":
+            if key in VOG_ORIGINAL:
+                continue
+            VOG_ORIGINAL[key] = [float(v) for v in table]
+            sideways = [i for k in range(2, len(table) - 1, chunk) for i in (k + 1, k + 4) if i < min(k + chunk, len(table))]
+            for i in sideways:
+                table[i] = 0.0
+            log(f"Angel's video centred: start location {VOG_ORIGINAL[key]} -> {[float(v) for v in table]}")
+        elif key in VOG_ORIGINAL:
+            for i, v in enumerate(VOG_ORIGINAL.pop(key)):
+                table[i] = v
+            log("Angel's video back to its classic place")
+        module.StartLocation = start            # in case the struct came back as a copy
+
+
+@hook("WillowGame.WillowPlayerController:ShowScreenParticle", Type.PRE)
+def on_show_screen_particle_pre(obj: Any, args: Any, ret: Any, func: Any) -> None:
+    try:
+        place_vog_particle(getattr(args, "Template", None))
+    except Exception as ex:  # an experiment must never break the effect
+        warn_once("vogplace:" + type(ex).__name__, f"Angel placement failed ({type(ex).__name__}: {ex})")
 
 
 SEEN_PARTICLES: set[str] = set()     # ShowScreenParticle also runs for repeating effects (burning, shock): log each once
