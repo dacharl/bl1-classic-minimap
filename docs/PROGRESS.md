@@ -61,7 +61,8 @@ This page tracks where the project stands: what works, what's installed, how to 
 | v0.13 | Player-built movie: one-file install, movie cache, Enhanced discovery, original art, builder moved into the mod | Run 21 (PC): works with both arts and Extended UI (§3aj, §3ak) |
 | v0.13.1 | Enhanced-style objective marks (tint option), one mark per spot, green "X", tight box, cache per art | Run 22 (PC): one turn-in mark, "!", tight box, art switch confirmed (§3ak, §3al) |
 | v0.14.0 | Zoom mode (Enhanced: fit once per HUD; Objective: refit on mission change), clearer button names | Run 23 (PC): Objective zoom confirmed; rotation, autosave and Angel findings (§3am, §3an) |
-| v0.14.1 | Upright icons when rotating; Angel position spike (log plus experimental Enhanced placement) | Installed on the PC; not yet played (§3an) |
+| v0.14.1 | Upright icons when rotating; Angel position spike (log plus experimental Enhanced placement) | Run 24 (PC): the screen-mesh path never ran (§3an) |
+| v0.14.2 | Re-applies the ECHO/quest/checklist shift whenever the game resets it, checked every frame and every tick (run 25, Deck); Angel diagnostic logging the HUD root `vog` clip | Built, not installed (§3ao, §3ap) |
 | v0.11 | Separate optional profiler add-on 0.1.0, telemetry-free core artifact, frozen report contract, overhead benchmark | Built offline; not installed (§3z). Adapter in `steam-deck-scripts` pending |
 
 ## Doc map
@@ -174,9 +175,9 @@ That's one zone so far. **The decomp (ENHANCED_NATIVE.md §3) shows that the tru
 - Hosted CI verification of automatic workers remains pending; local validation is recorded in PHASE3 §3s.
 - **Player-built movie in game (PLAN_V13 step 6; the 1.0.0 gate's first part, decision 21):**
   - **PC done** (runs 21–23): both arts, Extended UI, the cache, the glyphs, and the old-package note.
-  - **Deck still to run** (v0.14.1): Proton paths, Enhanced through `libraryfolders.vdf` (if installed), both arts, Extended UI, and the build time.
+  - **Deck (run 25, v0.14.1, §3ap):** Proton paths, original art, Extended UI merge (3.31 s) and the build (2.03 s) work. The game reset the ECHO panel behind the map; v0.14.2 re-applies the shift. Still to run on the Deck: Enhanced through `libraryfolders.vdf`, if installed.
 - **v0.14.1 checks:** upright icons with "Rotate with player". The first Angel call's log answers the open questions: classic's mesh placement, whether `SetTranslation` works, and whether the native moves the mesh back. Compare "Angel position (experiment)" Classic with Enhanced.
-- **Angel's video (PLAN_V14):** a 3D screen mesh behind the minimap. Spike in v0.14.1, then decide between Enhanced's placement and another fix.
+- **Angel's video (PLAN_V14):** run 24 showed the v0.14.1 screen-mesh path never ran; the likely display is the HUD root `vog` clip (texture `texture1`, authored top centre). v0.14.2 logs that clip (§3ao); install it, trigger an Angel call, press F7 while she is on screen, then decide the fix.
 - **Autosave icon (open by user decision, 2026-10-26):** `WillowHUD` draws `SavingIndicator_INST` natively above the minimap. No change for now.
 - **Path to 1.0.0 (PLAN_V13 decisions 20–23):** PLAN_V14 for tuning (grilled after v0.13 is played); v0.14.x private builds; one pre-release through the release workflow's new `prerelease` input; then 1.0.0, the first public release.
 - **Mutation floors for the moved builder files** (`hudmovie`, `swfbuild`, `as2asm`, `swfdeps`, `upk`) are configured at 70 but not measured; add them to `cosmic-ray.toml` and measure on demand.

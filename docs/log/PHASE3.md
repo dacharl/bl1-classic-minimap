@@ -1185,10 +1185,119 @@ counter-rotation fix; leave the autosave open, without hiding the minimap.
   profiler 0.1.7 `f4c7d39e…0147`, SHA-256 verified.
 - **Backups:** v0.14.0 (`a2ea341d…f327`, `fb723b37…1467`) in the main checkout's
   `dist\v0.14.0-20261026T025655.020528Z\`.
-- **Game files:** stock `GfxHUD.upk` unchanged. Not yet played.
+- **Game files:** stock `GfxHUD.upk` unchanged.
+
+**Run 24 (v0.14.1, two PC sessions, 2026-10-26 03:09–03:26 UTC; logs pasted by the user):**
+- **The Angel spike captured nothing.** No "Angel call" line appeared, so `PlayVoGEchoCall` never ran, and every
+  F7 snapshot reported `'angel': None` (no `GFxUIManager.ScreenMesh`).
+- **So the Angel the user saw is not the 3D hologram path.** Re-research:
+  - classic's HUD root clip `vog` (sprite 80, depth 689) displays external image 39 named **`texture1`**, the
+    name the ECHO video code sets with `SetExternalTexture("texture1", video)`;
+  - Enhanced's `vog` (sprite 208, image 47) and Extended UI's merged HUD (sprite 80, image 39) are the same;
+  - all three place `vog` at (412, 90), 456 × 256.6, the top centre, which is where Enhanced shows Angel;
+  - the `echo` avatar's `vog` frame (sprite 211 frame 4) is only a static portrait that moves with `echo`.
+- **Open:** whether classic moves `vog` at runtime (native code; no HUD AS writes it) or the top-right image is
+  something else. v0.14.1's F7 doesn't record `vog`, and its hook only covers the hologram path.
+- Also seen:
+  - the movie cache worked across sessions (`read from the movie cache`, 0.06 s);
+  - the Extended UI merge took 3.0 s;
+  - Objective zoom refits on mission changes (164.6%, 151.0%, 400%) and keeps the fit otherwise.
 
 **Not yet seen:**
 - the Enhanced green turn-in mark at a ready objective (the turn-in was done in original art);
 - "Tint objective diamonds" in game;
 - a cache hit after switching back to an art that is already cached;
 - the Steam Deck.
+
+## 3ao. v0.14.2: Angel diagnostic for the root `vog` clip (2026-10-26, offline only)
+
+**Why:** run 24 (§3an) showed the v0.14.1 spike watched the wrong path. The likely display is the HUD root clip
+`vog`, which shows the ECHO video texture `texture1`. The classic scripts route ECHO calls through
+`Behavior_PlayEchoCall` → `ServerPlayEchoCall` → native `ClientPlayEchoCall`, and the HUD side through native
+`WillowHUDGFxMovie.PlayEchoCall`, so a hook alone may never fire. The diagnostic therefore reads the clip itself.
+
+**Change (diagnostic only; no visible behaviour change):**
+- F7 adds `'vog'`: the root clip's `_x`, `_y`, `_width`, `_height`, `_xscale`, `_yscale`, `_alpha`,
+  `_currentframe`, `_totalframes` and `_visible`, or `None` when the movie has no `vog`.
+- While the map runs, the clip is read once a second, and every change is logged as
+  `Angel's screen (root vog): {…}` (one baseline line per HUD).
+- Hooks on `WillowPlayerController:Behavior_PlayEchoCall`, `WillowPlayerController:ClientPlayEchoCall` and
+  `WillowHUDGFxMovie:PlayEchoCall` log `ECHO call (<name>)` and read the clip every tick for 15 s.
+- The v0.14.1 screen-mesh spike and "Angel position (experiment)" stay as they were.
+
+**Tests:** a new `test_minimap_mod.py` scenario (red first: F7 had no `'vog'`):
+- F7 with and without the clip;
+- one baseline line and no repeats, and a moved clip is logged;
+- each ECHO hook logs, and the next tick sees a change;
+- after 15 s the watch is back to once a second.
+
+Both suites pass on both art variants; 129 unit tests, coverage, ruff and the repository checks pass.
+`release.py --game --enhanced`: the in-mod build matches (Enhanced art, `ba2d0256…1885`).
+
+The first build (`bf2085a5…86ba`) was replaced before install by the run-25 fix (§3ap).
+
+**What the next run should show:** at an Angel call, whether `vog` becomes visible and where (`_x`/`_y` near
+(412, 90) = top centre as authored; a larger `_x` = moved right), and which ECHO hook, if any, fired.
+
+## 3ap. Run 25: v0.14.1 on the Steam Deck, original art; the ECHO panel reset behind the map (2026-10-26)
+
+**Setup (log provided by the user):** Steam Deck, v0.14.1 + profiler 0.1.7, no GOTY Enhanced (original art),
+Extended UI 1.3.2. Session 03:31–05:53 UTC.
+- The movie was built in 2.03 s and merged into Extended UI's movie in 3.31 s (840 386 bytes). The log noted
+  the old `GfxHUD_Minimap.upk` was still on the Deck, unused.
+- Zones: New Haven, Scrap caves, Interlude, Scrapyard, Pirate Bay, Trash Coast, Canyon. Every map and refit
+  worked, there were no errors, and the Docked placement was 16:9 with the tilt.
+
+**Symptom (user):** ECHO comms regularly appeared behind the minimap and its original art.
+
+**Evidence:** four F7 snapshots, all reporting `'hud_shifted': True`, `'dock': '16:9'`, `p1` unchanged and
+`'echo_x0': 791.45`:
+- 05:05:05: `echo_x` 610.0 (Enhanced's place, as set);
+- 05:06:47, same HUD movie: `echo_x` 791.45 (classic's authored place), with nothing logged in between;
+- 05:50:38 and 05:53:15, a new HUD movie that was shifted at 05:48:23: `echo_x` 791.45 again.
+
+The PC's run-24 snapshots were all 610.0, but that session was short.
+
+**Cause (inferred):**
+- No ActionScript in classic's or Extended UI's HUD writes `echo`'s position; the native code drives the root
+  layout frames by label (`16_9`, `16_9_end`, `16_9_off`, …).
+- `echo`'s place comes from p1's single first frame, so a re-played p1 puts it back while p1 itself (its
+  transform and `mmOrig`) stays the same. `check_dock` sees no p1 change, so the shift was never re-applied.
+- What triggers the re-play is not identified. It happened between gameplay events (probably ECHO calls), and
+  run 23's "Angel half behind the minimap" may be the same reset of this panel, which shows her avatar.
+
+**Fix (in v0.14.2):**
+- New AS `MinimapHudKeep`, run by every `tick` command. While the shift is on (`mmHudMode` 1) and `p1.echo._x`
+  is more than 0.5 from the shifted x, it re-applies `MinimapHudShift` with the stored placements and counts
+  the fix in `mmHudFixes`.
+- `MinimapHudShift` stores its placements as `_root.mmHud_<arg>` for this.
+- The once-a-second dock check logs `the game put the ECHO panel back behind the map; moved it again (N
+  times)`, and F7 adds `hud_fixes`.
+- No extra Python-to-GFx calls per tick; one extra read per second.
+- **Every frame too:** the user then reported a brief flicker of the panel behind the map before it moved,
+  even with v0.14.1. That means p1 is sometimes replaced outright, and v0.14.1's once-a-second re-dock caught
+  those cases late. The flicker also bounds a tick-only fix: up to 50 ms behind the map.
+  `MinimapCreate` therefore sets `map.onEnterFrame = MinimapHudKeep`, so the movie checks on every frame
+  before drawing it. The tick call stays as a fallback.
+  - Neither HUD movie uses `onEnterFrame`, so whether this runtime fires it is unverified.
+  - Expected effect: no flicker if it fires, at most one tick of flicker if not.
+
+**Tests (red first):**
+- AS: after the shift, the column is reset to authored, and the next tick puts it back (echo, quest, checklist
+  scale) with `mmHudFixes` = 1. A further tick doesn't count again, and after a restore ticks leave it alone.
+- AS: the map clip's `onEnterFrame` is `MinimapHudKeep`, and running it after a reset puts the column back.
+- Mod: the same reset in the stubbed game is moved back on the next step and logged once; F7 has `hud_fixes`.
+
+Both suites pass on both art variants; 129 unit tests, coverage, ruff and repository checks pass.
+`release.py --game --enhanced`: the in-mod build matches (Enhanced art, `6a6ef7dd…d181`).
+
+**Built (not installed):** `dist/releases/0.14.2/` holds `classic_minimap.sdkmod` 0.14.2 `5d2380c3…0547` and the
+profiler 0.1.8 `23018d24…1139`. The earlier tick-only build `776cf659…569f` was replaced.
+
+**Unverified:**
+- the fix in game;
+- whether `onEnterFrame` fires here, which would end the flicker;
+- what triggers the reset.
+
+**Next run:** the log should show `moved it again` lines where the panel used to stay behind the map, and F7
+`hud_fixes` > 0.

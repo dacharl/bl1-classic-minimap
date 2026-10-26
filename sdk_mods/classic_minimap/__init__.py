@@ -55,7 +55,7 @@ from . import hudmovie
 from .swfmerge import MergeRefused
 from .swfmerge import merge as merge_movie
 
-__version__ = "0.14.1"
+__version__ = "0.14.2"
 
 
 STAGE_W = 1280.0                       # classic HUD stage is 1280x720
@@ -101,6 +101,8 @@ STATUS_FRAME = {MS_NOT_STARTED: "newmission", MS_READY_TO_TURN_IN: "turnin"}   #
 STATUS_TINT = {MS_NOT_STARTED: 0x50E050, MS_READY_TO_TURN_IN: 0xFFC420}   # "Tint objective diamonds" (v0.6 style)
 VOG_ENHANCED = (-2.1, -0.4, 0.14)      # Enhanced's GlobalsDefinition.VoGSinglePlayerPosition X, Y, Z (W = 0); spike
 VOG_WATCH_SECONDS = 10.0               # after an Angel call: log (and with "Enhanced", undo) native moves of the mesh
+VOG_FAST_SECONDS = 15.0                # after an ECHO call: watch the root vog clip every tick (run 24 diagnostic)
+VOG_NUMBERS = ("_x", "_y", "_width", "_height", "_xscale", "_yscale", "_alpha", "_currentframe", "_totalframes")
 GIVER_OBJECTIVE_UU = 500.0             # a giver this close to an objective is its NPC: one mark there (PHASE3 3ak)
 LANDMARK_CLIP = "map.maps.landmarks"   # icon template clip (frames objective .. questionmark, turnin, newmission)
 RECORD_KINDS = {"FloatProperty", "IntProperty", "BoolProperty", "ByteProperty", "StrProperty", "NameProperty",
@@ -215,6 +217,9 @@ class State:
         self.vog_until = 0.0               # Angel-call watch window end (run 23 spike)...
         self.vog_next = 0.0                # ...next check...
         self.vog_last: Any = None          # ...and the mesh translation last seen
+        self.vog_clip: Any = ()            # root vog clip state last logged (() = not read yet; run 24 diagnostic)...
+        self.vog_clip_next = 0.0           # ...next once-a-second read...
+        self.vog_fast_until = 0.0          # ...and the end of the every-tick watch after an ECHO call
         self.mission_key: Any = None       # tracked mission and status at the last collect (Objective zoom mode)
         self.fit_mission: Any = None       # ... and at the last fit
         # docking (PLAN_V07 3): layout name when docked, p1 signature it was computed for, HUD column state
@@ -222,6 +227,7 @@ class State:
         self.p1_sig: Any = None
         self.dock_mode: Any = None
         self.hud_on = False
+        self.hud_fixes = 0                 # times the movie re-applied the shift after the game undid it
         self.next_dock_check = 0.0
         # copied at collection time (no native references)
         self.anchor: dict[str, Any] = {}
@@ -404,6 +410,11 @@ def check_dock(movie: Any) -> None:
     sig = p1_signature(movie)
     if sig != S.p1_sig:
         dock(movie, *custom_placement())
+    fixes = get_num(movie, "mmHudFixes")       # MinimapHudKeep re-applied the shift (run 25)
+    if finite(fixes) and fixes > S.hud_fixes:
+        S.hud_fixes = int(fixes)
+        log(f"the game put the ECHO panel back behind the map; moved it again ({S.hud_fixes} "
+            f"time{'s' if S.hud_fixes != 1 else ''})")
 
 
 def teardown(movie: Any = None) -> None:
@@ -1383,6 +1394,9 @@ def tick(pc: Any) -> None:
         check_dock(movie)
     if S.vog_until > now and now >= S.vog_next:
         watch_vog(pc, now)
+    if S.vog_fast_until > now or now >= S.vog_clip_next:
+        S.vog_clip_next = now + DOCK_CHECK_INTERVAL
+        watch_vog_clip(movie)
     if S.rebuild_pending:
         if S.rebuild_refit:
             S.fit_anchor = None
@@ -1471,6 +1485,7 @@ def on_diag_key() -> None:
                             "hud.MovieInfo": str(movie.MovieInfo) if movie is not None else None}
     mesh = vog_mesh(pc) if pc is not None else None
     info["angel"] = vog_state(mesh) if mesh is not None else None
+    info["vog"] = vog_clip_state(movie) if movie is not None else None
     r = Redirect.result
     info["hud_movie"] = None if r is None else {
         "art": r.art, "cached": r.cached, "seconds": round(r.seconds, 2), "bytes": len(r.data),
@@ -1489,7 +1504,7 @@ def on_diag_key() -> None:
                 p1=S.p1_sig)
     if movie is not None:
         info.update(dock_b=get_num(movie, "mmDockB"), echo_x=get_num(movie, "p1.echo._x"),
-                    echo_x0=get_num(movie, "mmEchoX0"))
+                    echo_x0=get_num(movie, "mmEchoX0"), hud_fixes=get_num(movie, "mmHudFixes"))
     if pc is not None:
         try:
             pts = radar_threats(pc)
@@ -1576,6 +1591,55 @@ def watch_vog(pc: Any, now: float) -> None:
             apply_vog_position(mesh)
             t = vog_translation(mesh)
         S.vog_last = t
+
+
+# Run 24 (PHASE3 3an): PlayVoGEchoCall never ran and there was no screen mesh. The HUD movie's root clip `vog`
+# (every edition authors it top centre, (412, 90), 456 x 256.6) shows external image "texture1", the name ECHO videos
+# are bound to, so Angel probably plays there. Log that clip: on F7, on every change (once a second), and every tick
+# for a while after a script-level ECHO call, to see whether classic moves it top right.
+
+def vog_clip_state(movie: Any) -> Any:
+    """The root vog clip's placement, or None when the movie has no such clip."""
+    nums = {k: get_num(movie, "vog." + k) for k in VOG_NUMBERS}
+    if not finite(nums["_x"]):
+        return None
+    out: dict[str, Any] = {k: round(v, 1) if finite(v) else v for k, v in nums.items()}
+    try:
+        out["_visible"] = bool(movie.GetVariableBool("vog._visible"))
+    except Exception as ex:
+        out["_visible"] = f"<{type(ex).__name__}>"
+    return out
+
+
+def watch_vog_clip(movie: Any) -> None:
+    try:
+        state = vog_clip_state(movie)
+    except Exception as ex:  # a diagnostic must never break the tick
+        warn_once("vogclip:" + type(ex).__name__, f"vog clip check failed ({type(ex).__name__}: {ex})")
+        return
+    if state != S.vog_clip:
+        S.vog_clip = state
+        log(f"Angel's screen (root vog): {state}")
+
+
+def on_echo_call(name: str) -> None:
+    log(f"ECHO call ({name}); watching the root vog clip for {VOG_FAST_SECONDS:g}s")
+    S.vog_fast_until = time.time() + VOG_FAST_SECONDS
+
+
+@hook("WillowGame.WillowPlayerController:Behavior_PlayEchoCall", Type.PRE)
+def on_behavior_echo_call(obj: Any, args: Any, ret: Any, func: Any) -> None:
+    on_echo_call("Behavior_PlayEchoCall")
+
+
+@hook("WillowGame.WillowPlayerController:ClientPlayEchoCall", Type.PRE)
+def on_client_echo_call(obj: Any, args: Any, ret: Any, func: Any) -> None:
+    on_echo_call("ClientPlayEchoCall")
+
+
+@hook("WillowGame.WillowHUDGFxMovie:PlayEchoCall", Type.PRE)
+def on_hud_echo_call(obj: Any, args: Any, ret: Any, func: Any) -> None:
+    on_echo_call("PlayEchoCall")
 
 
 def apply_layout_now(movie: Any) -> None:

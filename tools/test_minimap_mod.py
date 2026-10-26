@@ -684,6 +684,16 @@ def main(gfx_path, on_import=None):
         off(); step()
         assert m.get('_visible') is True, label + ' cleared: minimap back'
         close(p1c.get('echo').get('_x'), e16['echo'][0])
+    # Run 25 (Deck): the game re-plays p1's first frame, putting ECHO back behind the map with the shift still on.
+    # The next tick moves the column again; the once-a-second check logs it, and F7 counts it.
+    for n, (x, y) in P1_LAYOUTS['16:9']['column'].items():
+        p1c.get(n).props.update(_x=x, _y=y, _xscale=100.04)
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        step()
+        close(p1c.get('echo').get('_x'), e16['echo'][0]); close(p1c.get('quest').get('_x'), e16['quest'][0])
+        step(mod.DOCK_CHECK_INTERVAL)
+    assert 'the game put the ECHO panel back behind the map; moved it again (1 time)' in buf.getvalue(), buf.getvalue()
     # a level streams in (e.g. travel) -> hidden while it settles, back after 3 s; no flicker on rebuild
     world.StreamingLevels.append(types.SimpleNamespace(bIsVisible=True, LoadedLevel='Level arid_settle.TheWorld'))
     step(0.3)
@@ -1094,7 +1104,8 @@ def main(gfx_path, on_import=None):
     diag = buf.getvalue()
     assert console_lines == ['[Classic Minimap] Diagnostic snapshot written to Binaries/Plugins/unrealsdk.log.']
     assert 'diagnostics:' in diag and "'version': '%s'" % mod.__version__ in diag, diag[:300]
-    for field in ('dock_mode', 'radar_active', 'givers', 'giver_icons', 'zoom', 'icon_scale', 'echo_x0', 'hud_movie'):
+    for field in ('dock_mode', 'radar_active', 'givers', 'giver_icons', 'zoom', 'icon_scale', 'echo_x0', 'hud_movie',
+                  'hud_fixes'):
         assert "'%s'" % field in diag, field
     # PLAN_V13 decision 8: F7 says which art is in use and where the inputs came from
     assert "'art': 'original'" in diag and 'GfxHUD.upk' in diag and "'enhanced_folder': None" in diag, diag[-600:]
@@ -1134,6 +1145,45 @@ def main(gfx_path, on_import=None):
     with contextlib.redirect_stdout(io.StringIO()):
         vog_hook(pc, None, None, None)
     del pc.GFxUIManager
+    # Run 24 (PHASE3 3an): PlayVoGEchoCall never ran and there was no screen mesh. Every HUD movie's root clip `vog`
+    # (authored at (412, 90), 456 x 256.6) shows external image "texture1", the name ECHO videos are bound to. F7
+    # records that clip, a once-a-second watch logs every change to it, and the script-level ECHO entry points log
+    # the call and watch it every tick for a while.
+    assert "'vog': None" in buf.getvalue(), 'F7 records a missing vog clip as None'
+    vog = movie2.root.add(asvm.Clip('vog'))
+    vog.props.update(_x=412.0, _y=90.0, _width=456.0, _height=256.6, _xscale=100.0, _yscale=100.0, _visible=False,
+                     _alpha=100.0, _currentframe=1.0, _totalframes=1.0)
+    buf = _io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        KEYBINDS['Minimap diagnostics']()
+    assert "'vog': {" in buf.getvalue() and "'_x': 412.0" in buf.getvalue() and "'_visible': False" in buf.getvalue()
+    buf = _io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        step(1.1); step(1.1)
+    assert buf.getvalue().count("Angel's screen (root vog):") == 1, buf.getvalue()   # baseline once, no repeats
+    vog.props.update(_x=700.0, _visible=True)
+    buf = _io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        step(1.1)
+    assert "Angel's screen (root vog):" in buf.getvalue() and "'_x': 700.0" in buf.getvalue(), buf.getvalue()
+    for name in ('WillowGame.WillowPlayerController:Behavior_PlayEchoCall',
+                 'WillowGame.WillowPlayerController:ClientPlayEchoCall',
+                 'WillowGame.WillowHUDGFxMovie:PlayEchoCall'):
+        buf = _io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            HOOKS[name](pc, Struct(CallDef="EchoCallDefinition'Angel'"), None, None)
+            vog.props.update(_y=vog.props['_y'] + 1.0)
+            step(mod.TICK_INTERVAL + 0.01)                      # the fast watch sees it on the next tick
+        out = buf.getvalue()
+        assert 'ECHO call (%s)' % name.rsplit(':', 1)[1] in out and "Angel's screen (root vog):" in out, out
+    with contextlib.redirect_stdout(io.StringIO()):
+        step(mod.VOG_FAST_SECONDS + 1.0)                        # fast watch over: back to once a second
+    vog.props.update(_y=1.0)
+    buf = _io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        step(mod.TICK_INTERVAL + 0.01)
+    assert "Angel's screen" not in buf.getvalue()
+    movie2.root.children.pop('vog')
     # Feedback is optional when there is no viewport console; the diagnostic still reaches the log.
     console = pc.Player.ViewportClient.ViewportConsole
     pc.Player.ViewportClient.ViewportConsole = None

@@ -86,6 +86,7 @@ OBJECTIVE_SCALE = 0.55
 OBJECTIVE_HALF = 45.1 * OBJECTIVE_SCALE / 2
 SOURCE_CLIPS = ('landmarks', 'players', 'enemy')   # maps' icon templates that AddLandmark duplicates
 HUD_CLIPS = ('echo', 'quest', 'check1', 'check2', 'check3', 'check4', 'check5')   # p1 column we shift
+HUD_ARGS = ('ex', 'ey', 'qx', 'qy', 'cx', 'cy', 'cdy', 'csx', 'csy')                # MinimapHudShift's placements
 THREAT_DEPTH = 1000
 
 
@@ -168,6 +169,9 @@ def new_functions():
     a.setm('map', '_x', 'x').setm('map', '_y', 'y')
     a.setm('map', '_xscale', 'scale').setm('map', '_yscale', 'scale')
     a.setm('map', '_visible', True)
+    # the game can reset p1's column at any moment (run 25): check every movie frame, before it's drawn,
+    # instead of waiting for the mod's tick (which still calls it too)
+    a.setm('map', 'onEnterFrame', 'MinimapHudKeep')
     a.label('out')
     a.ret(('!', ('==', 'map', Ellipsis)))
     fns.append(function('MinimapCreate', ('x', 'y', 'scale'), a))
@@ -231,6 +235,7 @@ def new_functions():
           ('fn', 'Number', ('idx', 'parts', 3))))
     a.do(('fn', 'MinimapRecenter', ('==', ('idx', 'parts', 4), ('s', '1')), ('fn', 'Number', ('idx', 'parts', 5))))
     a.do(('fn', 'MinimapEdges'))
+    a.do(('fn', 'MinimapHudKeep'))
     a.ret(True)
     a.label('c_add')         # add~clip~u~v~deg~frame[~rgb]: one landmark icon (static), optionally tinted
     a.if_not(('==', 'op', ('s', 'add')), 'c_frame')
@@ -381,10 +386,30 @@ def new_functions():
         a.label('next_' + n)
     a.label('done')
     a.setm('_root', 'mmHudMode', 'mode')
+    for v in HUD_ARGS:
+        a.setm('_root', 'mmHud_' + v, v)          # for MinimapHudKeep
     a.ret(True)
     a.label('nop1')
     a.ret(False)
-    fns.append(function('MinimapHudShift', ('mode', 'ex', 'ey', 'qx', 'qy', 'cx', 'cy', 'cdy', 'csx', 'csy'), a))
+    fns.append(function('MinimapHudShift', ('mode', *HUD_ARGS), a))
+
+    # MinimapHudKeep (every tick): the game re-plays p1's first frame now and then (run 25, Deck: F7 read the
+    # shift on but echo back at its authored x), which puts the column back where the map sits. Re-apply the
+    # shift when echo isn't where it put it, and count it in mmHudFixes for F7.
+    a = Fn()
+    a.if_not(('==', '_root.mmHudMode', 1), 'keep_done')
+    a.local('d', ('-', ('mem', ('mem', '_root.p1', 'echo'), '_x'), '_root.mmHud_ex'))
+    a.if_not(('!', ('<', 'd', -0.5)), 'keep_fix')
+    a.if_not(('<', 0.5, 'd'), 'keep_done')
+    a.label('keep_fix')
+    a.do(('fn', 'MinimapHudShift', 1, *['_root.mmHud_' + v for v in HUD_ARGS]))
+    a.if_not(('==', '_root.mmHudFixes', Ellipsis), 'keep_count')
+    a.setm('_root', 'mmHudFixes', 0)
+    a.label('keep_count')
+    a.setm('_root', 'mmHudFixes', ('+', '_root.mmHudFixes', 1))
+    a.label('keep_done')
+    a.ret(True)
+    fns.append(function('MinimapHudKeep', (), a))
 
     # MinimapEdges(): Enhanced's northMC / currentObjectiveMC (E_HUD Minimap class): an indicator on the window
     # edge in the direction of map north (always shown) and of each objective icon outside the window

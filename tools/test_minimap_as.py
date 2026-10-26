@@ -561,6 +561,25 @@ def main(path):
     close(p1.get('echo').get('_x'), 610); close(p1.get('echo').get('_y'), 13.1)
     close(p1.get('quest').get('_x'), 577); close(p1.get('check3').get('_y'), 59.4 + 2 * 16.4)
     close(p1.get('check5').get('_xscale'), 92.02); close(p1.get('echo').get('_xscale'), 100.04)
+    # Run 25 (Deck): the game re-plays p1's first frame, which puts the column back at its authored places while
+    # the shift is on (F7: hud_shifted True, echo_x 791.45). Each tick re-applies the shift and counts it.
+    vm.call('MinimapCmd', 'tick~0.5~0.5~0~0~0')
+    assert root.get('mmHudFixes') in (None, UNDEF, 0), 'no fix while the column is where the shift put it'
+    for n, (x, y) in authored.items():
+        c = p1.get(n); c.props.update(_x=x, _y=y, _xscale=100.04, _yscale=100.0)
+    vm.call('MinimapCmd', 'tick~0.5~0.5~0~0~0')
+    close(p1.get('echo').get('_x'), 610); close(p1.get('quest').get('_y'), 129.1); close(p1.get('check5').get('_xscale'), 92.02)
+    vm.call('MinimapCmd', 'tick~0.5~0.5~0~0~0')
+    assert root.get('mmHudFixes') == 1, root.get('mmHudFixes')
+    close(root.get('mmEchoX0'), 791.5)
+    # The user saw a brief flicker behind the map even with the 1 s re-dock: the map clip also runs the check on
+    # every movie frame (onEnterFrame, before the frame is drawn), so a reset doesn't wait for the mod's tick.
+    keep = m.get('onEnterFrame')
+    assert keep is vm.funcs['MinimapHudKeep'], 'the map clip checks the column every frame'
+    for n, (x, y) in authored.items():
+        c = p1.get(n); c.props.update(_x=x, _y=y, _xscale=100.04, _yscale=100.0)
+    vm.run_func(keep, [])
+    close(p1.get('echo').get('_x'), 610); assert root.get('mmHudFixes') == 2
     for _ in range(3):                                   # repeated toggles don't drift
         vm.call('MinimapCmd', hud % 0); vm.call('MinimapCmd', hud % 1)
     vm.call('MinimapCmd', hud % 0)
@@ -569,6 +588,8 @@ def main(path):
         close(c.get('_x'), x); close(c.get('_y'), y); close(c.get('_xscale'), 100.04); close(c.get('_yscale'), 100.0)
     close(root.get('mmEchoX0'), 791.5), 'originals must not be re-recorded from shifted values'
     assert root.get('mmHudMode') == 0
+    vm.call('MinimapCmd', 'tick~0.5~0.5~0~0~0')
+    close(p1.get('echo').get('_x'), 791.5); assert root.get('mmHudFixes') == 2, 'restored: ticks leave it alone'
     root.children.pop('p1')
 
     # PLAN_V08 movie structure: Enhanced turnin/newmission frames appended to the landmark sprite; the
