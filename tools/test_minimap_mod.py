@@ -1098,6 +1098,42 @@ def main(gfx_path, on_import=None):
         assert "'%s'" % field in diag, field
     # PLAN_V13 decision 8: F7 says which art is in use and where the inputs came from
     assert "'art': 'original'" in diag and 'GfxHUD.upk' in diag and "'enhanced_folder': None" in diag, diag[-600:]
+    # Run 23 spike (PHASE3 3an): Angel's video is a 3D screen mesh (GFxUIManager.ScreenMesh) that PlayVoGEchoCall
+    # attaches to the camera; classic places it top right. Log its placement on every call; "Angel position
+    # (experiment)" = Enhanced applies Enhanced's VoGSinglePlayerPosition (X, Y, Z) and re-applies it if the native
+    # moves it back during the watch window.
+    class Mesh:
+        def __init__(self):
+            self.Translation = vec(10.0, 20.0, 30.0)
+            self.Rotation = Struct(Pitch=0, Yaw=0, Roll=0)
+            self.Scale, self.Scale3D, self.AbsoluteTranslation = 1.0, vec(1.0, 1.0, 1.0), False
+            self.Owner, self.sets = "CameraActor'Matinee'", []
+
+        def SetTranslation(self, v):
+            self.sets.append((v.X, v.Y, v.Z))
+            self.Translation = vec(v.X, v.Y, v.Z)
+    mesh = Mesh()
+    pc.GFxUIManager = Struct(ScreenMesh=mesh)
+    vog_hook = HOOKS['WillowGame.WillowPlayerController:PlayVoGEchoCall']
+    buf = _io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        vog_hook(pc, None, None, None)
+    assert mesh.sets == [] and 'Angel call: screen mesh' in buf.getvalue() and '(10.0, 20.0, 30.0)' in buf.getvalue()
+    mod.opt_angel_position.value = 'Enhanced'
+    with contextlib.redirect_stdout(buf):
+        vog_hook(pc, None, None, None)
+        assert mesh.sets == [(-2.1, -0.4, 0.14)], mesh.sets
+        mesh.Translation = vec(10.0, 20.0, 30.0)               # the native puts it back
+        step(1.1)
+    assert mesh.sets[-1] == (-2.1, -0.4, 0.14) and len(mesh.sets) == 2 and 'moved back' in buf.getvalue()
+    with contextlib.redirect_stdout(buf):
+        KEYBINDS['Minimap diagnostics']()
+    assert "'angel':" in buf.getvalue()
+    mod.opt_angel_position.value = 'Classic'
+    pc.GFxUIManager = None                                     # no UI manager: no crash, one warning
+    with contextlib.redirect_stdout(io.StringIO()):
+        vog_hook(pc, None, None, None)
+    del pc.GFxUIManager
     # Feedback is optional when there is no viewport console; the diagnostic still reaches the log.
     console = pc.Player.ViewportClient.ViewportConsole
     pc.Player.ViewportClient.ViewportConsole = None

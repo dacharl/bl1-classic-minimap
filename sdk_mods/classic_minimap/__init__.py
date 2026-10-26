@@ -55,7 +55,7 @@ from . import hudmovie
 from .swfmerge import MergeRefused
 from .swfmerge import merge as merge_movie
 
-__version__ = "0.14.0"
+__version__ = "0.14.1"
 
 
 STAGE_W = 1280.0                       # classic HUD stage is 1280x720
@@ -99,6 +99,8 @@ RADAR_PROBE_EVERY = 8                  # probe every Nth empty radar read (THREA
 MS_NOT_STARTED, MS_READY_TO_TURN_IN = 0, 2     # IMission.EMissionStatus
 STATUS_FRAME = {MS_NOT_STARTED: "newmission", MS_READY_TO_TURN_IN: "turnin"}   # Enhanced's objective icon types
 STATUS_TINT = {MS_NOT_STARTED: 0x50E050, MS_READY_TO_TURN_IN: 0xFFC420}   # "Tint objective diamonds" (v0.6 style)
+VOG_ENHANCED = (-2.1, -0.4, 0.14)      # Enhanced's GlobalsDefinition.VoGSinglePlayerPosition X, Y, Z (W = 0); spike
+VOG_WATCH_SECONDS = 10.0               # after an Angel call: log (and with "Enhanced", undo) native moves of the mesh
 GIVER_OBJECTIVE_UU = 500.0             # a giver this close to an objective is its NPC: one mark there (PHASE3 3ak)
 LANDMARK_CLIP = "map.maps.landmarks"   # icon template clip (frames objective .. questionmark, turnin, newmission)
 RECORD_KINDS = {"FloatProperty", "IntProperty", "BoolProperty", "ByteProperty", "StrProperty", "NameProperty",
@@ -145,6 +147,10 @@ opt_enhanced_art = BoolOption("Use Enhanced artwork", True,
                               description="Use GOTY Enhanced's minimap artwork when it is installed; off uses the "
                                           "mod's own art. Takes effect from the next level load.",
                               on_change_while_enabled=lambda _, value: remake_movie(use_enhanced=value))
+opt_angel_position = SpinnerOption("Angel position (experiment)", "Classic", ["Classic", "Enhanced"],
+                                   description="Where Angel's video appears. Classic: top right, behind the minimap. "
+                                               "Enhanced: tries Enhanced's placement (top centre). Experimental; "
+                                               "each call logs where her screen sits.")
 opt_enhanced_folder = HiddenOption("Enhanced folder", "",
                                    description="GOTY Enhanced's game folder, if the mod doesn't find it itself.")
 
@@ -206,6 +212,9 @@ class State:
         self.last_hidden_reason = "start"
         self.rebuild_pending = False       # rebuild the markers on the next tick...
         self.rebuild_refit = False         # ...and refit the zoom (F8, option changes; not the status menu)
+        self.vog_until = 0.0               # Angel-call watch window end (run 23 spike)...
+        self.vog_next = 0.0                # ...next check...
+        self.vog_last: Any = None          # ...and the mesh translation last seen
         self.mission_key: Any = None       # tracked mission and status at the last collect (Objective zoom mode)
         self.fit_mission: Any = None       # ... and at the last fit
         # docking (PLAN_V07 3): layout name when docked, p1 signature it was computed for, HUD column state
@@ -1372,6 +1381,8 @@ def tick(pc: Any) -> None:
     elif now >= S.next_dock_check:
         S.next_dock_check = now + DOCK_CHECK_INTERVAL
         check_dock(movie)
+    if S.vog_until > now and now >= S.vog_next:
+        watch_vog(pc, now)
     if S.rebuild_pending:
         if S.rebuild_refit:
             S.fit_anchor = None
@@ -1458,6 +1469,8 @@ def on_diag_key() -> None:
                             "template.MovieInfo": str(Redirect.template.MovieInfo) if Redirect.template else None,
                             "hud_merge": Redirect.status or None,
                             "hud.MovieInfo": str(movie.MovieInfo) if movie is not None else None}
+    mesh = vog_mesh(pc) if pc is not None else None
+    info["angel"] = vog_state(mesh) if mesh is not None else None
     r = Redirect.result
     info["hud_movie"] = None if r is None else {
         "art": r.art, "cached": r.cached, "seconds": round(r.seconds, 2), "bytes": len(r.data),
@@ -1498,6 +1511,71 @@ def on_diag_key() -> None:
 @hook("WillowGame.StatusMenuExGFxMovie:OnClose", Type.POST)
 def on_status_menu_close(obj: Any, args: Any, ret: Any, func: Any) -> None:
     rebuild(refit=False)  # missions/waypoints may have changed while the menu was open; the zoom mode decides refits
+
+
+# ---- Angel's screen (run 23 spike, PHASE3 3an) ---------------------------------------------------------
+# PlayVoGEchoCall renders Angel's video onto GFxUIManager.ScreenMesh, a 3D mesh attached to the camera, so the HUD
+# always draws over it; classic places it top right, behind the minimap. Enhanced positions it from
+# GlobalsDefinition.VoG*Position (which classic lacks). This logs the mesh and optionally tries Enhanced's value.
+
+def vog_mesh(pc: Any) -> Any:
+    manager = getattr(pc, "GFxUIManager", None)
+    return getattr(manager, "ScreenMesh", None) if manager is not None else None
+
+
+def vog_translation(mesh: Any) -> tuple[float, float, float]:
+    t = mesh.Translation
+    return round(float(t.X), 3), round(float(t.Y), 3), round(float(t.Z), 3)
+
+
+def vog_state(mesh: Any) -> dict[str, Any]:
+    out: dict[str, Any] = {"mesh": str(mesh)}
+    for name, fields in (("Translation", "XYZ"), ("Rotation", ("Pitch", "Yaw", "Roll")), ("Scale", None),
+                         ("Scale3D", "XYZ"), ("AbsoluteTranslation", None), ("Owner", None)):
+        try:
+            v = getattr(mesh, name)
+            out[name] = tuple(float(getattr(v, f)) for f in fields) if fields else str(v)
+        except Exception as ex:
+            out[name] = f"<{type(ex).__name__}>"
+    return out
+
+
+def apply_vog_position(mesh: Any) -> None:
+    x, y, z = VOG_ENHANCED
+    mesh.SetTranslation(unrealsdk.make_struct("Vector", X=x, Y=y, Z=z))
+
+
+@hook("WillowGame.WillowPlayerController:PlayVoGEchoCall", Type.POST)
+def on_vog_call(obj: Any, args: Any, ret: Any, func: Any) -> None:
+    try:
+        mesh = vog_mesh(obj)
+        if mesh is None:
+            warn_once("vog:nomesh", "Angel call: no GFxUIManager.ScreenMesh to inspect")
+            return
+        log(f"Angel call: screen mesh {vog_state(mesh)}")
+        if opt_angel_position.value == "Enhanced":
+            apply_vog_position(mesh)
+            log(f"Angel call: moved the screen mesh to Enhanced's placement {VOG_ENHANCED}")
+        S.vog_last, S.vog_until, S.vog_next = vog_translation(mesh), time.time() + VOG_WATCH_SECONDS, time.time() + 1.0
+    except Exception as ex:  # an experiment must never break the call
+        warn_once("vog:" + type(ex).__name__, f"Angel call inspection failed ({type(ex).__name__}: {ex})")
+
+
+def watch_vog(pc: Any, now: float) -> None:
+    """During the watch window: log native moves of Angel's mesh and, with "Enhanced", put it back."""
+    S.vog_next = now + 1.0
+    try:
+        mesh = vog_mesh(pc)
+        t = vog_translation(mesh)
+    except Exception:
+        S.vog_until = 0.0
+        return
+    if t != S.vog_last:
+        log(f"Angel call: the screen mesh moved back to {t} (was {S.vog_last})")
+        if opt_angel_position.value == "Enhanced":
+            apply_vog_position(mesh)
+            t = vog_translation(mesh)
+        S.vog_last = t
 
 
 def apply_layout_now(movie: Any) -> None:
@@ -1552,5 +1630,5 @@ mod = build_mod(options=[opt_position, opt_dock_size, opt_scale, opt_margin_x, o
                          opt_icon_size,
                          opt_rotate, opt_rotation_offset, opt_threats, opt_threat_range, opt_givers, opt_objective_tint,
                          opt_hide_compass,
-                         opt_enhanced_art, opt_rebuild, opt_rebuild_movie, opt_enhanced_folder])
+                         opt_enhanced_art, opt_angel_position, opt_rebuild, opt_rebuild_movie, opt_enhanced_folder])
 BASE_DESCRIPTION = getattr(mod, "description", "") or ""

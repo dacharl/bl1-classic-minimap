@@ -55,12 +55,13 @@ Open **MODS → Classic Minimap**:
 | Zoom (vs Enhanced) | 100% uses Enhanced's objective-fit zoom; lower shows more of the map. Applies in either zoom mode. |
 | Zoom mode | **Enhanced** (default): the zoom is fitted to you and your objectives once per level load, as in Enhanced; switching missions keeps it. **Objective**: also refits when your tracked mission or its status changes. **F8** refits in both modes. |
 | Icon size (%) | Size of landmark, player and enemy icons; 100% matches Enhanced. |
-| Rotate with player | Rotate the map so you always face up (north marker moves around the edge). |
+| Rotate with player | Rotate the map so you always face up (north marker moves around the edge); icons stay upright, as in Enhanced. |
 | Show enemies | Red dots for enemies the radar tracks. |
 | Enemy range (m) | Only show enemies this close; 0 = no limit (like Enhanced). |
 | Show mission givers | "!" and turn-in marks at mission givers. |
 | Tint objective diamonds | Off (default, like Enhanced): a mission ready to hand in shows the turn-in mark, and one not started shows "!", in place of the objective diamond. On: the diamond stays and turns gold (ready to hand in) or green (not started), as in earlier versions. |
 | Hide compass | Hide the classic compass strip at the bottom. |
+| Angel position (experiment) | **Classic** (default): Angel's video appears top right, partly behind the minimap. **Enhanced**: tries to move it to Enhanced's placement (top centre). Experimental: each call logs where her screen sits, for tuning. |
 | Use Enhanced artwork | On (default): Enhanced's artwork when Enhanced is installed. Off: the mod's own art. Takes effect from the next level load. |
 | Refresh map markers | Re-collect landmarks and objectives and refit the zoom (same as F8). |
 | Rebuild HUD movie from game files | Build the minimap's HUD movie from your game files again, for example after installing Enhanced. Takes effect from the next level load. |

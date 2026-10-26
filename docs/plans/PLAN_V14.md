@@ -53,6 +53,25 @@ per zone so that the window always covers the same number of metres.
   - a **Fixed** mode: the same metres across the window in every zone (the table above);
   - a **vehicle zoom:** zoom out 2–3× while driving, and restore the previous zoom on exit.
 
+## Run 23 findings (PHASE3 §3an)
+
+- **Icons rotate with the map in "Rotate with player".** Enhanced counter-rotates every landmark icon and every
+  threat (`CancelOutIconRotation`); ours does only the threats. Fix: counter-rotate every dynamic icon except the
+  player, in `MinimapRecenter`.
+- **Angel's video is half hidden behind the map.** It is a 3D hologram: `PlayVoGEchoCall` renders
+  `VoGEchoCallGFxMovie` onto `GFxUIManager.ScreenMesh`, attached to a camera actor, so the HUD always draws over it
+  and depth can't fix it. Enhanced places it per screen layout from four `GlobalsDefinition` `Vector4` values that
+  classic lacks (single player: (−2.1, −0.4, 0.14, 0.0)); classic's native placement is fixed (top right). Options:
+  - move the mesh to Enhanced's single-player placement when a call starts (an in-game spike on `ScreenMesh`'s
+    translation: log classic's own values first, then apply Enhanced's);
+  - hide the minimap while a call plays (hook `PlayVoGEchoCall`, end on `StopEchoCall` or the movie closing).
+- **The autosave indicator covers the minimap.** `WillowHUD` draws `SavingIndicator_INST` natively on the canvas,
+  above all GFx. Script natives bracket a save: `NotifySavingStarted` and `NotifySavingComplete(InSaveDuration)`.
+  Hiding the minimap was considered and **rejected by the user** (2026-10-26); the item stays open.
+
+**v0.14.1 (PHASE3 §3an):** the counter-rotation fix, plus the Angel spike: each call logs the mesh, and "Angel
+position (experiment)" = Enhanced applies `(-2.1, -0.4, 0.14)`, re-applying it if the native code moves it back.
+
 ## Other tuning items (from PROGRESS, not yet researched)
 
 - The level-change-to-minimap delay (about 10 s: anchor wait plus the 3 s settle).

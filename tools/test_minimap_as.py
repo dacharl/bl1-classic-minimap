@@ -507,6 +507,13 @@ def main(path):
     assert len(ms.children) == before + 1 and added
     close(added[0].get('_x'), tm.get('_x') + 0.25 * tm.get('_width'))
     close(added[0].get('_y'), tm.get('_y') + 0.75 * tm.get('_height'))
+    # Run 23 (PHASE3 3an): like Enhanced's CancelOutIconRotation (every icon in iconPathArray, not only threats),
+    # every map icon stays upright while the map turns; the player icon keeps its heading
+    vm.call('MinimapCmd', 'tick~0.61~0.42~-60~1~0')
+    close(ms.get('_rotation'), 60)
+    close(added[0].get('_rotation'), -60); close(pl.get('_rotation'), -60)
+    vm.call('MinimapCmd', 'tick~0.61~0.42~-60~0~0')       # north-up again: icons straight
+    close(ms.get('_rotation'), 0); close(added[0].get('_rotation'), 0)
     assert tint_of(added[0]) is None, 'untinted add must not touch the colour'
     vm.call('MinimapCmd', 'add~map.maps.landmarks~0.3~0.3~0~objective~16761888')     # 0xFFC420 tint
     tinted = [c for c in ms.children.values() if c.frame == 'objective' and c.props.get('_ct')]

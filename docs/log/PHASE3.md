@@ -1095,7 +1095,91 @@ switching the tracked mission: out when the new waypoint leads to another map, i
 - **Real files (`release.py --game`):** the in-mod builds match. Enhanced art `3dda7ae2…6b72`, original art
   `78740fd7…e178`; bundle `dist/releases/0.14.0` (`classic_minimap.sdkmod` `a2ea341d…f327`, profiler
   `fb723b37…1467`).
-- **Gates:** 129 unit tests, both real-movie suites on both variants, and the gates pass. Not installed or played.
+- **Gates:** 129 unit tests, both real-movie suites on both variants, and the gates pass. Committed as `da82bf4`.
+- **Installed on the PC (2026-10-26 01:30 UTC, game closed):** `tools/install.py dist/releases/0.14.0 --profiler
+  --backups <main checkout>/dist`.
+  - **Installed:** `classic_minimap.sdkmod` 0.14.0 `a2ea341d…f327` and the profiler 0.1.6 `fb723b37…1467`,
+    SHA-256 verified.
+  - **Backups:** v0.13.1 (`e3669056…62b5`, `adb5d942…4287`) in the main checkout's
+    `dist\v0.13.1-20261026T013034.736255Z\`.
+  - **Game files:** stock `GfxHUD.upk` unchanged. Played in run 23 (§3an).
+
+## 3an. Run 23: v0.14.0 on the PC (2026-10-26)
+
+User screenshots: Skag Gully, Fyrestone, Sledge's Safehouse.
+
+**Works:** the "Objective" zoom mode refits as designed (the last screenshot).
+
+**Findings for tuning:**
+1. **"Rotate with player" leaves the map icons turned:** vending machines, givers and objectives rotate with the
+   map. The threat markers, the edge objective indicators and the north marker stay upright.
+
+   Enhanced (E_HUD Minimap class, `CancelOutIconRotation`) sets `_rotation = -currentRot` on **every icon in
+   `iconPathArray`** (all landmarks AddLandmark creates except the player) and on every threat. Ours counter-rotates
+   only the threats (PHASE3 §3ad), so this is a gap in our port.
+2. **The autosave indicator covers the minimap** (the round icon at the top right).
+   - It isn't in any GFx movie. `WillowHUD` draws it natively on the canvas: class defaults `SavingMat =
+     HUD.Materials.SavingIndicator_INST`, `SavingMaterialScale = 0.5`, identical in both editions.
+   - Script-callable natives bracket a save: `WillowHUD.NotifySavingStarted()` and
+     `NotifySavingComplete(InSaveDuration)`. Classic's exec thunk is at `0x0156a7a0`, registered at startup into
+     `0x1efd278` (REA: string `intAWillowHUDexecNotifySavingStarted` at `0x1d4bff8`).
+   - The draw position is in native code and wasn't traced. Ghidra has no function at the thunk, since it's
+     reached only through that pointer.
+   - Canvas drawing goes on top of the GFx HUD, so neither edition could cover the icon with GFx. Whether Enhanced
+     moves the icon or tolerates the overlap is unknown.
+3. **Angel's video is half hidden behind the minimap.** This first looked like a depth issue, but it is not one.
+   - `vog` (root depth 689) sits at (412, 90) and covers stage x 412–868, the middle of the screen, so it is not
+     the overlay in the screenshot.
+   - The image spans stage x ≈ 960–1274, where the unshifted `echo` panel would be. But F7 snapshots show `echo`
+     correctly shifted (`echo_x` 610) and `set_visible` re-applies the shift whenever the map shows.
+   - Classic script: `WillowPlayerController.PlayVoGEchoCall` plays `GlobalsDef.VoGMovieDefinition` through
+     `GFxUIManager.PlayMovie`. `VoGEchoCallGFxMovie.PlayEchoCall` sets the video as the external texture
+     `texture1`, and the movie renders onto **`GFxUIManager.ScreenMesh`**, a 3D mesh attached to a camera actor
+     (with skeletal animations from `CallDef.VoG_AnimSet`).
+   - So Angel is a hologram in the 3D scene: every HUD element draws over it, and our opaque box hides the part
+     behind it. Moving the map's depth would not help.
+   - **Enhanced moves her by data** (the user: Enhanced shows Angel top centre). Enhanced's `GlobalsDefinition`
+     adds four `Vector4` properties that classic lacks: `VoGSinglePlayerPosition`, `VoGHorizontalSplitPosition`,
+     `VoGVerticalSplitPosition` and `VoG4PlayerSplitPosition`. Their values in Enhanced's
+     `gd_globals.upk` (`General.Globals`; scratchpad `vogpos.py`):
+
+     | Layout | Value |
+     |---|---|
+     | Single player | (−2.1, −0.4, 0.14, 0.0) |
+     | Horizontal split | (−1.4, −0.65, 0.3, −0.05) |
+     | Vertical split | (−1.6, −0.4, 0.3, 0.0) |
+     | 4-player split | (−1.4, −0.65, 0.3, −0.05) |
+
+     They look like camera-relative offsets of the screen mesh (inferred; Enhanced's native code that reads them
+     wasn't traced). Classic's native code uses a fixed placement, which shows top right.
+
+**→ v0.14.1, profiler 0.1.7 (2026-10-26, offline only).** The user decided: build the Angel spike and the
+counter-rotation fix; leave the autosave open, without hiding the minimap.
+- **Counter-rotation (movie):**
+  - `add` records every icon in `_root.mmIcons`, which `MinimapClear` drops;
+  - `MinimapRecenter` sets `-maps._rotation` on each icon as well as each threat, as Enhanced's
+    `CancelOutIconRotation` does over `iconPathArray` and `threatsArray`;
+  - the player keeps its heading.
+  - Test (failed first, icon at 12° instead of −60°): `test_minimap_as` with rotation on, then north-up again.
+- **Angel spike (mod):**
+  - a hook on `WillowPlayerController:PlayVoGEchoCall` (POST) logs `GFxUIManager.ScreenMesh`: Translation,
+    Rotation, Scale, Scale3D, AbsoluteTranslation and Owner;
+  - new option **"Angel position (experiment)"**: Classic (default) or Enhanced. Enhanced calls
+    `SetTranslation(Vector(-2.1, -0.4, 0.14))`, Enhanced's single-player X, Y, Z;
+  - for 10 s afterwards, the tick logs any native move of the mesh and re-applies the Enhanced placement;
+  - F7 gains `angel`.
+  - Test (failed first, missing hook): the mod suite covers logging, applying, re-applying after a native reset,
+    F7, and a missing UI manager.
+- **Real files (`release.py --game`):** the in-mod builds match. Enhanced art `6d6f40ee…9e94`, original art
+  `b3376a80…edee`; bundle `dist/releases/0.14.1` (`classic_minimap.sdkmod` `0f6ca48f…8d3c`, profiler
+  `f4c7d39e…0147`).
+- **Gates:** 129 unit tests, both real-movie suites on both variants, and the gates pass.
+- **Unknown until played:**
+  - whether `SetTranslation` exists on classic's screen mesh (failures are logged);
+  - whether the values mean the same thing in classic's attachment;
+  - whether classic's native code moves the mesh back.
+
+  The first Angel call's log answers all three. The autosave stays open (user).
 
 **Not yet seen:**
 - the Enhanced green turn-in mark at a ready objective (the turn-in was done in original art);
