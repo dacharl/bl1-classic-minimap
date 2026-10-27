@@ -1284,6 +1284,38 @@ def main(gfx_path, on_import=None):
         HOOKS['WillowGame.WillowPlayerController:SetUpVoGScreenParticle'](pc, None, None, None)
         step(mod.VOG_WATCH_SECONDS + 1.0)
     del pc.ScreenParticleRecords, pc.GetPlayerViewPoint, pc.GetFOVAngle
+    # Autosave diagnostic (v0.14.8, PHASE3 3ax): WillowHUD draws SavingMat natively above the minimap; its position is
+    # native code, but SaveStartTime / SaveDuration / SavingMaterialScale are plain HUD properties. Log every change
+    # (with world time) so a run shows how a save drives them; F7 reports them; the NotifySaving* hooks log if they fire.
+    hud = pc.myHUD
+    hud.SaveStartTime, hud.SaveDuration, hud.SavingMaterialScale = 0.0, 0.0, 0.5
+    hud.SavingMat = "MaterialInstanceConstant'HUD.Materials.SavingIndicator_INST'"
+    pc.WorldInfo.TimeSeconds = 130.0
+    buf = _io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        step(0.3); step(0.3)
+    out = buf.getvalue()
+    assert out.count('save indicator:') == 1, out                     # baseline once, no repeats
+    assert "save indicator: {'SaveStartTime': 0.0, 'SaveDuration': 0.0, 'SavingMaterialScale': 0.5" in out, out
+    assert "'world_time': 130.0" in out and 'SavingIndicator_INST' in out, out
+    for field, value in (('SaveStartTime', 131.25), ('SaveDuration', 1.5)):
+        setattr(hud, field, value)
+        buf = _io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            step(0.3)
+        assert "'%s': %s" % (field, value) in buf.getvalue(), buf.getvalue()
+    buf = _io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        HOOKS['WillowGame.WillowHUD:NotifySavingStarted'](hud, None, None, None)
+        HOOKS['WillowGame.WillowHUD:NotifySavingComplete'](hud, Struct(InSaveDuration=1.5), None, None)
+        KEYBINDS['Minimap diagnostics']()
+    out = buf.getvalue()
+    assert 'save started (NotifySavingStarted)' in out and 'save complete (NotifySavingComplete, 1.5 s)' in out, out
+    assert "'save_indicator': {'SaveStartTime': 131.25" in out, out
+    del hud.SaveStartTime, hud.SaveDuration, hud.SavingMaterialScale, hud.SavingMat
+    with contextlib.redirect_stdout(io.StringIO()):                    # a HUD without the fields: no crash
+        step(0.3)
+        KEYBINDS['Minimap diagnostics']()
     # Feedback is optional when there is no viewport console; the diagnostic still reaches the log.
     console = pc.Player.ViewportClient.ViewportConsole
     pc.Player.ViewportClient.ViewportConsole = None

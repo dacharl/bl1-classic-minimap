@@ -1673,3 +1673,45 @@ No code change.
 - **Not yet seen:** 4:3, and a call using `part_VoG_SimpleFade`.
 
 No code change.
+
+## 3ax. v0.14.8: autosave indicator diagnostic (2026-10-27, offline only)
+
+**Why:** with Angel fixed, the user asked to revisit the autosave icon that covers the minimap (run 23, §3an; left
+open by the user's decision then) and chose to diagnose before picking a fix.
+
+**Research (static):**
+- **Neither edition has a position property for the icon.** Classic's `WillowHUD` has only `SavingMat`
+  (`HUD.Materials.SavingIndicator_INST`) and `SavingMaterialScale` (0.5), plus the timing fields `SaveStartTime`
+  and `SaveDuration`. Enhanced has the same, with `ConnectionMat` and the connection-warning fields alongside.
+- The draw position is fixed in native code, so unlike Angel's particle (§3au) it can't be moved by editing data.
+- Neither HUD movie (classic or Enhanced) has save-indicator art.
+- The options weighed with the user:
+  - replace the native icon with our own GFx indicator, timed from `SaveStartTime`/`SaveDuration`;
+  - shrink it through `SavingMaterialScale` (anchor unknown);
+  - diagnose first (chosen);
+  - leave it.
+
+**Change → v0.14.8 + profiler 0.1.14 (diagnostic only; no visible change):**
+- Every 0.25 s the mod reads `SaveStartTime`, `SaveDuration`, `SavingMaterialScale` and `SavingMat` from
+  `pc.myHUD`. It logs `save indicator: {…}, 'world_time': …` on every change, with one baseline line per HUD.
+- F7 adds `save_indicator`.
+- PRE hooks on `WillowHUD:NotifySavingStarted` and `:NotifySavingComplete` log whether they ever fire. They are
+  natives called from native code, so they may not, like `PlayEchoCall` (§3ap).
+
+**Tests (red first):**
+- one baseline line and no repeats, with world time and the material;
+- changes to `SaveStartTime` and `SaveDuration` are logged;
+- both hooks log;
+- F7 has the field;
+- a HUD without the fields doesn't crash.
+
+Both suites pass on both art variants; 129 unit tests, coverage, ruff and repository checks pass.
+`release.py --game --enhanced`: the in-mod build matches (`323b5b38…c92c`).
+
+**Built (not installed):** `dist/releases/0.14.8/` in the `feat/save-indicator-diag` worktree holds
+`classic_minimap.sdkmod` 0.14.8 `96cd97a2…4178` and the profiler 0.1.14 `e36949c8…8743`.
+
+**Next run:** trigger an autosave (enter a new area, or complete or turn in a mission) and take a screenshot while
+the icon shows. The log gives how `SaveStartTime`/`SaveDuration` move against world time. The screenshot gives
+the icon's exact spot and size against the minimap. Together they decide between our own indicator and a smaller
+native one.

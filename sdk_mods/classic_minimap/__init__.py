@@ -55,7 +55,7 @@ from . import hudmovie
 from .swfmerge import MergeRefused
 from .swfmerge import merge as merge_movie
 
-__version__ = "0.14.7"
+__version__ = "0.14.8"
 
 
 STAGE_W = 1280.0                       # classic HUD stage is 1280x720
@@ -102,6 +102,8 @@ STATUS_TINT = {MS_NOT_STARTED: 0x50E050, MS_READY_TO_TURN_IN: 0xFFC420}   # "Tin
 VOG_WATCH_SECONDS = 10.0               # after an Angel call: log her screen mesh / particle once a second
 VOG_FAST_SECONDS = 15.0                # after an ECHO call: watch the root vog clip every tick (run 24 diagnostic)
 VOG_NUMBERS = ("_x", "_y", "_width", "_height", "_xscale", "_yscale", "_alpha", "_currentframe", "_totalframes")
+SAVE_FIELDS = ("SaveStartTime", "SaveDuration", "SavingMaterialScale", "SavingMat")   # WillowHUD autosave icon
+SAVE_CHECK_INTERVAL = 0.25             # autosave diagnostic: how often to read them (v0.14.8)
 GIVER_OBJECTIVE_UU = 500.0             # a giver this close to an objective is its NPC: one mark there (PHASE3 3ak)
 LANDMARK_CLIP = "map.maps.landmarks"   # icon template clip (frames objective .. questionmark, turnin, newmission)
 RECORD_KINDS = {"FloatProperty", "IntProperty", "BoolProperty", "ByteProperty", "StrProperty", "NameProperty",
@@ -221,6 +223,8 @@ class State:
         self.vog_fast_until = 0.0          # ...and the end of the every-tick watch after an ECHO call
         self.sp_until = 0.0                # screen-particle watch window end (run 26 diagnostic)...
         self.sp_next = 0.0                 # ...and its next once-a-second log
+        self.save_state: Any = ()          # autosave fields last logged (() = not read yet; v0.14.8 diagnostic)...
+        self.save_next = 0.0               # ...and the next read
         self.mission_key: Any = None       # tracked mission and status at the last collect (Objective zoom mode)
         self.fit_mission: Any = None       # ... and at the last fit
         # docking (PLAN_V07 3): layout name when docked, p1 signature it was computed for, HUD column state
@@ -1361,6 +1365,9 @@ def tick(pc: Any) -> None:
         return
     if pc.Pawn is None:                  # main menu, loading, dead/respawning: nothing to show
         return
+    if now >= S.save_next:
+        S.save_next = now + SAVE_CHECK_INTERVAL
+        watch_save(pc)
     if now >= S.next_epoch_check:
         S.next_epoch_check = now + EPOCH_CHECK_INTERVAL
         update_epoch(pc, now)
@@ -1489,6 +1496,7 @@ def on_diag_key() -> None:
     mesh = vog_mesh(pc) if pc is not None else None
     info["angel"] = vog_state(mesh) if mesh is not None else None
     info["vog"] = vog_clip_state(movie) if movie is not None else None
+    info["save_indicator"] = save_state(pc) if pc is not None else None
     try:
         info["screen_particles"] = [particle_record(r) for r in particle_records(pc)] if pc is not None else None
     except Exception as ex:
@@ -1872,6 +1880,49 @@ def on_show_screen_particle(obj: Any, args: Any, ret: Any, func: Any) -> None:
 @hook("WillowGame.WillowPlayerController:SetUpVoGScreenParticle", Type.POST)
 def on_vog_screen_particle(obj: Any, args: Any, ret: Any, func: Any) -> None:
     on_screen_particle(obj, "SetUpVoGScreenParticle")
+
+
+# Autosave diagnostic (v0.14.8, PHASE3 3ax): WillowHUD draws SavingMat natively on the canvas, above the minimap, at a
+# position fixed in native code (no position property in either edition). Its plain properties SaveStartTime,
+# SaveDuration and SavingMaterialScale are readable, so log how a save drives them before deciding on a fix.
+
+def save_state(pc: Any) -> Any:
+    hud = getattr(pc, "myHUD", None)
+    if hud is None:
+        return None
+    out: dict[str, Any] = {}
+    for name in SAVE_FIELDS:
+        try:
+            v = getattr(hud, name)
+        except Exception:
+            continue
+        out[name] = round(float(v), 3) if isinstance(v, (int, float)) and not isinstance(v, bool) else str(v)
+    return out or None
+
+
+def watch_save(pc: Any) -> None:
+    try:
+        state = save_state(pc)
+    except Exception as ex:  # a diagnostic must never break the tick
+        warn_once("save:" + type(ex).__name__, f"save indicator check failed ({type(ex).__name__}: {ex})")
+        return
+    if state != S.save_state:
+        S.save_state = state
+        try:
+            world_time: Any = round(float(pc.WorldInfo.TimeSeconds), 2)
+        except Exception as ex:
+            world_time = f"<{type(ex).__name__}>"
+        log(f"save indicator: {state}, 'world_time': {world_time}")
+
+
+@hook("WillowGame.WillowHUD:NotifySavingStarted", Type.PRE)
+def on_saving_started(obj: Any, args: Any, ret: Any, func: Any) -> None:
+    log("save started (NotifySavingStarted)")
+
+
+@hook("WillowGame.WillowHUD:NotifySavingComplete", Type.PRE)
+def on_saving_complete(obj: Any, args: Any, ret: Any, func: Any) -> None:
+    log(f"save complete (NotifySavingComplete, {getattr(args, 'InSaveDuration', '?')} s)")
 
 
 def apply_layout_now(movie: Any) -> None:
