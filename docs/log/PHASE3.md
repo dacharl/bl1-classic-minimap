@@ -1604,6 +1604,12 @@ Both suites pass on both art variants; 129 unit tests, coverage, ruff and reposi
 **Built (not installed):** `dist/releases/0.14.7/` holds `classic_minimap.sdkmod` 0.14.7 `cca615b0…6664` and the
 profiler 0.1.13 `9a15ba1f…cda9`.
 
+**Committed** as `5c06890`.
+
+**Installed on the PC (2026-10-26 23:46 UTC, game closed):** `classic_minimap.sdkmod` 0.14.7 `cca615b0…6664` and the
+profiler 0.1.13 `9a15ba1f…cda9`, SHA-256 verified. v0.14.6 (`e4fbda70…0ee1`, `3f748e50…e33f`) is backed up in the
+main checkout's `dist\v0.14.6-20261026T234610.240604Z\`. The stock `GfxHUD.upk` is unchanged (`5c515c3e…`).
+
 **To confirm invariance (next runs):** screenshot Angel's calls in each condition, each with the matching watch
 lines:
 - normal play;
@@ -1611,3 +1617,32 @@ lines:
 - `fov 110` in the console;
 - the Steam Deck at 16:10;
 - a later mission's call, to see a different video and maybe SimpleFade.
+
+## 3av. Run 31: v0.14.7 on the PC; Angel centred and stable across iron sights (2026-10-27)
+
+**Run (PC, Arid, 01:24 UTC; screenshot and log provided by the user):** "looked good… it seemed to be stable between
+ironsights and normal fov". Sprint FOV was not tried.
+
+**Evidence:**
+- The log has `Angel's video moved left by 4.97` (table Y −4.97) before the effect started. Default Centered
+  applied with no settings change, as expected after the rename.
+- In the screenshot Angel spans about 830–1250 px of 2000 (centre ≈ 52%), level with the centred objective text and
+  clear of the minimap.
+- **Watch lines:** `fov` 70.0 normally, and 48.3 and 53.0 in iron sights. `distance/scale` stayed 19.31 throughout,
+  and the component scale barely moved (27.67 → 27.31 → 27.24).
+  - So the native code doesn't resize the overlay for the FOV, yet the user saw no shift when zooming.
+  - This fits the component's `SDPG_Foreground` depth group: UE3 draws the foreground (first-person weapon) layer
+    with its own projection, independent of the zoom. That part is inferred; the in-game observation is the
+    evidence.
+- **The gun scope is also a screen particle** (`fx_PostProcess.Particles.fx_part_All_Round_GunScopes`, parameter
+  `WeaponScopeMaterial`). It sits at the same translation, rotation and scale as Angel's overlay, so the native
+  placement is the engine's general screen-particle rule. Its name has no "VoG", so the mod leaves it alone. It
+  was logged once, as designed.
+- The ECHO panel stayed shifted (`echo_x` 610; no resets).
+
+**Invariance status:**
+- **Confirmed:** camera direction (run 30), iron-sights FOV 48–53 vs 70 (run 31), and every Pulse video (frame
+  analysis, §3au).
+- **Not yet seen:** sprint FOV, the Deck's 16:10 aspect, 4:3, and a call that uses `part_VoG_SimpleFade`.
+
+No code change.
