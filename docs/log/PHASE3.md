@@ -1646,3 +1646,30 @@ ironsights and normal fov". Sprint FOV was not tried.
 - **Not yet seen:** sprint FOV, the Deck's 16:10 aspect, 4:3, and a call that uses `part_VoG_SimpleFade`.
 
 No code change.
+
+## 3aw. Run 32: v0.14.7 on the Steam Deck, original art, FOV 100 (2026-10-27)
+
+**Run (Deck, 02:15–02:18 UTC; log provided by the user):** "steam deck test successful".
+- Setup: no GOTY Enhanced, so original art. Extended UI 1.3.2 alongside other SDK mods, including "FOV and sprint
+  rotation fix" 3.0.0, Unofficial Patch 1.3.3, Playthrough 3 and Repeatable Missions.
+
+**Evidence:**
+- The movie was built in 2.20 s (619 135 bytes, original art, Proton `S:\` paths) and merged into Extended UI's
+  movie in 3.74 s (841 359 bytes). Docked at 16:9 with the tilt; map ready at Arid with 26 markers; no errors from
+  the mod.
+- **Angel:** `Angel's video moved left by 4.97` came before the effect started, and the user reports success.
+- **Watch lines:** `fov 100.0` (the FOV mod) and **`distance/scale 15.37`**, against 19.31 at FOV 70 on the PC;
+  the component scale was 63.7.
+  - So the native code re-places the overlay for a different base FOV, unlike the transient iron-sights zoom in run
+    31, where the ratio stayed 19.31.
+  - The local-space shift still put her where the user expected. This covers both a large FOV change and the
+    Deck's display in one run.
+- **ECHO panel:** `echo_x` 610, `hud_shifted` True; no `moved it again` lines in this short session.
+- The log still notes the old `GfxHUD_Minimap.upk` on the Deck; it is unused and can be deleted.
+
+**Invariance status:**
+- **Confirmed:** camera direction (run 30), iron-sights zoom (run 31), base FOV 100 on the Deck (run 32), and
+  every Pulse video (§3au).
+- **Not yet seen:** 4:3, and a call using `part_VoG_SimpleFade`.
+
+No code change.
