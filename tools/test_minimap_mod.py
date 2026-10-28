@@ -257,6 +257,8 @@ class Movie:
         self.add_p1(P1_LAYOUTS['16:9'])
         self.invokes = []
         self.visible_sets = []      # every map._visible write, to catch a rebuild hiding the map
+        self.external = {}          # SetExternalTexture bindings (PLAN_V15)
+        self.external_error = None  # set to an exception to make SetExternalTexture raise
 
     def add_p1(self, lay):
         """The stock p1 HUD clip as the layout sprite places it (classic 706 = 16:9, 722 = 4:3), with the
@@ -279,6 +281,13 @@ class Movie:
         self.invokes.append((command, arg))
         if command in self.vm.funcs:
             self.vm.call(command, arg)
+
+    def SetExternalTexture(self, resource, texture):
+        """GFxMovie.SetExternalTexture: binds a game texture to a DefineExternalImage placeholder; returns a bool."""
+        if self.external_error is not None:
+            raise self.external_error
+        self.external[resource] = texture
+        return True
 
     def GetVariableNumber(self, path):
         v = self.vm.lookup({}, path)
@@ -1312,6 +1321,51 @@ def main(gfx_path, on_import=None):
     out = buf.getvalue()
     assert 'save started (NotifySavingStarted)' in out and 'save complete (NotifySavingComplete, 1.5 s)' in out, out
     assert "'save_indicator': {'SaveStartTime': 131.25" in out, out
+    # PLAN_V15 step 1 (spike): while a save shows (SaveDuration > 0) and the map is docked and shown, our own
+    # indicator shows at the ECHO panel's shifted spot (p1 (216.1, 30.4) + Enhanced echo (610, 13.1) = (826.1, 43.5)),
+    # 48 px. It draws the game's own texture, bound once per HUD with SetExternalTexture, or "Saving..." when the
+    # texture isn't found (retried every few seconds) or binding fails (not retried). The native icon is left
+    # alone in the spike, so one screenshot shows both.
+    out = buf.getvalue()
+    save = movie2.root.get('mmsave')
+    assert isinstance(save, asvm.Clip) and save.get('_visible') is True, 'SaveDuration 1.5 > 0: shown'
+    assert save.get('label').get('_visible') is True and save.get('icon').get('_visible') is False, 'no texture yet'
+    close(save.get('_x'), 826.1); close(save.get('_y'), 43.5); close(save.get('_xscale'), 37.5)
+    tex = Struct(name="Texture2D'HUD.Textures.saving_indicator'")
+    OBJECTS['HUD.Textures.saving_indicator'] = tex
+    buf = _io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        step(mod.SAVE_BIND_RETRY + 0.1)
+    assert movie2.external.get('mmSaveTex') is tex and 'save icon texture bound' in buf.getvalue(), buf.getvalue()
+    assert save.get('icon').get('_visible') is True and save.get('label').get('_visible') is False
+    assert hud.SavingMaterialScale == 0.5, 'the spike leaves the native icon alone'
+    hud.SaveDuration = 0.0
+    with contextlib.redirect_stdout(io.StringIO()):
+        step(0.3)
+    assert save.get('_visible') is False, 'save over: hidden'
+    hud.SaveDuration = 3.0
+    pc.myHUD.bShowHUD = False
+    with contextlib.redirect_stdout(io.StringIO()):
+        step(0.3)
+    assert save.get('_visible') is False, 'minimap hidden (HUD off): ours stays hidden too'
+    pc.myHUD.bShowHUD = True
+    with contextlib.redirect_stdout(io.StringIO()):
+        step(mod.SETTLE_SECONDS); step(0.3)
+    assert save.get('_visible') is True and save.get('icon').get('_visible') is True
+    with contextlib.redirect_stdout(buf):
+        KEYBINDS['Minimap diagnostics']()
+    assert "'save_icon': {'bound': True, 'mode': 1" in buf.getvalue(), buf.getvalue()[-400:]
+    mod.S.save_bound = None                                             # binding raises: text, not retried
+    movie2.external_error = RuntimeError('no such resource')
+    buf = _io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        step(0.3); step(mod.SAVE_BIND_RETRY + 0.1)
+    assert 'SetExternalTexture failed (RuntimeError: no such resource)' in buf.getvalue(), buf.getvalue()
+    assert buf.getvalue().count('SetExternalTexture failed') == 1
+    assert save.get('label').get('_visible') is True and save.get('icon').get('_visible') is False
+    movie2.external_error = None
+    hud.SaveDuration = 1.5
+    del OBJECTS['HUD.Textures.saving_indicator']
     del hud.SaveStartTime, hud.SaveDuration, hud.SavingMaterialScale, hud.SavingMat
     with contextlib.redirect_stdout(io.StringIO()):                    # a HUD without the fields: no crash
         step(0.3)

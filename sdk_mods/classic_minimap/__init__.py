@@ -55,7 +55,7 @@ from . import hudmovie
 from .swfmerge import MergeRefused
 from .swfmerge import merge as merge_movie
 
-__version__ = "0.14.8"
+__version__ = "0.15.0"
 
 
 STAGE_W = 1280.0                       # classic HUD stage is 1280x720
@@ -104,6 +104,10 @@ VOG_FAST_SECONDS = 15.0                # after an ECHO call: watch the root vog 
 VOG_NUMBERS = ("_x", "_y", "_width", "_height", "_xscale", "_yscale", "_alpha", "_currentframe", "_totalframes")
 SAVE_FIELDS = ("SaveStartTime", "SaveDuration", "SavingMaterialScale", "SavingMat")   # WillowHUD autosave icon
 SAVE_CHECK_INTERVAL = 0.25             # autosave diagnostic: how often to read them (v0.14.8)
+SAVE_TEXTURE_PATH = "HUD.Textures.saving_indicator"   # the native icon's texture (PLAN_V15), 128 x 128
+SAVE_TEXTURE_NAME = "mmSaveTex"        # our movie's external image placeholder (swfbuild.SAVE_TEXTURE)
+SAVE_SIZE = 48.0                       # our indicator's size (stage px)
+SAVE_BIND_RETRY = 5.0                  # s between tries while the texture isn't loaded yet
 GIVER_OBJECTIVE_UU = 500.0             # a giver this close to an objective is its NPC: one mark there (PHASE3 3ak)
 LANDMARK_CLIP = "map.maps.landmarks"   # icon template clip (frames objective .. questionmark, turnin, newmission)
 RECORD_KINDS = {"FloatProperty", "IntProperty", "BoolProperty", "ByteProperty", "StrProperty", "NameProperty",
@@ -225,6 +229,10 @@ class State:
         self.sp_next = 0.0                 # ...and its next once-a-second log
         self.save_state: Any = ()          # autosave fields last logged (() = not read yet; v0.14.8 diagnostic)...
         self.save_next = 0.0               # ...and the next read
+        self.save_bound: Any = None        # PLAN_V15: texture bound to this HUD (None: not yet / not loaded)...
+        self.save_bind_next = 0.0          # ...next try while not loaded...
+        self.save_mode = 0                 # ...our indicator: 0 hidden, 1 texture, 2 "Saving..."...
+        self.save_spot: Any = None         # ...and where it was put (stage px)
         self.mission_key: Any = None       # tracked mission and status at the last collect (Objective zoom mode)
         self.fit_mission: Any = None       # ... and at the last fit
         # docking (PLAN_V07 3): layout name when docked, p1 signature it was computed for, HUD column state
@@ -1443,6 +1451,7 @@ def tick(pc: Any) -> None:
         warn_once("vis:" + type(ex).__name__, f"visibility check unavailable ({type(ex).__name__}: {ex})")
         reason = ""
     set_visible(movie, not reason, reason)
+    update_save_icon(pc, movie, now)
     if S.fit_pending and not reason:
         refit_when_shown(pc, movie)
         S.next_threats = 0.0              # a redraw clears the dots: redraw them on the next tick
@@ -1497,6 +1506,7 @@ def on_diag_key() -> None:
     info["angel"] = vog_state(mesh) if mesh is not None else None
     info["vog"] = vog_clip_state(movie) if movie is not None else None
     info["save_indicator"] = save_state(pc) if pc is not None else None
+    info["save_icon"] = {"bound": S.save_bound, "mode": S.save_mode, "spot": S.save_spot}
     try:
         info["screen_particles"] = [particle_record(r) for r in particle_records(pc)] if pc is not None else None
     except Exception as ex:
@@ -1913,6 +1923,55 @@ def watch_save(pc: Any) -> None:
         except Exception as ex:
             world_time = f"<{type(ex).__name__}>"
         log(f"save indicator: {state}, 'world_time': {world_time}")
+
+
+# PLAN_V15 step 1 (spike): our own save indicator beside the map. The game's texture is bound to our movie's
+# placeholder once per HUD; while a save shows (SaveDuration > 0) and the map is docked and shown, the indicator
+# shows at the ECHO panel's shifted spot (provisional: run 34 measures the native icon's spot). The native icon is
+# left alone in this build, so a screenshot shows both.
+
+def bind_save_texture(movie: Any, now: float) -> None:
+    tex = find("Texture2D", SAVE_TEXTURE_PATH)
+    if tex is None:
+        S.save_bind_next = now + SAVE_BIND_RETRY
+        warn_once("savetex", 'save icon texture not loaded yet; showing "Saving..." until it is')
+        return
+    try:
+        ok = movie.SetExternalTexture(SAVE_TEXTURE_NAME, tex)
+    except Exception as ex:  # never retried: text instead
+        S.save_bound = False
+        log(f'save icon: SetExternalTexture failed ({type(ex).__name__}: {ex}); showing "Saving..."')
+        return
+    S.save_bound = bool(ok)
+    log(f"save icon texture bound: {ok} ({tex})")
+
+
+def save_spot() -> Any:
+    """Stage position of the ECHO panel's shifted place (provisional spot for the spike)."""
+    if S.dock is None or S.p1_sig is None:
+        return None
+    px, py, sx, sy = S.p1_sig[:4]
+    ex, ey = LAYOUTS[S.dock]["echo"]
+    return round(px + ex * sx / 100.0, 1), round(py + ey * sy / 100.0, 1)
+
+
+def update_save_icon(pc: Any, movie: Any, now: float) -> None:
+    try:
+        saving = float(pc.myHUD.SaveDuration) > 0
+    except Exception:
+        saving = False
+    spot = save_spot()
+    want = saving and S.shown is True and spot is not None
+    if want and S.save_bound is None and now >= S.save_bind_next:
+        bind_save_texture(movie, now)
+    mode = (1 if S.save_bound else 2) if want else 0
+    if mode == S.save_mode and (not mode or spot == S.save_spot):
+        return
+    x, y = spot if spot is not None else (0.0, 0.0)
+    cmd(movie, "save", mode, x, y, SAVE_SIZE)
+    if mode != S.save_mode:
+        log(f"save icon {('hidden', 'shown (texture)', 'shown (Saving...)')[mode]} at {spot}")
+    S.save_mode, S.save_spot = mode, spot
 
 
 @hook("WillowGame.WillowHUD:NotifySavingStarted", Type.PRE)

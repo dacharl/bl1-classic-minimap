@@ -99,7 +99,7 @@ class SourceChecks(unittest.TestCase):
         """GFx numbers gradient fills in file order and DefineExternalGradient (1003) records are keyed by that
         number. Inserting gradient-bearing shapes shifted classic's numbering, so the box took classic's bar
         textures and later classic shapes (the damage indicator) lost theirs (run 14)."""
-        from ci_fixture import movie, sprite, native_contract
+        from ci_fixture import movie, sprite, native_contract, willow_body_font
         from swfbuild import build, tag
         from swfdeps import read_tags, skip_rect, shape_gradient_count
         import as2asm
@@ -115,7 +115,8 @@ class SourceChecks(unittest.TestCase):
         def image(gid, name):
             return tag(1003, struct.pack('<HHH', gid, 13, 256) + bytes([len(name)]) + name.encode())
 
-        classic = movie([image(0, 'HUD_G0.tga'), image(1, 'HUD_G1.tga'), image(2, 'HUD_G2.tga'),
+        # the HUD's WillowBody font: both art variants copy it for the save indicator's label (PLAN_V15)
+        classic = movie([willow_body_font(), image(0, 'HUD_G0.tga'), image(1, 'HUD_G1.tga'), image(2, 'HUD_G2.tga'),
                          gradient_shape(10, 1), tag(1, b''), gradient_shape(11, 1), gradient_shape(12, 1)])
         status = movie([sprite(1040), sprite(1050), sprite(1066, [(1, 1050)], ['questionmark']),
                         sprite(1132, [(1, 1066)]), sprite(1154, [(1, 1040), (5, 1040), (8, 1132)]),

@@ -1711,7 +1711,94 @@ Both suites pass on both art variants; 129 unit tests, coverage, ruff and reposi
 **Built (not installed):** `dist/releases/0.14.8/` in the `feat/save-indicator-diag` worktree holds
 `classic_minimap.sdkmod` 0.14.8 `96cd97a2…4178` and the profiler 0.1.14 `e36949c8…8743`.
 
+**Committed** as `764746c` on `feat/save-indicator-diag`.
+
+**Installed on the PC (2026-10-27 23:17 UTC, game closed):** `classic_minimap.sdkmod` 0.14.8 `96cd97a2…4178` and the
+profiler 0.1.14 `e36949c8…8743`, SHA-256 verified. v0.14.7 (`cca615b0…6664`, `9a15ba1f…cda9`) is backed up in the
+main checkout's `dist\v0.14.7-20261027T231716.560310Z\`. The stock `GfxHUD.upk` is unchanged (`5c515c3e…`).
+
 **Next run:** trigger an autosave (enter a new area, or complete or turn in a mission) and take a screenshot while
 the icon shows. The log gives how `SaveStartTime`/`SaveDuration` move against world time. The screenshot gives
 the icon's exact spot and size against the minimap. Together they decide between our own indicator and a smaller
 native one.
+
+## 3ay. Run 33: v0.14.8 on the PC; how an autosave drives the HUD fields (2026-10-27)
+
+**Run (PC, Enhanced art, Extended UI, New Haven, 23:49–23:50 UTC; log provided by the user, no screenshot):** the
+user drove past several autosave stations and pressed F7, noting that perhaps only the last one showed the icon.
+
+**Evidence:**
+- **Baseline:** `SaveStartTime` 0.0, `SaveDuration` 0.0, `SavingMaterialScale` 0.5, `SavingMat`
+  `HUD.Materials.SavingIndicator_INST`.
+- **One save, at 23:50:39** (in the vehicle): `SaveStartTime` 69.856 and **`SaveDuration` 3.0**. About 2.9 s later
+  (23:50:42) `SaveDuration` was back to **0.0**, with `SaveStartTime` unchanged.
+  - No other changes: the earlier stations didn't save, as the user suspected. Read every 0.25 s, a 3 s window
+    can't be missed.
+- **Clock:** `SaveStartTime` (69.86) runs ahead of `WorldInfo.TimeSeconds` (61.98), so it uses another clock,
+  probably real or audio time. `SaveDuration > 0` alone marks when the icon is showing.
+- **Hooks:** `NotifySavingStarted`/`Complete` never fired. They are native-to-native, like `PlayEchoCall`.
+- **Side result: v0.14.2's ECHO fix seen working on the PC.**
+  - The log reads `the game put the ECHO panel back behind the map; moved it again` (1, then 2 times, at
+    23:50:08–09), and F7 reads `hud_fixes` 2.0 with `echo_x` 610.
+  - That is the first in-game proof of the run-25 fix: the reset happens on the PC too.
+
+**Not captured:** a screenshot of the icon's position. It isn't needed for a replacement.
+
+**Next:** choose the fix (§3ax options). With the timing known, a replacement can:
+- hide the native icon (`SavingMaterialScale` 0, which avoids a None material);
+- show our own indicator while `SaveDuration > 0`.
+
+**Decided (PLAN_V15):** reuse the game's texture and its pulse in our movie, left of the map like the ECHO panel
+(overlap with an active call is fine, as in classic), with a "Saving..." text fallback and no option.
+
+## 3az. v0.15.0: PLAN_V15 step 1, the save indicator spike (2026-10-27, offline only)
+
+**Change → v0.15.0 + profiler 0.1.15. Both icons show during a save, so one screenshot measures the native spot.**
+
+- **Movie** (`swfbuild.save_art`, both art variants):
+  - `DefineExternalImage` 1330 `mmSaveTex` (128 × 128, format 13), laid out like classic's eight controller-button
+    placeholders;
+  - shape 1331, clipped-bitmap filled from it, centred, one bitmap pixel per px;
+  - a copy of the HUD's (empty) WillowBody font (1333) and a "Saving..." DefineEditText (1332, 40 px, white);
+  - sprite 1334 holding `icon` and `label`, exported `bl1mm_save`.
+- **AS:**
+  - `save~mode~x~y~size` calls `MinimapSave`, which attaches `_root.mmsave` once at depth 9002 (above the map),
+    places and scales it, and shows the texture (1), the text (2) or nothing (0). `icon.blendMode = "add"`, like
+    the native `BLEND_Additive`.
+  - `MinimapSavePulse` (its `onEnterFrame`) pulses `_alpha` 10–100 % on a sine. The step is 2π / (HUD fps × 1 s),
+    baked in from the HUD header.
+  - `MinimapDestroy` removes the clip.
+- **Mod:**
+  - Once per HUD it finds `Texture2D'HUD.Textures.saving_indicator'` and binds it with
+    `movie.SetExternalTexture("mmSaveTex", tex)`.
+    - If the texture isn't loaded, it retries every 5 s and shows the text meanwhile.
+    - If the call raises, it falls back to the text and doesn't retry.
+  - While `SaveDuration > 0`, with the map docked and shown, it shows ours at the ECHO panel's shifted spot
+    (provisional), 48 px. It logs `save icon shown (texture|Saving...) at …` and `hidden`. F7 adds `save_icon`.
+  - **The native icon is left alone in this build.**
+- **Test fixture:** `test_ci`'s gradient fixture HUD now carries the WillowBody font, like the real HUD. The
+  Enhanced-art build copies it for the label too.
+
+**Tests (red first):**
+- AS: attach once; hiding never attaches; placement and scale; texture or text; additive blend; pulse range;
+  hide; destroy removes it.
+- Builder: the external image's bytes, the shape's bitmap fill, the font and text, the export, and the named
+  children.
+- Mod: texture missing → text → bound on retry → texture; hidden after the save; hidden while the minimap is;
+  binding raises → text, logged once; F7; native scale untouched.
+
+Both suites pass on both art variants; 129 unit tests, coverage, ruff and repository checks pass. An offline merge
+into Extended UI's HUD movie keeps ids 1330–1334 and the export, with no clash. `release.py --game --enhanced`:
+the in-mod build matches (`685f7e97…2787`).
+
+**Built (not installed):** `dist/releases/0.15.0/` in the `feat/save-indicator-diag` worktree holds
+`classic_minimap.sdkmod` 0.15.0 `b5e8312e…3c8c` and the profiler 0.1.15 `512233be…ea42`.
+
+**Unverified (in game):**
+- whether `SetExternalTexture` from Python is safe and returns True;
+- whether GFx draws the `G8` texture additively (no grey or black square);
+- the pulse's look;
+- that both icons show during a save.
+
+**Next run:** trigger an autosave and take a screenshot while both icons show. Step 2 then sets our spot to the
+native spot plus the ECHO shift and hides the native icon.

@@ -15,7 +15,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import as2asm  # noqa: E402
 from as2asm import Reg  # noqa: E402
 from swfbuild import EXPORT_NAME, top_level  # noqa: E402
-from swfdeps import Movie, read_tags  # noqa: E402
+from swfdeps import Movie, read_tags, shape_bitmaps  # noqa: E402
 
 PROPS = {0: '_x', 1: '_y', 2: '_xscale', 3: '_yscale', 7: '_visible', 10: '_rotation', 6: '_alpha'}
 UNDEF = Ellipsis
@@ -101,6 +101,11 @@ class Clip:
         if ident in ('bl1mm_north', 'bl1mm_objective', 'bl1mm_enemy'):   # edge indicator / threat art
             c = self.add(Clip(name, None, depth))
             c.frame = ident
+            return c
+        if ident == 'bl1mm_save':     # PLAN_V15: the save indicator sprite, as swfbuild lays it out
+            c = self.add(Clip(name, None, depth))
+            c.add(Clip('icon', None, -16383, 128.0, 128.0))     # external image mmSaveTex, centred
+            c.add(Clip('label', None, -16382, 200.0, 50.0))     # "Saving..." in the game font
             return c
         assert ident == EXPORT_NAME, ident
         return self.add(build_map_clip(name, depth))
@@ -592,6 +597,32 @@ def main(path):
     close(p1.get('echo').get('_x'), 791.5); assert root.get('mmHudFixes') == 2, 'restored: ticks leave it alone'
     root.children.pop('p1')
 
+    # PLAN_V15 step 1: our save indicator. save~mode~x~y~size attaches bl1mm_save once as _root.mmsave (above the
+    # map), places it at (x, y) scaled so its 128 px art is `size` px, shows the game texture (1) or the "Saving..."
+    # text (2), and hides it (0). The image adds like the native material (BLEND_Additive), and an onEnterFrame
+    # pulses _alpha with a sine, as the material's Time -> Sine does.
+    assert root.get('mmsave') is UNDEF
+    vm.call('MinimapCmd', 'save~0~0~0~48')
+    assert root.get('mmsave') is UNDEF, 'hiding never attaches'
+    vm.call('MinimapCmd', 'save~1~826~43.5~48')
+    s = root.get('mmsave')
+    assert isinstance(s, Clip) and s.depth == 9002 and s.get('_visible') is True
+    close(s.get('_x'), 826); close(s.get('_y'), 43.5); close(s.get('_xscale'), 37.5); close(s.get('_yscale'), 37.5)
+    assert s.get('icon').get('_visible') is True and s.get('label').get('_visible') is False
+    assert s.get('icon').get('blendMode') == 'add' and root.get('mmSaveMode') == 1
+    pulse = s.get('onEnterFrame')
+    assert pulse is vm.funcs['MinimapSavePulse'], 'the clip pulses itself every frame'
+    alphas = []
+    for _ in range(40):
+        vm.run_func(pulse, [])
+        alphas.append(s.get('_alpha'))
+    assert 5 <= min(alphas) < 30 and 90 < max(alphas) <= 100, (min(alphas), max(alphas))
+    vm.call('MinimapCmd', 'save~2~826~43.5~48')
+    assert s.get('icon').get('_visible') is False and s.get('label').get('_visible') is True
+    assert root.get('mmsave') is s, 'attached once'
+    vm.call('MinimapCmd', 'save~0~826~43.5~48')
+    assert s.get('_visible') is False and root.get('mmSaveMode') == 0
+
     # PLAN_V08 movie structure: Enhanced turnin/newmission frames appended to the landmark sprite; the
     # north and objective art exported for the edge indicators
     mv = Movie(data=d)
@@ -611,6 +642,17 @@ def main(path):
     m4 = by_depth[4]
     assert m4[0] & 0x40 and m4.endswith(b'mask\0' + struct.pack('<H', 6)), m4.hex()  # clip layer to depth 6
     assert by_depth[6].endswith(b'maps\0') and struct.unpack_from('<H', by_depth[6], 3)[0] == 1132
+    # PLAN_V15: an external image placeholder laid out like classic's own (UI16 id, format 13, width, height,
+    # export name, file name), a shape filled with it, and the exported bl1mm_save sprite holding icon + label
+    code, ext = mv.defs[1330]
+    assert code == 1001 and struct.unpack_from('<HHHH', ext, 0) == (1330, 13, 128, 128), ext[:8].hex()
+    assert ext[8:9 + ext[8]] == bytes([9]) + b'mmSaveTex', ext
+    code, shape = mv.defs[1331]
+    assert 1330 in shape_bitmaps(code, shape), 'the icon shape fills with the external image'
+    assert mv.defs[1332][0] == 37 and mv.defs[1333][0] == 75, 'the label is text in a copied font'
+    assert mv.exports.get(1334) == 'bl1mm_save'
+    names = [b for c, b in read_tags(mv.defs[1334][1], 4, len(mv.defs[1334][1])) if c == 26]
+    assert any(b.endswith(b'icon\0') for b in names) and any(b.endswith(b'label\0') for b in names)
 
     # icon scale (Enhanced draws icons at its map clip's 0.7; ours are scaled up to match)
     vm.call('MinimapCmd', 'clear')
@@ -682,9 +724,10 @@ def main(path):
     assert root.get('mmObjectives') is UNDEF and root.get('mmEdges') is UNDEF and m.get('mmEdge1') is UNDEF
     vm.call('MinimapCmd', 'tick~0.5~0.5~0~0~0')
 
-    # MinimapDestroy
+    # MinimapDestroy (it also removes PLAN_V15's save indicator)
+    assert isinstance(root.get('mmsave'), Clip)
     vm.call('MinimapDestroy')
-    assert root.get('map') is UNDEF
+    assert root.get('map') is UNDEF and root.get('mmsave') is UNDEF and root.get('mmSaveMode') is UNDEF
     assert isinstance(root.get('mmfallback'), Clip), 'attach path must not consume the fallback'
 
     # MinimapPing: side effect the mod reads back (classic Invoke returns nothing usable)
