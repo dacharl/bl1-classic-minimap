@@ -647,9 +647,23 @@ def main(path):
     code, ext = mv.defs[1330]
     assert code == 1001 and struct.unpack_from('<HHHH', ext, 0) == (1330, 13, 128, 128), ext[:8].hex()
     assert ext[8:9 + ext[8]] == bytes([9]) + b'mmSaveTex', ext
+    # Run 34: SetExternalTexture returned False. GFx resolves the name through the export table: every image the
+    # game binds at runtime (texture1, weaptex1..4, the button art) is exported under its name; unbound ones aren't.
+    assert mv.exports.get(1330) == 'mmSaveTex', 'the placeholder must be exported for SetExternalTexture to find it'
     code, shape = mv.defs[1331]
     assert 1330 in shape_bitmaps(code, shape), 'the icon shape fills with the external image'
     assert mv.defs[1332][0] == 37 and mv.defs[1333][0] == 75, 'the label is text in a copied font'
+    # Run 34: "Saving..." showed as "Savinq...": the box ended 0.6 x the font size below the origin and clipped
+    # the descender. Like the map glyphs' boxes, it must reach 0.8 x the size below (font size: UI16 twips after
+    # the RECT and two flag bytes and the font id).
+    label = mv.defs[1332][1]
+    nbits = label[2] >> 3
+    bits = ''.join(format(b, '08b') for b in label[2:2 + (5 + 4 * nbits + 7) // 8])[5:]
+    ymin, ymax = (int(bits[i * nbits:(i + 1) * nbits], 2) for i in (2, 3))
+    ymin -= (1 << nbits) if ymin >> (nbits - 1) else 0
+    rect_len = (5 + 4 * nbits + 7) // 8
+    size = struct.unpack_from('<H', label, 2 + rect_len + 4)[0]
+    assert ymax >= 0.8 * size and ymin <= -0.45 * size, (ymin, ymax, size)
     assert mv.exports.get(1334) == 'bl1mm_save'
     names = [b for c, b in read_tags(mv.defs[1334][1], 4, len(mv.defs[1334][1])) if c == 26]
     assert any(b.endswith(b'icon\0') for b in names) and any(b.endswith(b'label\0') for b in names)

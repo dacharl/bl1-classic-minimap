@@ -1,7 +1,7 @@
 # Performance report schema v1 (frozen 2026-10-24)
 
 This is the **report contract** of PLAN_V11 decision 15: the file the optional profiler add-on
-(`sdk_mods/classic_minimap_profiler`, versions 0.1.0–0.1.15; the fixtures come from 0.1.15; each release only extends the core allowlist) writes and the MCP performance adapter in
+(`sdk_mods/classic_minimap_profiler`, versions 0.1.0–0.1.16; the fixtures come from 0.1.16; each release only extends the core allowlist) writes and the MCP performance adapter in
 `steam-deck-scripts` reads. [PLAN_V11_MCP_HANDOFF.md](../plans/PLAN_V11_MCP_HANDOFF.md) describes the
 handoff; this document is the authoritative field list. The fixtures in `tools/fixtures/perf_reports/`
 are part of the contract: `valid-*.json` are produced by the real profiler

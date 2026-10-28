@@ -934,7 +934,8 @@ def save_art(hud):
     """PLAN_V15: the save indicator sprite, exported as SAVE_EXPORT. `icon` is the game texture's placeholder,
     `label` the "Saving..." fallback in a copy of the HUD's (empty) WillowBody font."""
     half = 100.0
-    label = tag(37, struct.pack('<H', SAVE_TEXT) + rect_bytes(-half, half, -0.6 * SAVE_LABEL_SIZE, 0.6 * SAVE_LABEL_SIZE)
+    # the box reaches 0.8 x the size below the origin, like the glyph boxes: at 0.6 the "g" lost its tail (run 34)
+    label = tag(37, struct.pack('<H', SAVE_TEXT) + rect_bytes(-half, half, -0.45 * SAVE_LABEL_SIZE, 0.8 * SAVE_LABEL_SIZE)
                 + bytes([0x80 | 0x08 | 0x04 | 0x01, 0x20 | 0x10])    # HasText ReadOnly HasTextColor HasFont; HasLayout NoSelect
                 + struct.pack('<HH', SAVE_FONT, int(round(SAVE_LABEL_SIZE * 20))) + rgba(0xFFFFFF)
                 + bytes([2]) + struct.pack('<HHHh', 0, 0, 0, 0) + b'\0' + b'Saving...\0')
@@ -1021,7 +1022,8 @@ def build(hud, status_menu, enhanced=None, version=None):
     actions = [funcs[n] for n in COPIED_FUNCTIONS] + new_functions(pulse_step)
     do_action = tag(12, as2asm.encode(actions, end=True))
     exports = ((MAP_ID, EXPORT_NAME), (NORTH_ART, 'bl1mm_north'), (OBJECTIVE_ART, 'bl1mm_objective'),
-               (ENEMY_ART, 'bl1mm_enemy'), (SAVE_ART, SAVE_EXPORT))
+               (ENEMY_ART, 'bl1mm_enemy'), (SAVE_ART, SAVE_EXPORT),
+               (SAVE_IMAGE, SAVE_TEXTURE))   # SetExternalTexture finds images through the exports (run 34)
     export = tag(56, struct.pack('<H', len(exports)) + b''.join(struct.pack('<H', cid) + name.encode() + b'\0'
                                                                 for cid, name in exports))
     added = b''.join(defs) + map_sprite() + export + place_fallback() + do_action

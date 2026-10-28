@@ -1800,5 +1800,55 @@ the in-mod build matches (`685f7e97…2787`).
 - the pulse's look;
 - that both icons show during a save.
 
+**Committed** as `adee2a4` on `feat/save-indicator-diag`.
+
+**Installed on the PC (2026-10-28 00:58 UTC, game closed):** `classic_minimap.sdkmod` 0.15.0 `b5e8312e…3c8c` and the
+profiler 0.1.15 `512233be…ea42`, SHA-256 verified. v0.14.8 (`96cd97a2…4178`, `e36949c8…8743`) is backed up in the
+main checkout's `dist\v0.14.8-20261028T005833.795878Z\`. The stock `GfxHUD.upk` is unchanged (`5c515c3e…`).
+
 **Next run:** trigger an autosave and take a screenshot while both icons show. Step 2 then sets our spot to the
 native spot plus the ECHO shift and hides the native icon.
+
+## 3ba. Run 34: v0.15.0 on the PC; the texture didn't bind → v0.15.1 (2026-10-28)
+
+**Run (PC, Enhanced art, Extended UI, New Haven, 01:47–01:49 UTC; log provided by the user, no screenshot):** "the
+fallback 'Saving...' was cropped as 'Savinq...', but it did trigger with the autosave marker".
+
+**Evidence:**
+- **Timing works.** At the save (`SaveDuration` 3.0 at 01:49:27) the mod logged `save icon shown (Saving...) at
+  (826.0, 43.5)`, then `save icon hidden` at 01:49:30 when the native icon went away. The user saw both.
+- **Binding:** `save icon texture bound: False (Texture2D'HUD.Textures.saving_indicator')`.
+  - The texture was found, and `SetExternalTexture` returned False without raising.
+  - So calling it from Python is safe (no crash), but nothing was bound, and the text fallback showed. F7 read
+    `save_icon {'bound': False, 'mode': 2}`.
+- **Label:** "Saving..." was clipped to "Savinq...". The text box ended 0.6 × the font size below its origin and
+  cut the "g"'s descender.
+- The ECHO reset fix fired twice again (01:48:23–25).
+
+**Cause of the False:** every external image the classic HUD binds at runtime is also listed in the movie's
+ExportAssets under the same name:
+- `texture1` (the ECHO video, 64 × 64);
+- `weaptex1..4` and `p2_weaptex1..4`;
+- the 30 controller-button images.
+
+Images that are never bound (`HUD_IB6.tga`, …) have an empty name and no export. Our `mmSaveTex` had its name
+inside the tag but no export entry. GFx's `SetExternalTexture` evidently resolves the name through the export table.
+
+**Change → v0.15.1 + profiler 0.1.16:**
+- The block's ExportAssets lists `(1330, 'mmSaveTex')`.
+- The label box spans −0.45 … +0.8 × the font size, the proportions of the map glyphs' boxes.
+
+**Tests (red first):**
+- AS/builder: the placeholder is exported under its name, and the label box reaches 0.8 × the font size below its
+  origin.
+
+Both suites pass on both art variants; 129 unit tests, coverage, ruff and repository checks pass. The offline
+Extended UI merge keeps ids 1330–1334 and the exports. `release.py --game --enhanced`: the in-mod build matches
+(`09cb239d…5ee6`).
+
+**Built (not installed):** `dist/releases/0.15.1/` in the `feat/save-indicator-diag` worktree holds
+`classic_minimap.sdkmod` 0.15.1 `0d074f7e…4b43` and the profiler 0.1.16 `f3c9ddb6…ea09`.
+
+**Next run:** an autosave with a screenshot.
+- The log should read `save icon texture bound: True` and `shown (texture)`.
+- The screenshot shows how the G8 texture draws with the additive blend, and the native icon's spot for step 2.
