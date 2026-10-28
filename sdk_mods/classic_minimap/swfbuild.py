@@ -88,16 +88,15 @@ OBJECTIVE_HALF = 45.1 * OBJECTIVE_SCALE / 2
 SOURCE_CLIPS = ('landmarks', 'players', 'enemy')   # maps' icon templates that AddLandmark duplicates
 HUD_CLIPS = ('echo', 'quest', 'check1', 'check2', 'check3', 'check4', 'check5')   # p1 column we shift
 HUD_ARGS = ('ex', 'ey', 'qx', 'qy', 'cx', 'cy', 'cdy', 'csx', 'csy')                # MinimapHudShift's placements
-# PLAN_V15: our save indicator. The game's HUD.Textures.saving_indicator (128 x 128) is bound at runtime to an
-# external image placeholder (SetExternalTexture), so nothing of the game's is copied into the movie.
-SAVE_IMAGE, SAVE_SHAPE, SAVE_TEXT, SAVE_FONT, SAVE_ART = 1330, 1331, 1332, 1333, 1334
-SAVE_IDS = {SAVE_IMAGE, SAVE_SHAPE, SAVE_TEXT, SAVE_FONT, SAVE_ART}
+# PLAN_V15: our save indicator, a vector Vault logo like the game's HUD.Textures.saving_indicator (a ring and a
+# Λ mark). The game texture itself drew opaque in GFx, which has no blend modes (run 35), so the art is our own.
+SAVE_RING, SAVE_MARK, SAVE_ART = 1330, 1331, 1334
+SAVE_IDS = {SAVE_RING, SAVE_MARK, SAVE_ART}
 SAVE_EXPORT = 'bl1mm_save'
-SAVE_TEXTURE = 'mmSaveTex'             # the placeholder's export name, as SetExternalTexture addresses it
-SAVE_ART_SIZE = 128                    # texture and icon size (px); the mod scales the sprite to its size
+SAVE_ART_SIZE = 128                    # art box (px), like the 128 px texture; the mod scales the sprite to its size
 SAVE_DEPTH = 9002                      # above the map (ATTACH_DEPTH)
-SAVE_LABEL_SIZE = 40.0                 # "Saving..." fallback font height in sprite px (about 15 px at 48 px)
-SAVE_PULSE_PERIOD = 1.0                # s: the native material pulses with Time -> Sine (default period)
+SAVE_RING_RADII = (60.0, 48.0)         # outer / inner (px in the 128 box): the texture's ring is about 9% thick
+SAVE_RING_STEPS = 48                   # polygon sides per circle
 THREAT_DEPTH = 1000
 
 
@@ -160,9 +159,7 @@ def add_player_capture(addlandmark):
     return addlandmark
 
 
-def new_functions(pulse_step=2 * math.pi / 30):
-    """The root functions. pulse_step: the save indicator's sine step per movie frame (one SAVE_PULSE_PERIOD at
-    the HUD's frame rate)."""
+def new_functions():
     fns = []
 
     # Classic GFxMovie.Invoke does not fill in its return value (in game it came back as Type=96 garbage),
@@ -246,10 +243,11 @@ def new_functions(pulse_step=2 * math.pi / 30):
     a.do(('fn', 'MinimapPing', ('idx', 'parts', 1)))
     a.ret(True)
     # Python-driven path (PLAN_DIRECT step A): the mod projects positions itself each tick.
-    a.label('c_save')        # save~mode~x~y~size: our save indicator (PLAN_V15)
+    a.label('c_save')        # save~show~x~y~size~alpha: our save indicator (PLAN_V15)
     a.if_not(('==', 'op', ('s', 'save')), 'c_tick')
     a.do(('fn', 'MinimapSave', ('fn', 'Number', ('idx', 'parts', 1)), ('fn', 'Number', ('idx', 'parts', 2)),
-          ('fn', 'Number', ('idx', 'parts', 3)), ('fn', 'Number', ('idx', 'parts', 4))))
+          ('fn', 'Number', ('idx', 'parts', 3)), ('fn', 'Number', ('idx', 'parts', 4)),
+          ('fn', 'Number', ('idx', 'parts', 5))))
     a.ret(True)
     a.label('c_tick')        # tick~u~v~deg~rotate~offset: place the player icon, then centre/rotate
     a.if_not(('==', 'op', ('s', 'tick')), 'c_add')
@@ -433,43 +431,29 @@ def new_functions(pulse_step=2 * math.pi / 30):
     a.ret(True)
     fns.append(function('MinimapHudKeep', (), a))
 
-    # MinimapSave(mode, x, y, size), PLAN_V15: our save indicator, attached once above the map as _root.mmsave.
-    # mode 0 hides it, 1 shows the game's texture (bound by the mod to the SAVE_TEXTURE placeholder), 2 the
-    # "Saving..." text. The icon adds like the native BLEND_Additive material; MinimapSavePulse pulses it.
+    # MinimapSave(show, x, y, size, alpha), PLAN_V15: our save indicator, attached once above the map as
+    # _root.mmsave, placed and scaled so its SAVE_ART_SIZE art is `size` px. The mod drives `alpha` every tick from
+    # the engine's real-time clock, in step with the native icon's material pulse.
     a = Fn()
     a.local('s', '_root.mmsave')
     a.if_not(('==', 's', Ellipsis), 'have')
-    a.if_not(('!', ('==', 'mode', 0)), 'out')        # nothing to hide
+    a.if_not(('!', ('==', 'show', 0)), 'out')        # nothing to hide
     a.do(('call', '_root', 'attachMovie', ('s', SAVE_EXPORT), ('s', 'mmsave'), SAVE_DEPTH))
     a.local('s', '_root.mmsave')
     a.if_not(('!', ('==', 's', Ellipsis)), 'fail')
-    a.setm(('mem', 's', 'icon'), 'blendMode', ('s', 'add'))
-    a.setm('s', 'mmPhase', 0)
-    a.setm('s', 'onEnterFrame', 'MinimapSavePulse')
     a.label('have')
-    a.setm('s', '_visible', ('!', ('==', 'mode', 0)))
+    a.setm('s', '_visible', ('!', ('==', 'show', 0)))
     a.setm('s', '_x', 'x').setm('s', '_y', 'y')
     a.local('k', ('*', ('/', 'size', SAVE_ART_SIZE), 100))
     a.setm('s', '_xscale', 'k').setm('s', '_yscale', 'k')
-    a.setm(('mem', 's', 'icon'), '_visible', ('==', 'mode', 1))
-    a.setm(('mem', 's', 'label'), '_visible', ('==', 'mode', 2))
-    a.setm('_root', 'mmSaveMode', 'mode')
+    a.setm('s', '_alpha', 'alpha')
+    a.setm('_root', 'mmSaveMode', 'show')
     a.label('out')
     a.ret(True)
     a.label('fail')
     a.setm('_root', 'mmSaveMode', -1)                 # attachMovie failed
     a.ret(False)
-    fns.append(function('MinimapSave', ('mode', 'x', 'y', 'size'), a))
-
-    # MinimapSavePulse (the indicator's onEnterFrame): brightness pulses once per SAVE_PULSE_PERIOD, 10-100%.
-    a = Fn()
-    a.local('s', '_root.mmsave')
-    a.if_not(('!', ('==', 's', Ellipsis)), 'pdone')
-    a.setm('s', 'mmPhase', ('+', ('mem', 's', 'mmPhase'), pulse_step))
-    a.setm('s', '_alpha', ('+', 55, ('*', 45, ('call', 'Math', 'sin', ('mem', 's', 'mmPhase')))))
-    a.label('pdone')
-    a.ret(True)
-    fns.append(function('MinimapSavePulse', (), a))
+    fns.append(function('MinimapSave', ('show', 'x', 'y', 'size', 'alpha'), a))
 
     # MinimapEdges(): Enhanced's northMC / currentObjectiveMC (E_HUD Minimap class): an indicator on the window
     # edge in the direction of map north (always shown) and of each objective icon outside the window
@@ -892,59 +876,37 @@ def original_art(hud):
     return out + art_wrappers()
 
 
-def hud_fps(movie):
-    """The movie's frame rate (SWF header, 8.8 fixed point after the stage RECT)."""
-    rect_len = (5 + 4 * (movie[8] >> 3) + 7) // 8
-    return movie[8 + rect_len + 1] + movie[8 + rect_len] / 256.0
-
-
-def external_image(cid, name, w, h):
-    """GFx DefineExternalImage (1001), laid out like classic's own: UI16 id, format 13, width, height, then the
-    export name and a file name, each UI8-length-prefixed."""
-    fn = (name + '.tga').encode()
-    return tag(1001, struct.pack('<HHHH', cid, 13, w, h) + bytes([len(name)]) + name.encode() + bytes([len(fn)]) + fn)
-
-
-def bitmap_shape(sid, bitmap, size):
-    """DefineShape3: a size x size square centred on the origin, clipped-bitmap filled with `bitmap` one bitmap
-    pixel per px (the fill matrix scales twips by 20 and moves the image's corner to the square's)."""
-    half = size / 2
-    body = struct.pack('<H', sid) + rect_bytes(-half, half, -half, half)
-    m = BitWriter()
-    scale, move = 20 << 16, int(round(-half * 20))
-    m.u(1, 1); n = signed_bits(scale); m.u(n, 5); m.s(scale, n); m.s(scale, n)       # HasScale
-    m.u(0, 1)                                                                          # no rotate
-    n = signed_bits(move); m.u(n, 5); m.s(move, n); m.s(move, n)                       # translate
-    body += bytes([1, 0x41]) + struct.pack('<H', bitmap) + m.data() + bytes([0])      # 1 fill, no lines
+def ring_shape(sid, r_out, r_in, steps, fill):
+    """DefineShape3: a ring centred on the origin. Both circles run clockwise on screen: the outer one fills its
+    inside (FillStyle1), the inner one its outside (FillStyle0), so the centre stays empty."""
+    body = struct.pack('<H', sid) + rect_bytes(-r_out, r_out, -r_out, r_out) + bytes([1, 0x00]) + fill + bytes([0])
     w = BitWriter()
-    w.u(1, 4); w.u(0, 4)                                                               # NumFillBits, NumLineBits
-    corner = int(round(-half * 20))
-    w.u(0, 1); w.u(0, 1); w.u(0, 1); w.u(1, 1); w.u(0, 1); w.u(1, 1)                   # fill1, moveTo
-    n = signed_bits(corner); w.u(n, 5); w.s(corner, n); w.s(corner, n)
-    w.u(1, 1)                                                                          # FillStyle1 = 1
-    side = int(round(size * 20))
-    for dx, dy in ((side, 0), (0, side), (-side, 0), (0, -side)):
-        n = max(2, signed_bits(dx, dy))
-        w.u(1, 1); w.u(1, 1); w.u(n - 2, 4); w.u(1, 1); w.s(dx, n); w.s(dy, n)
+    w.u(1, 4); w.u(0, 4)                                            # NumFillBits, NumLineBits
+    for r, fill0, fill1 in ((r_out, 0, 1), (r_in, 1, 0)):
+        pts = [(int(round(r * math.cos(2 * math.pi * k / steps) * 20)),
+                int(round(r * math.sin(2 * math.pi * k / steps) * 20))) for k in range(steps)]
+        w.u(0, 1); w.u(0, 1); w.u(0, 1); w.u(1, 1); w.u(1, 1); w.u(1, 1)   # new fill1, fill0, moveTo
+        n = signed_bits(*pts[0]); w.u(n, 5); w.s(pts[0][0], n); w.s(pts[0][1], n)
+        w.u(fill0, 1); w.u(fill1, 1)
+        for (ax, ay), (bx, by) in zip(pts, pts[1:] + pts[:1]):
+            dx, dy = bx - ax, by - ay
+            n = max(2, signed_bits(dx, dy))
+            w.u(1, 1); w.u(1, 1); w.u(n - 2, 4); w.u(1, 1); w.s(dx, n); w.s(dy, n)
     w.u(0, 6)
     return tag(32, body + w.data())
 
 
-def save_art(hud):
-    """PLAN_V15: the save indicator sprite, exported as SAVE_EXPORT. `icon` is the game texture's placeholder,
-    `label` the "Saving..." fallback in a copy of the HUD's (empty) WillowBody font."""
-    half = 100.0
-    # the box reaches 0.8 x the size below the origin, like the glyph boxes: at 0.6 the "g" lost its tail (run 34)
-    label = tag(37, struct.pack('<H', SAVE_TEXT) + rect_bytes(-half, half, -0.45 * SAVE_LABEL_SIZE, 0.8 * SAVE_LABEL_SIZE)
-                + bytes([0x80 | 0x08 | 0x04 | 0x01, 0x20 | 0x10])    # HasText ReadOnly HasTextColor HasFont; HasLayout NoSelect
-                + struct.pack('<HH', SAVE_FONT, int(round(SAVE_LABEL_SIZE * 20))) + rgba(0xFFFFFF)
-                + bytes([2]) + struct.pack('<HHHh', 0, 0, 0, 0) + b'\0' + b'Saving...\0')
+def save_art():
+    """PLAN_V15: the save indicator, exported as SAVE_EXPORT: the game's Vault logo (a ring and a Λ mark) redrawn
+    white in a SAVE_ART_SIZE box. The mod sets its alpha (the pulse)."""
+    r_out, r_in = SAVE_RING_RADII
+    # Λ: apex near the top of the ring, legs to its lower part, strokes about as thick as the ring
+    mark = [(0, -40), (28, 30), (15, 30), (0, -15), (-15, 30), (-28, 30)]
     sprite = struct.pack('<HH', SAVE_ART, 1)
-    sprite += tag(26, bytes([0x20 | 0x02]) + struct.pack('<HH', 1, SAVE_SHAPE) + b'icon\0')
-    sprite += tag(26, bytes([0x20 | 0x02]) + struct.pack('<HH', 2, SAVE_TEXT) + b'label\0')
-    return [external_image(SAVE_IMAGE, SAVE_TEXTURE, SAVE_ART_SIZE, SAVE_ART_SIZE),
-            bitmap_shape(SAVE_SHAPE, SAVE_IMAGE, SAVE_ART_SIZE),
-            tag(75, struct.pack('<H', SAVE_FONT) + font_record(hud)[2:]), label,
+    sprite += tag(26, bytes([0x02]) + struct.pack('<HH', 1, SAVE_RING))
+    sprite += tag(26, bytes([0x02]) + struct.pack('<HH', 2, SAVE_MARK))
+    return [ring_shape(SAVE_RING, r_out, r_in, SAVE_RING_STEPS, rgba(0xFFFFFF)),
+            polygon_shape(SAVE_MARK, mark, rgba(0xFFFFFF)),
             tag(39, sprite + tag(1, b'') + tag(0, b''))]
 
 
@@ -1014,16 +976,14 @@ def build(hud, status_menu, enhanced=None, version=None):
     assert len(li) == 1, 'landmark sprite %d not found' % LANDMARK_SPRITE
     defs[li[0]] = landmark_frames(defs[li[0]])
     art = enhanced_art(enhanced) if enhanced is not None else original_art(hud)
-    defs = art + save_art(hud) + defs           # each definition only references earlier ones
+    defs = art + save_art() + defs           # each definition only references earlier ones
 
     funcs = copied_functions(status_menu)
     add_player_capture(funcs['AddLandmark'])
-    pulse_step = 2 * math.pi / (hud_fps(hud) * SAVE_PULSE_PERIOD)
-    actions = [funcs[n] for n in COPIED_FUNCTIONS] + new_functions(pulse_step)
+    actions = [funcs[n] for n in COPIED_FUNCTIONS] + new_functions()
     do_action = tag(12, as2asm.encode(actions, end=True))
     exports = ((MAP_ID, EXPORT_NAME), (NORTH_ART, 'bl1mm_north'), (OBJECTIVE_ART, 'bl1mm_objective'),
-               (ENEMY_ART, 'bl1mm_enemy'), (SAVE_ART, SAVE_EXPORT),
-               (SAVE_IMAGE, SAVE_TEXTURE))   # SetExternalTexture finds images through the exports (run 34)
+               (ENEMY_ART, 'bl1mm_enemy'), (SAVE_ART, SAVE_EXPORT))
     export = tag(56, struct.pack('<H', len(exports)) + b''.join(struct.pack('<H', cid) + name.encode() + b'\0'
                                                                 for cid, name in exports))
     added = b''.join(defs) + map_sprite() + export + place_fallback() + do_action

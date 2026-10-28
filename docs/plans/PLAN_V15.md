@@ -62,6 +62,32 @@ relationship. The native icon's exact spot is not yet measured.
 - Hide the native icon while docked: `hud.SavingMaterialScale = 0`, restored when undocked or when the mod is
   disabled.
 
+## Step 1 results (runs 34–35, PHASE3 §3ba, §3bb)
+
+- **Timing:** ours shows and hides with every save.
+- **Binding:** `SetExternalTexture` from Python is safe. It needs the placeholder **exported** under its name (v0.15.1).
+- **Transparency:** the texture then draws, but **opaque**. GFx ignores `blendMode`, and none of the game's movies
+  uses a blend mode, so the black around the logo can't be made transparent.
+- **The native spot:** centred on the docked minimap at stage ≈ (1120, 102), about 64 stage px across.
+- **The pulse:** brightness = clamp(1 − sin(2πt), 0, 1) on the engine's real-time clock (Time ignores pause, Sine
+  period 1 s), from the material's wiring.
+
+## Step 2 (decided 2026-10-28: vector redraw)
+
+1. **Art:** our own vector Vault logo, a ring plus the Λ mark, white, drawn in the movie. It is transparent and sharp
+   at any size. It replaces the external image and `SetExternalTexture`. The "Saving..." text fallback (decision
+   3) is dropped: it covered a texture that can't be shown, and vector art has no such failure path.
+2. **Size and spot:**
+   - 64 stage px, like the native icon.
+   - Position: the native spot moved by the ECHO panel's shift, in p1 space: the Enhanced echo position +
+     (native − classic echo).
+   - For 16:9 that is (610, 13.1) + (903.95 − 791.45, 71.55 − 37.1) = p1 (722.5, 47.55), stage ≈ (938.6, 78.0).
+3. **Pulse in sync:** each tick while shown, the mod sets our alpha to 100 × clamp(1 − sin(2π · t), 0, 1), where t
+   is `WorldInfo.RealTimeSeconds`. The first run logs the clock against `SaveStartTime` to confirm the match. The
+   frame-counted AS pulse is removed.
+4. **Hide the native icon:** while ours is in use (map docked and shown), set `pc.myHUD.SavingMaterialScale = 0`.
+   Restore the original (0.5) when undocked, hidden, on a new HUD, and on disable.
+
 ## Risks
 
 - GFx may draw a `G8` texture without the additive blend (a grey or black square). The `add` blend mode should

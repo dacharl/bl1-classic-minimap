@@ -257,8 +257,6 @@ class Movie:
         self.add_p1(P1_LAYOUTS['16:9'])
         self.invokes = []
         self.visible_sets = []      # every map._visible write, to catch a rebuild hiding the map
-        self.external = {}          # SetExternalTexture bindings (PLAN_V15)
-        self.external_error = None  # set to an exception to make SetExternalTexture raise
 
     def add_p1(self, lay):
         """The stock p1 HUD clip as the layout sprite places it (classic 706 = 16:9, 722 = 4:3), with the
@@ -281,13 +279,6 @@ class Movie:
         self.invokes.append((command, arg))
         if command in self.vm.funcs:
             self.vm.call(command, arg)
-
-    def SetExternalTexture(self, resource, texture):
-        """GFxMovie.SetExternalTexture: binds a game texture to a DefineExternalImage placeholder; returns a bool."""
-        if self.external_error is not None:
-            raise self.external_error
-        self.external[resource] = texture
-        return True
 
     def GetVariableNumber(self, path):
         v = self.vm.lookup({}, path)
@@ -1305,7 +1296,8 @@ def main(gfx_path, on_import=None):
         step(0.3); step(0.3)
     out = buf.getvalue()
     assert out.count('save indicator:') == 1, out                     # baseline once, no repeats
-    assert "save indicator: {'SaveStartTime': 0.0, 'SaveDuration': 0.0, 'SavingMaterialScale': 0.5" in out, out
+    # (SavingMaterialScale is no longer watched: from v0.15.2 the mod itself sets it to hide the native icon)
+    assert "save indicator: {'SaveStartTime': 0.0, 'SaveDuration': 0.0, 'SavingMat':" in out, out
     assert "'world_time': 130.0" in out and 'SavingIndicator_INST' in out, out
     for field, value in (('SaveStartTime', 131.25), ('SaveDuration', 1.5)):
         setattr(hud, field, value)
@@ -1321,52 +1313,43 @@ def main(gfx_path, on_import=None):
     out = buf.getvalue()
     assert 'save started (NotifySavingStarted)' in out and 'save complete (NotifySavingComplete, 1.5 s)' in out, out
     assert "'save_indicator': {'SaveStartTime': 131.25" in out, out
-    # PLAN_V15 step 1 (spike): while a save shows (SaveDuration > 0) and the map is docked and shown, our own
-    # indicator shows at the ECHO panel's shifted spot (p1 (216.1, 30.4) + Enhanced echo (610, 13.1) = (826.1, 43.5)),
-    # 48 px. It draws the game's own texture, bound once per HUD with SetExternalTexture, or "Saving..." when the
-    # texture isn't found (retried every few seconds) or binding fails (not retried). The native icon is left
-    # alone in the spike, so one screenshot shows both.
-    out = buf.getvalue()
+    # PLAN_V15 step 2 (runs 34-35): our own vector Vault logo replaces the native icon while the map is docked and
+    # shown. The native one is hidden with SavingMaterialScale 0 (restored when the map isn't docked and shown, and
+    # on disable). Ours shows while a save does (SaveDuration > 0), 64 px, at the native spot moved by the ECHO
+    # panel's shift: p1 (216.1, 30.4) + Enhanced echo (610, 13.1) + (native - classic echo) (112.5, 34.45) =
+    # (938.6, 77.95). Its alpha follows the native material on the engine's real-time clock:
+    # 100 x clamp(1 - sin(2 pi t), 0, 1), with t = WorldInfo.RealTimeSeconds.
+    assert hud.SavingMaterialScale == 0.0, 'map docked and shown: the native icon is hidden'
     save = movie2.root.get('mmsave')
     assert isinstance(save, asvm.Clip) and save.get('_visible') is True, 'SaveDuration 1.5 > 0: shown'
-    assert save.get('label').get('_visible') is True and save.get('icon').get('_visible') is False, 'no texture yet'
-    close(save.get('_x'), 826.1); close(save.get('_y'), 43.5); close(save.get('_xscale'), 37.5)
-    tex = Struct(name="Texture2D'HUD.Textures.saving_indicator'")
-    OBJECTS['HUD.Textures.saving_indicator'] = tex
-    buf = _io.StringIO()
-    with contextlib.redirect_stdout(buf):
-        step(mod.SAVE_BIND_RETRY + 0.1)
-    assert movie2.external.get('mmSaveTex') is tex and 'save icon texture bound' in buf.getvalue(), buf.getvalue()
-    assert save.get('icon').get('_visible') is True and save.get('label').get('_visible') is False
-    assert hud.SavingMaterialScale == 0.5, 'the spike leaves the native icon alone'
+    close(save.get('_x'), 938.6, 0.06); close(save.get('_y'), 77.95, 0.06); close(save.get('_xscale'), 50.0)
+    for t, alpha in ((10.25, 0.0), (10.75, 100.0), (10.0, 100.0), (10.125, 29.3)):
+        pc.WorldInfo.RealTimeSeconds = t
+        with contextlib.redirect_stdout(io.StringIO()):
+            step(mod.TICK_INTERVAL + 0.01)
+        close(save.get('_alpha'), alpha, 0.1)
     hud.SaveDuration = 0.0
     with contextlib.redirect_stdout(io.StringIO()):
         step(0.3)
-    assert save.get('_visible') is False, 'save over: hidden'
+    assert save.get('_visible') is False and hud.SavingMaterialScale == 0.0, 'save over: ours hidden, native stays off'
     hud.SaveDuration = 3.0
     pc.myHUD.bShowHUD = False
-    with contextlib.redirect_stdout(io.StringIO()):
-        step(0.3)
-    assert save.get('_visible') is False, 'minimap hidden (HUD off): ours stays hidden too'
-    pc.myHUD.bShowHUD = True
-    with contextlib.redirect_stdout(io.StringIO()):
-        step(mod.SETTLE_SECONDS); step(0.3)
-    assert save.get('_visible') is True and save.get('icon').get('_visible') is True
-    with contextlib.redirect_stdout(buf):
-        KEYBINDS['Minimap diagnostics']()
-    assert "'save_icon': {'bound': True, 'mode': 1" in buf.getvalue(), buf.getvalue()[-400:]
-    mod.S.save_bound = None                                             # binding raises: text, not retried
-    movie2.external_error = RuntimeError('no such resource')
     buf = _io.StringIO()
     with contextlib.redirect_stdout(buf):
-        step(0.3); step(mod.SAVE_BIND_RETRY + 0.1)
-    assert 'SetExternalTexture failed (RuntimeError: no such resource)' in buf.getvalue(), buf.getvalue()
-    assert buf.getvalue().count('SetExternalTexture failed') == 1
-    assert save.get('label').get('_visible') is True and save.get('icon').get('_visible') is False
-    movie2.external_error = None
-    hud.SaveDuration = 1.5
-    del OBJECTS['HUD.Textures.saving_indicator']
-    del hud.SaveStartTime, hud.SaveDuration, hud.SavingMaterialScale, hud.SavingMat
+        step(0.3)
+    assert save.get('_visible') is False, 'minimap hidden (HUD off): ours stays hidden too'
+    assert hud.SavingMaterialScale == 0.5 and 'native save icon restored (0.5)' in buf.getvalue(), buf.getvalue()
+    pc.myHUD.bShowHUD = True
+    buf = _io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        step(mod.SETTLE_SECONDS); step(0.3)
+    assert save.get('_visible') is True and hud.SavingMaterialScale == 0.0
+    assert 'native save icon hidden (scale 0.5 -> 0)' in buf.getvalue(), buf.getvalue()
+    with contextlib.redirect_stdout(buf):
+        KEYBINDS['Minimap diagnostics']()
+    assert "'save_icon': {'shown': True, 'spot': (938.6, " in buf.getvalue(), buf.getvalue()[-400:]
+    assert "'native_scale': 0.5" in buf.getvalue()
+    del hud.SaveStartTime, hud.SaveDuration, hud.SavingMat
     with contextlib.redirect_stdout(io.StringIO()):                    # a HUD without the fields: no crash
         step(0.3)
         KEYBINDS['Minimap diagnostics']()
@@ -1391,6 +1374,8 @@ def main(gfx_path, on_import=None):
         mod.get_pc = get_local_pc
     mod.on_disable()
     assert movie2.root.get('map') is UNDEF and p1d.get('bearing').get('_visible') is True
+    assert pc.myHUD.SavingMaterialScale == 0.5, 'disable gives the native save icon back'
+    del pc.myHUD.SavingMaterialScale
     close(p1d.get('echo').get('_x'), 791.5); close(p1d.get('check1').get('_xscale'), 100.04)
     assert TEMPLATE.MovieInfo is STOCK_INFO, 'disable must restore the stock HUD movie'
     # PLAN_V10 worked examples through the real tick hook, using recorded Arid geometry.

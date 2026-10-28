@@ -102,11 +102,8 @@ class Clip:
             c = self.add(Clip(name, None, depth))
             c.frame = ident
             return c
-        if ident == 'bl1mm_save':     # PLAN_V15: the save indicator sprite, as swfbuild lays it out
-            c = self.add(Clip(name, None, depth))
-            c.add(Clip('icon', None, -16383, 128.0, 128.0))     # external image mmSaveTex, centred
-            c.add(Clip('label', None, -16382, 200.0, 50.0))     # "Saving..." in the game font
-            return c
+        if ident == 'bl1mm_save':     # PLAN_V15: the save indicator, a vector Vault logo centred in 128 px
+            return self.add(Clip(name, None, depth, 128.0, 128.0))
         assert ident == EXPORT_NAME, ident
         return self.add(build_map_clip(name, depth))
 
@@ -597,30 +594,21 @@ def main(path):
     close(p1.get('echo').get('_x'), 791.5); assert root.get('mmHudFixes') == 2, 'restored: ticks leave it alone'
     root.children.pop('p1')
 
-    # PLAN_V15 step 1: our save indicator. save~mode~x~y~size attaches bl1mm_save once as _root.mmsave (above the
-    # map), places it at (x, y) scaled so its 128 px art is `size` px, shows the game texture (1) or the "Saving..."
-    # text (2), and hides it (0). The image adds like the native material (BLEND_Additive), and an onEnterFrame
-    # pulses _alpha with a sine, as the material's Time -> Sine does.
+    # PLAN_V15 step 2: our save indicator, a vector Vault logo. save~show~x~y~size~alpha attaches bl1mm_save once as
+    # _root.mmsave (above the map), places it at (x, y) scaled so its 128 px art is `size` px, sets its alpha (the mod
+    # drives the pulse from the engine's clock, in step with the native icon) and shows or hides it.
     assert root.get('mmsave') is UNDEF
-    vm.call('MinimapCmd', 'save~0~0~0~48')
+    vm.call('MinimapCmd', 'save~0~0~0~64~100')
     assert root.get('mmsave') is UNDEF, 'hiding never attaches'
-    vm.call('MinimapCmd', 'save~1~826~43.5~48')
+    vm.call('MinimapCmd', 'save~1~938.6~78~64~40')
     s = root.get('mmsave')
-    assert isinstance(s, Clip) and s.depth == 9002 and s.get('_visible') is True
-    close(s.get('_x'), 826); close(s.get('_y'), 43.5); close(s.get('_xscale'), 37.5); close(s.get('_yscale'), 37.5)
-    assert s.get('icon').get('_visible') is True and s.get('label').get('_visible') is False
-    assert s.get('icon').get('blendMode') == 'add' and root.get('mmSaveMode') == 1
-    pulse = s.get('onEnterFrame')
-    assert pulse is vm.funcs['MinimapSavePulse'], 'the clip pulses itself every frame'
-    alphas = []
-    for _ in range(40):
-        vm.run_func(pulse, [])
-        alphas.append(s.get('_alpha'))
-    assert 5 <= min(alphas) < 30 and 90 < max(alphas) <= 100, (min(alphas), max(alphas))
-    vm.call('MinimapCmd', 'save~2~826~43.5~48')
-    assert s.get('icon').get('_visible') is False and s.get('label').get('_visible') is True
+    assert isinstance(s, Clip) and s.depth == 9002 and s.get('_visible') is True and root.get('mmSaveMode') == 1
+    close(s.get('_x'), 938.6); close(s.get('_y'), 78); close(s.get('_xscale'), 50); close(s.get('_yscale'), 50)
+    close(s.get('_alpha'), 40)
+    vm.call('MinimapCmd', 'save~1~938.6~78~64~100')
     assert root.get('mmsave') is s, 'attached once'
-    vm.call('MinimapCmd', 'save~0~826~43.5~48')
+    close(s.get('_alpha'), 100)
+    vm.call('MinimapCmd', 'save~0~938.6~78~64~100')
     assert s.get('_visible') is False and root.get('mmSaveMode') == 0
 
     # PLAN_V08 movie structure: Enhanced turnin/newmission frames appended to the landmark sprite; the
@@ -642,31 +630,20 @@ def main(path):
     m4 = by_depth[4]
     assert m4[0] & 0x40 and m4.endswith(b'mask\0' + struct.pack('<H', 6)), m4.hex()  # clip layer to depth 6
     assert by_depth[6].endswith(b'maps\0') and struct.unpack_from('<H', by_depth[6], 3)[0] == 1132
-    # PLAN_V15: an external image placeholder laid out like classic's own (UI16 id, format 13, width, height,
-    # export name, file name), a shape filled with it, and the exported bl1mm_save sprite holding icon + label
-    code, ext = mv.defs[1330]
-    assert code == 1001 and struct.unpack_from('<HHHH', ext, 0) == (1330, 13, 128, 128), ext[:8].hex()
-    assert ext[8:9 + ext[8]] == bytes([9]) + b'mmSaveTex', ext
-    # Run 34: SetExternalTexture returned False. GFx resolves the name through the export table: every image the
-    # game binds at runtime (texture1, weaptex1..4, the button art) is exported under its name; unbound ones aren't.
-    assert mv.exports.get(1330) == 'mmSaveTex', 'the placeholder must be exported for SetExternalTexture to find it'
-    code, shape = mv.defs[1331]
-    assert 1330 in shape_bitmaps(code, shape), 'the icon shape fills with the external image'
-    assert mv.defs[1332][0] == 37 and mv.defs[1333][0] == 75, 'the label is text in a copied font'
-    # Run 34: "Saving..." showed as "Savinq...": the box ended 0.6 x the font size below the origin and clipped
-    # the descender. Like the map glyphs' boxes, it must reach 0.8 x the size below (font size: UI16 twips after
-    # the RECT and two flag bytes and the font id).
-    label = mv.defs[1332][1]
-    nbits = label[2] >> 3
-    bits = ''.join(format(b, '08b') for b in label[2:2 + (5 + 4 * nbits + 7) // 8])[5:]
-    ymin, ymax = (int(bits[i * nbits:(i + 1) * nbits], 2) for i in (2, 3))
-    ymin -= (1 << nbits) if ymin >> (nbits - 1) else 0
-    rect_len = (5 + 4 * nbits + 7) // 8
-    size = struct.unpack_from('<H', label, 2 + rect_len + 4)[0]
-    assert ymax >= 0.8 * size and ymin <= -0.45 * size, (ymin, ymax, size)
+    # PLAN_V15 step 2 (run 35: the game texture drew opaque, GFx has no blend modes): our own vector Vault logo, a
+    # white ring (shape 1330) and Λ mark (1331) centred in a 128 px box, no bitmaps and no external image left.
+    for sid in (1330, 1331):
+        code, shape = mv.defs[sid]
+        assert code == 32 and not shape_bitmaps(code, shape), (sid, code)
+        nbits = shape[2] >> 3
+        rect_len = (5 + 4 * nbits + 7) // 8
+        assert shape[2 + rect_len:2 + rect_len + 6] == bytes([1, 0x00]) + b'\xff\xff\xff\xff', 'one solid white fill'
+    assert not any(code in (1001, 1009) and cid >= 1300 for cid, (code, _) in mv.defs.items()), 'no placeholder left'
+    assert 'mmSaveTex' not in mv.exports.values()
     assert mv.exports.get(1334) == 'bl1mm_save'
-    names = [b for c, b in read_tags(mv.defs[1334][1], 4, len(mv.defs[1334][1])) if c == 26]
-    assert any(b.endswith(b'icon\0') for b in names) and any(b.endswith(b'label\0') for b in names)
+    placed = [struct.unpack_from('<H', b, 3)[0] for c, b in read_tags(mv.defs[1334][1], 4, len(mv.defs[1334][1]))
+              if c == 26]
+    assert placed == [1330, 1331], placed
 
     # icon scale (Enhanced draws icons at its map clip's 0.7; ours are scaled up to match)
     vm.call('MinimapCmd', 'clear')

@@ -1849,6 +1849,94 @@ Extended UI merge keeps ids 1330–1334 and the exports. `release.py --game --en
 **Built (not installed):** `dist/releases/0.15.1/` in the `feat/save-indicator-diag` worktree holds
 `classic_minimap.sdkmod` 0.15.1 `0d074f7e…4b43` and the profiler 0.1.16 `f3c9ddb6…ea09`.
 
+**Committed** as `b27e776` on `feat/save-indicator-diag`.
+
+**Installed on the PC (2026-10-28 02:40 UTC, game closed):** `classic_minimap.sdkmod` 0.15.1 `0d074f7e…4b43` and the
+profiler 0.1.16 `f3c9ddb6…ea09`, SHA-256 verified. v0.15.0 (`b5e8312e…3c8c`, `512233be…ea42`) is backed up in the
+main checkout's `dist\v0.15.0-20261028T024022.335811Z\`. The stock `GfxHUD.upk` is unchanged (`5c515c3e…`).
+
 **Next run:** an autosave with a screenshot.
 - The log should read `save icon texture bound: True` and `shown (texture)`.
 - The screenshot shows how the G8 texture draws with the additive blend, and the native icon's spot for step 2.
+
+## 3bb. Run 35: v0.15.1 on the PC; the texture binds but draws opaque (2026-10-28)
+
+**Run (PC, Enhanced art, Extended UI, New Haven, 02:42–02:45 UTC; log and three screenshots provided by the user):**
+"it loaded that time, but without an alpha channel. it also pulsed out of sequence with the native one".
+
+**Evidence:**
+- **Binding works:** `save icon texture bound: True (Texture2D'HUD.Textures.saving_indicator')`, then `save icon
+  shown (texture) at (826.0, 43.5)`, hidden when `SaveDuration` returned to 0. Three saves (02:43:27, 02:45:08,
+  02:45:26) all showed and hid.
+- **No transparency:** ours draws the white Vault logo on a solid black 48 px square (screenshots 1–3, top centre).
+  - GFx ignored the AS `blendMode = "add"`.
+  - None of the game's three movies (classic HUD, Enhanced HUD, status menu) uses a blend mode anywhere, in
+    PlaceObject3 or AS (`blendscan.py`). Their bound images rely on textures with real alpha, so additive blending
+    is a dead end in this GFx.
+- **The native icon's spot** (screenshots 2–3, 2000 × 1125): over the middle of the docked minimap, centred about
+  (1750, 160) px, about 100 px wide. That is stage ≈ (1120, 102), about 64 stage px.
+- **The pulse is out of step.** The material (`matgraph.py`) gives emissive = texture × `Clamp(OneMinus(Sine(Time)),
+  0, 1)` × `MatAlpha` (1), with Time ignoring pause and the Sine period the default 1 s.
+  - So brightness = clamp(1 − sin(2πt), 0, 1) on the engine's real-time clock: full for half of each second, dark
+    at t mod 1 = 0.25.
+  - Ours ran a frame-counted sine from the moment it appeared.
+- **Side notes:**
+  - The ECHO reset fix fired twice again.
+  - The gun-scope screen particle was logged at FOV 25.7 (scoped) with distance/scale 15.37. Once the scope closed,
+    the component sat at the origin, a stale record before `HideScreenParticle`.
+
+**Open for step 2 (user's choice):** how to get transparency, since the game texture can't be drawn additively.
+The native spot and the pulse formula are now known.
+
+**Decided:** a vector redraw (PLAN_V15 step 2).
+
+## 3bc. v0.15.2: PLAN_V15 step 2, our own save indicator replaces the native one (2026-10-28, offline only)
+
+**Change → v0.15.2 + profiler 0.1.17:**
+- **Art** (`swfbuild.save_art`, both art variants): the game's Vault logo redrawn as our own vector art, white, in a
+  128 px box.
+  - The ring is shape 1330: outer radius 60, inner 48, 48 sides. Both circles run clockwise; the outer fills its
+    inside and the inner its outside, so the centre is empty.
+  - The Λ mark is shape 1331, a polygon.
+  - Sprite 1334 places both and is exported `bl1mm_save`.
+  - Removed: the external image, its export, the bitmap shape, the "Saving..." label and its font, and the
+    frame-counted AS pulse. PLAN_V15 records that the text fallback is dropped.
+- **AS:** `save~show~x~y~size~alpha` calls `MinimapSave(show, x, y, size, alpha)`, which attaches once, places,
+  scales and sets the alpha.
+- **Mod:**
+  - **Hiding the native icon:** while the map is docked and shown, `hud.SavingMaterialScale` is set to 0, keeping
+    the original (0.5, never a 0 the mod set itself). It is restored when the map hides or undocks, and on
+    teardown/disable. Both are logged (`native save icon hidden (scale 0.5 -> 0)` / `restored (0.5)`).
+  - **Showing ours:** while a save shows (`SaveDuration > 0`), ours appears at **64 px**, at the native spot moved
+    by the ECHO panel's shift. That is the Enhanced echo position + `SAVE_FROM_ECHO` (112.5, 34.45) in p1 space:
+    stage ≈ (938.6, 78.0) in 16:9.
+  - **Pulse:** each tick, alpha = 100 × clamp(1 − sin(2π · `WorldInfo.RealTimeSeconds`), 0, 1). When ours first
+    shows, the mod logs `RealTimeSeconds` next to `SaveStartTime` to confirm the clock matches.
+  - `SavingMaterialScale` leaves the save diagnostic's watch list, since the mod now writes it. F7's `save_icon` is
+    `{shown, spot, alpha, native_scale}`.
+
+**Tests (red first):**
+- AS: attach once; hiding never attaches; placement, scale 50 % for 64 px, alpha.
+- Builder: two solid white vector shapes, no bitmaps, no external image or `mmSaveTex` export, the sprite placing
+  1330 and 1331, exported `bl1mm_save`.
+- Mod:
+  - the native icon is hidden while docked and shown, and restored with a log line when the map hides; disable
+    gives it back;
+  - the spot is (938.6, 77.95), scale 50;
+  - alpha is 0, 100, 100 and 29.3 at t = 10.25, 10.75, 10.0 and 10.125;
+  - ours hides when the save ends;
+  - F7 shows the new field.
+
+Both suites pass on both art variants; 129 unit tests, coverage, ruff and repository checks pass. The offline
+Extended UI merge keeps ids 1330, 1331 and 1334 and the export. `release.py --game --enhanced`: the in-mod build
+matches (`8eb1e4fd…d042`).
+
+**Built (not installed):** `dist/releases/0.15.2/` in the `feat/save-indicator-diag` worktree holds
+`classic_minimap.sdkmod` 0.15.2 `3a75b9f3…ef91` and the profiler 0.1.17 `a8f8f9b8…df9d`.
+
+**Unverified (in game):**
+- that the vector logo resembles the game's;
+- that the ring's hole renders;
+- that `RealTimeSeconds` is the material's clock (pulse in step);
+- that `SavingMaterialScale` 0 really hides the native icon;
+- the 4:3 spot (the same offset from the echo is assumed).

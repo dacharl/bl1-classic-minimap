@@ -55,7 +55,7 @@ from . import hudmovie
 from .swfmerge import MergeRefused
 from .swfmerge import merge as merge_movie
 
-__version__ = "0.15.1"
+__version__ = "0.15.2"
 
 
 STAGE_W = 1280.0                       # classic HUD stage is 1280x720
@@ -102,12 +102,11 @@ STATUS_TINT = {MS_NOT_STARTED: 0x50E050, MS_READY_TO_TURN_IN: 0xFFC420}   # "Tin
 VOG_WATCH_SECONDS = 10.0               # after an Angel call: log her screen mesh / particle once a second
 VOG_FAST_SECONDS = 15.0                # after an ECHO call: watch the root vog clip every tick (run 24 diagnostic)
 VOG_NUMBERS = ("_x", "_y", "_width", "_height", "_xscale", "_yscale", "_alpha", "_currentframe", "_totalframes")
-SAVE_FIELDS = ("SaveStartTime", "SaveDuration", "SavingMaterialScale", "SavingMat")   # WillowHUD autosave icon
+SAVE_FIELDS = ("SaveStartTime", "SaveDuration", "SavingMat")   # WillowHUD autosave icon (the mod sets the scale)
 SAVE_CHECK_INTERVAL = 0.25             # autosave diagnostic: how often to read them (v0.14.8)
-SAVE_TEXTURE_PATH = "HUD.Textures.saving_indicator"   # the native icon's texture (PLAN_V15), 128 x 128
-SAVE_TEXTURE_NAME = "mmSaveTex"        # our movie's external image placeholder (swfbuild.SAVE_TEXTURE)
-SAVE_SIZE = 48.0                       # our indicator's size (stage px)
-SAVE_BIND_RETRY = 5.0                  # s between tries while the texture isn't loaded yet
+SAVE_SIZE = 64.0                       # our indicator (stage px), as big as the native icon (run 35)
+SAVE_FROM_ECHO = (112.5, 34.45)        # native icon - classic echo, p1 px (run 35: native at stage (1120, 102))
+SAVE_NATIVE_SCALE = 0.5                # WillowHUD.SavingMaterialScale default, restored when ours isn't in use
 GIVER_OBJECTIVE_UU = 500.0             # a giver this close to an objective is its NPC: one mark there (PHASE3 3ak)
 LANDMARK_CLIP = "map.maps.landmarks"   # icon template clip (frames objective .. questionmark, turnin, newmission)
 RECORD_KINDS = {"FloatProperty", "IntProperty", "BoolProperty", "ByteProperty", "StrProperty", "NameProperty",
@@ -229,10 +228,10 @@ class State:
         self.sp_next = 0.0                 # ...and its next once-a-second log
         self.save_state: Any = ()          # autosave fields last logged (() = not read yet; v0.14.8 diagnostic)...
         self.save_next = 0.0               # ...and the next read
-        self.save_bound: Any = None        # PLAN_V15: texture bound to this HUD (None: not yet / not loaded)...
-        self.save_bind_next = 0.0          # ...next try while not loaded...
-        self.save_mode = 0                 # ...our indicator: 0 hidden, 1 texture, 2 "Saving..."...
-        self.save_spot: Any = None         # ...and where it was put (stage px)
+        self.save_shown = False            # PLAN_V15: our save indicator is showing...
+        self.save_spot: Any = None         # ...where (stage px)...
+        self.save_alpha: Any = None        # ...its last alpha...
+        self.native_scale: Any = None      # ...and the native icon's scale while we hide it (None: not hidden)
         self.mission_key: Any = None       # tracked mission and status at the last collect (Objective zoom mode)
         self.fit_mission: Any = None       # ... and at the last fit
         # docking (PLAN_V07 3): layout name when docked, p1 signature it was computed for, HUD column state
@@ -440,6 +439,9 @@ def teardown(movie: Any = None) -> None:
             m.SetVariableBool("p1.bearing._visible", True)
         except Exception:
             pass
+    pc = get_pc()
+    if pc is not None and S.native_scale is not None:      # give the native save icon back (PLAN_V15)
+        hide_native_save(pc.myHUD, False)
     S.reset()
 
 
@@ -1506,7 +1508,8 @@ def on_diag_key() -> None:
     info["angel"] = vog_state(mesh) if mesh is not None else None
     info["vog"] = vog_clip_state(movie) if movie is not None else None
     info["save_indicator"] = save_state(pc) if pc is not None else None
-    info["save_icon"] = {"bound": S.save_bound, "mode": S.save_mode, "spot": S.save_spot}
+    info["save_icon"] = {"shown": S.save_shown, "spot": S.save_spot, "alpha": S.save_alpha,
+                         "native_scale": S.native_scale}
     try:
         info["screen_particles"] = [particle_record(r) for r in particle_records(pc)] if pc is not None else None
     except Exception as ex:
@@ -1925,53 +1928,70 @@ def watch_save(pc: Any) -> None:
         log(f"save indicator: {state}, 'world_time': {world_time}")
 
 
-# PLAN_V15 step 1 (spike): our own save indicator beside the map. The game's texture is bound to our movie's
-# placeholder once per HUD; while a save shows (SaveDuration > 0) and the map is docked and shown, the indicator
-# shows at the ECHO panel's shifted spot (provisional: run 34 measures the native icon's spot). The native icon is
-# left alone in this build, so a screenshot shows both.
-
-def bind_save_texture(movie: Any, now: float) -> None:
-    tex = find("Texture2D", SAVE_TEXTURE_PATH)
-    if tex is None:
-        S.save_bind_next = now + SAVE_BIND_RETRY
-        warn_once("savetex", 'save icon texture not loaded yet; showing "Saving..." until it is')
-        return
-    try:
-        ok = movie.SetExternalTexture(SAVE_TEXTURE_NAME, tex)
-    except Exception as ex:  # never retried: text instead
-        S.save_bound = False
-        log(f'save icon: SetExternalTexture failed ({type(ex).__name__}: {ex}); showing "Saving..."')
-        return
-    S.save_bound = bool(ok)
-    log(f"save icon texture bound: {ok} ({tex})")
-
+# PLAN_V15 step 2: our own save indicator beside the map (a vector Vault logo; the game texture drew opaque, run 35).
+# While the map is docked and shown, the native icon is hidden (SavingMaterialScale 0) and ours shows whenever a
+# save does (SaveDuration > 0): 64 px at the native spot moved by the ECHO panel's shift, its alpha following the
+# native material on the engine's real-time clock.
 
 def save_spot() -> Any:
-    """Stage position of the ECHO panel's shifted place (provisional spot for the spike)."""
+    """Stage position: the native icon's spot moved like the ECHO panel, i.e. Enhanced echo + (native - classic echo)
+    in p1 space."""
     if S.dock is None or S.p1_sig is None:
         return None
     px, py, sx, sy = S.p1_sig[:4]
     ex, ey = LAYOUTS[S.dock]["echo"]
-    return round(px + ex * sx / 100.0, 1), round(py + ey * sy / 100.0, 1)
+    dx, dy = SAVE_FROM_ECHO
+    return round(px + (ex + dx) * sx / 100.0, 1), round(py + (ey + dy) * sy / 100.0, 1)
+
+
+def save_alpha(pc: Any) -> float:
+    """The native material's pulse (HUD.Materials.SavingIndicator, run 35): Clamp(OneMinus(Sine(Time)), 0, 1), Time
+    ignoring pause and the Sine period 1 s."""
+    try:
+        t = float(pc.WorldInfo.RealTimeSeconds)
+    except Exception:
+        return 100.0
+    return round(100.0 * max(0.0, min(1.0, 1.0 - math.sin(2 * math.pi * t))), 1)
+
+
+def hide_native_save(hud: Any, hide: bool) -> None:
+    """Hide the native icon (SavingMaterialScale 0) while ours replaces it; give its scale back otherwise."""
+    try:
+        if hide and S.native_scale is None:
+            scale = float(hud.SavingMaterialScale)
+            S.native_scale = scale if scale > 0 else SAVE_NATIVE_SCALE   # never keep a 0 we set ourselves
+            hud.SavingMaterialScale = 0.0
+            log(f"native save icon hidden (scale {S.native_scale:g} -> 0)")
+        elif not hide and S.native_scale is not None:
+            hud.SavingMaterialScale = S.native_scale
+            log(f"native save icon restored ({S.native_scale:g})")
+            S.native_scale = None
+    except Exception as ex:  # a HUD without the field: leave the native icon alone
+        warn_once("savescale:" + type(ex).__name__, f"native save icon unavailable ({type(ex).__name__}: {ex})")
 
 
 def update_save_icon(pc: Any, movie: Any, now: float) -> None:
+    hud = pc.myHUD
+    spot = save_spot()
+    active = S.shown is True and spot is not None          # ours replaces the native icon
+    hide_native_save(hud, active)
     try:
-        saving = float(pc.myHUD.SaveDuration) > 0
+        saving = float(hud.SaveDuration) > 0
     except Exception:
         saving = False
-    spot = save_spot()
-    want = saving and S.shown is True and spot is not None
-    if want and S.save_bound is None and now >= S.save_bind_next:
-        bind_save_texture(movie, now)
-    mode = (1 if S.save_bound else 2) if want else 0
-    if mode == S.save_mode and (not mode or spot == S.save_spot):
+    show = active and saving
+    if not show and not S.save_shown:
         return
+    alpha = save_alpha(pc) if show else 100.0
     x, y = spot if spot is not None else (0.0, 0.0)
-    cmd(movie, "save", mode, x, y, SAVE_SIZE)
-    if mode != S.save_mode:
-        log(f"save icon {('hidden', 'shown (texture)', 'shown (Saving...)')[mode]} at {spot}")
-    S.save_mode, S.save_spot = mode, spot
+    cmd(movie, "save", 1 if show else 0, x, y, SAVE_SIZE, alpha)
+    if show and not S.save_shown:
+        clocks = {k: getattr(pc.WorldInfo, "RealTimeSeconds", None) if k == "RealTimeSeconds"
+                  else getattr(hud, "SaveStartTime", None) for k in ("RealTimeSeconds", "SaveStartTime")}
+        log(f"save icon shown at {spot}; clocks {clocks}")
+    elif not show:
+        log("save icon hidden")
+    S.save_shown, S.save_spot, S.save_alpha = show, spot, alpha
 
 
 @hook("WillowGame.WillowHUD:NotifySavingStarted", Type.PRE)
