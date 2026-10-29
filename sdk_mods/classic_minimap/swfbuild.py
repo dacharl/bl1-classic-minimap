@@ -95,8 +95,16 @@ SAVE_IDS = {SAVE_RING, SAVE_MARK, SAVE_ART}
 SAVE_EXPORT = 'bl1mm_save'
 SAVE_ART_SIZE = 128                    # art box (px), like the 128 px texture; the mod scales the sprite to its size
 SAVE_DEPTH = 9002                      # above the map (ATTACH_DEPTH)
-SAVE_RING_RADII = (60.0, 48.0)         # outer / inner (px in the 128 box): the texture's ring is about 9% thick
-SAVE_RING_STEPS = 48                   # polygon sides per circle
+SAVE_RING_RADII = (60.0, 50.0)         # outer / inner (px in the 128 box): the reference ring is 270 / 225 (run 36)
+SAVE_RING_STEPS = 64                   # polygon sides per circle
+SAVE_ARC_STEPS = 12                    # segments per arch arc
+# The Λ arch, measured from the user's reference logo (600 px, centre (300, 300), ring radius 270), in its units:
+# the outer edge runs from the feet up to a rounded top (circle centre (0, -145), radius 65), the inner edge to a
+# rounded opening (centre (0, -132.9), radius 32.1). The legs are extended to radius 232 so they run into the ring.
+SAVE_REF_RADIUS = 270.0
+SAVE_ARCH = {'outer': ((-60.0, -170.0), (-170.0, 140.0), (0.0, -145.0), 65.0),
+             'inner': ((-32.0, -130.0), (-110.0, 190.0), (0.0, -132.9), 32.1)}
+SAVE_FOOT_RADIUS = 232.0
 THREAT_DEPTH = 1000
 
 
@@ -896,12 +904,44 @@ def ring_shape(sid, r_out, r_in, steps, fill):
     return tag(32, body + w.data())
 
 
+def arch_points():
+    """The Λ arch (SAVE_ARCH) as one clockwise outline, scaled from the reference logo to our ring: up the left outer
+    leg, over the rounded top, down the right outer leg, along the ring to the right inner foot, up and back over the
+    rounded opening, down the left inner leg and along the ring to the start."""
+    scale = SAVE_RING_RADII[0] / SAVE_REF_RADIUS
+
+    def foot(top, low):     # extend the leg from its top through `low` to SAVE_FOOT_RADIUS (into the ring)
+        dx, dy = low[0] - top[0], low[1] - top[1]
+        a, b = dx * dx + dy * dy, 2 * (top[0] * dx + top[1] * dy)
+        c = top[0] ** 2 + top[1] ** 2 - SAVE_FOOT_RADIUS ** 2
+        t = (-b + math.sqrt(b * b - 4 * a * c)) / (2 * a)
+        return top[0] + t * dx, top[1] + t * dy
+
+    def arc(centre, r, a0, a1, steps, ends=False):
+        rng = range(steps + 1) if ends else range(1, steps)
+        return [(centre[0] + r * math.cos(a0 + (a1 - a0) * k / steps),
+                 centre[1] + r * math.sin(a0 + (a1 - a0) * k / steps)) for k in rng]
+
+    def angle(p, centre=(0.0, 0.0)):
+        return math.atan2(p[1] - centre[1], p[0] - centre[0])
+
+    (o_top, o_low, o_c, o_r), (i_top, i_low, i_c, i_r) = SAVE_ARCH['outer'], SAVE_ARCH['inner']
+    fl, il = foot(o_top, o_low), foot(i_top, i_low)
+    fr, ir = (-fl[0], fl[1]), (-il[0], il[1])
+    a_ol, a_or = angle(o_top, o_c), angle((-o_top[0], o_top[1]), o_c)
+    a_il, a_ir = angle(i_top, i_c), angle((-i_top[0], i_top[1]), i_c)
+    pts = [fl] + arc(o_c, o_r, a_ol, a_or, SAVE_ARC_STEPS, ends=True)            # left leg, rounded top
+    pts += [fr] + arc((0.0, 0.0), SAVE_FOOT_RADIUS, angle(fr), angle(ir), 4)     # right foot along the ring
+    pts += [ir] + arc(i_c, i_r, a_ir, a_il - 2 * math.pi, SAVE_ARC_STEPS, ends=True)   # up, the opening's top
+    pts += [il] + arc((0.0, 0.0), SAVE_FOOT_RADIUS, angle(il), angle(fl), 4)     # left foot along the ring
+    return [(x * scale, y * scale) for x, y in pts]
+
+
 def save_art():
-    """PLAN_V15: the save indicator, exported as SAVE_EXPORT: the game's Vault logo (a ring and a Λ mark) redrawn
-    white in a SAVE_ART_SIZE box. The mod sets its alpha (the pulse)."""
+    """PLAN_V15: the save indicator, exported as SAVE_EXPORT: the game's Vault logo (a ring and the Λ arch) redrawn
+    white in a SAVE_ART_SIZE box from the reference measurements (run 36). The mod sets its alpha (the pulse)."""
     r_out, r_in = SAVE_RING_RADII
-    # Λ: apex near the top of the ring, legs to its lower part, strokes about as thick as the ring
-    mark = [(0, -40), (28, 30), (15, 30), (0, -15), (-15, 30), (-28, 30)]
+    mark = arch_points()
     sprite = struct.pack('<HH', SAVE_ART, 1)
     sprite += tag(26, bytes([0x02]) + struct.pack('<HH', 1, SAVE_RING))
     sprite += tag(26, bytes([0x02]) + struct.pack('<HH', 2, SAVE_MARK))

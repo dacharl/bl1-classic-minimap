@@ -1940,3 +1940,62 @@ matches (`8eb1e4fd…d042`).
 - that `RealTimeSeconds` is the material's clock (pulse in step);
 - that `SavingMaterialScale` 0 really hides the native icon;
 - the 4:3 spot (the same offset from the echo is assumed).
+
+**Committed** as `c4d452d` on `feat/save-indicator-diag`.
+
+**Installed on the PC (2026-10-28 11:45 UTC, game closed):** `classic_minimap.sdkmod` 0.15.2 `3a75b9f3…ef91` and the
+profiler 0.1.17 `a8f8f9b8…df9d`, SHA-256 verified. v0.15.1 (`0d074f7e…4b43`, `f3c9ddb6…ea09`) is backed up in the
+main checkout's `dist\v0.15.1-20261028T114521.597685Z\`. The stock `GfxHUD.upk` is unchanged (`5c515c3e…`).
+
+## 3bd. Run 36: v0.15.2 works; the logo looked crude → v0.15.3 redraw (2026-10-28/29)
+
+**Run (PC, Enhanced art, Extended UI, Crimson Lance bunker, 21:33–21:37 UTC; log, a reference logo and a
+screenshot provided by the user):** "it works, but it doesn't look entirely accurate… looks much more crude".
+
+**Evidence (log):**
+- **Hiding the native icon:** `native save icon hidden (scale 0.5 -> 0)` whenever the map shows docked, and
+  `native save icon restored (0.5)` whenever it hides (loading movie, settling, no live pawn).
+- **Ours shows and hides with each save:** two saves (21:35:21, 21:37:13) logged `save icon shown at (938.5, 78.0)`
+  and `hidden`. The screenshot shows only ours: transparent, left of the map near its top.
+- **The clocks match.** `RealTimeSeconds` read 99.658 against `SaveStartTime` 99.610, and 211.675 against 211.627
+  (within one tick), so our pulse uses the native material's clock.
+- The ECHO reset fix fired once more.
+
+**Shape:** measured from the user's reference (600 px, centre (300, 300)):
+- **Ring:** outer radius 270, inner 225.
+- **The Λ is an arch:**
+  - its outer edge runs from the feet at about (∓170, 140) up to (∓60, −170), then over a rounded top (circle
+    centre (0, −145), radius 65, top at −210);
+  - its inner edge runs from (∓110, 190) up to (∓32, −130), then over a rounded opening (centre (0, −132.9),
+    radius 32.1);
+  - the legs widen downward and run into the ring.
+- v0.15.2 had a six-point Λ with a sharp apex, short legs ending inside the ring, and a relatively thicker ring
+  (60/48).
+
+**Change → v0.15.3 + profiler 0.1.18:**
+- **Ring:** 60/50 (the reference's 270/225 scaled), 64 sides.
+- **Mark:** `swfbuild.arch_points()` builds the arch as one clockwise outline from `SAVE_ARCH`:
+  - the left outer leg, the rounded top (12 segments), the right outer leg;
+  - along the ring to the right inner foot;
+  - up and back over the rounded opening (12 segments), down the left inner leg, along the ring to the start.
+  - The legs are extended to radius 232 (in reference units), so they overlap the ring band with no seam.
+- **Preview:** a standard-library rasterizer (scratchpad `logopreview.py`) renders the same geometry next to the
+  reference for comparison before a game run.
+
+**Tests (red first):** the AS/builder suite checks:
+- the arch's top at −46.7 px (210/270 × 60);
+- symmetry;
+- the feet ending in the ring band (between radius 50 and 60);
+- the ring's outer radius 60;
+- an outline with arcs, not six points.
+
+Both suites pass on both art variants; 129 unit tests, coverage, ruff and repository checks pass. The offline
+Extended UI merge keeps the ids. `release.py --game --enhanced`: the in-mod build matches (`ce5ab041…912c`).
+
+**Built (not installed):** `dist/releases/0.15.3/` in the `feat/save-indicator-diag` worktree holds
+`classic_minimap.sdkmod` 0.15.3 `903a8091…cb04` and the profiler 0.1.18 `c67090fc…7016`.
+
+**Installed on the PC (2026-10-29 15:51 UTC, game closed), not yet committed:** `classic_minimap.sdkmod` 0.15.3
+`903a8091…cb04` and the profiler 0.1.18 `c67090fc…7016`, SHA-256 verified. v0.15.2 (`3a75b9f3…ef91`,
+`a8f8f9b8…df9d`) is backed up in the main checkout's `dist\v0.15.2-20261029T155131.712655Z\`. The stock
+`GfxHUD.upk` is unchanged (`5c515c3e…`).

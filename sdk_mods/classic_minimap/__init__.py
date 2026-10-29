@@ -55,7 +55,7 @@ from . import hudmovie
 from .swfmerge import MergeRefused
 from .swfmerge import merge as merge_movie
 
-__version__ = "0.15.2"
+__version__ = "0.15.3"
 
 
 STAGE_W = 1280.0                       # classic HUD stage is 1280x720

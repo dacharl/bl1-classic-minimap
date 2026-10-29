@@ -638,6 +638,22 @@ def main(path):
         nbits = shape[2] >> 3
         rect_len = (5 + 4 * nbits + 7) // 8
         assert shape[2 + rect_len:2 + rect_len + 6] == bytes([1, 0x00]) + b'\xff\xff\xff\xff', 'one solid white fill'
+    # Run 36: the six-point Λ looked crude. Measured from the user's reference logo (600 px, ring radius 270): the
+    # ring is 45 thick (inner radius 225), and the mark is an arch whose rounded top reaches 210 above the centre and
+    # whose legs run into the ring. Scaled to our 60 px ring: inner radius 50, the arch's top at -46.7, and the
+    # legs' feet past the inner radius (overlapping the ring, no seam).
+    def shape_rect(sid):
+        b = mv.defs[sid][1]
+        n = b[2] >> 3
+        bits = ''.join(format(x, '08b') for x in b[2:2 + (5 + 4 * n + 7) // 8])[5:]
+        vals = [int(bits[i * n:(i + 1) * n], 2) for i in range(4)]
+        return [(v - (1 << n) if v >> (n - 1) else v) / 20.0 for v in vals]      # xmin, xmax, ymin, ymax (px)
+    xmin, xmax, ymin, ymax = shape_rect(1331)
+    assert abs(ymin + 46.7) < 0.3, ymin
+    assert abs(xmin + xmax) < 0.1, 'symmetric'
+    assert math.hypot(xmax, ymax) > 50.0 and math.hypot(xmax, ymax) < 60.0, 'the feet end inside the ring band'
+    assert abs(shape_rect(1330)[1] - 60.0) < 0.1
+    assert len(mv.defs[1331][1]) > 120, 'arcs, not a six-point polygon'
     assert not any(code in (1001, 1009) and cid >= 1300 for cid, (code, _) in mv.defs.items()), 'no placeholder left'
     assert 'mmSaveTex' not in mv.exports.values()
     assert mv.exports.get(1334) == 'bl1mm_save'
