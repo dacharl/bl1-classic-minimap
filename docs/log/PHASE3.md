@@ -2122,3 +2122,53 @@ coverage, ruff and repository checks pass. `release.py --game --enhanced --profi
 `GfxHUD.upk` is unchanged (`5c515c3e…`).
 
 **Unverified:** the new spot in game (16:9 and 4:3).
+
+## 3bg. v0.15.6: our save icon as big as the native one (2026-10-30, offline only)
+
+**Question (user):** "is it also scaled the same as the native icon?" No. Measured on the run 37/38 screenshots
+(2000 × 1125, so 1.5625 screen px per stage px):
+
+| Icon | Ring across (screen px) | Stage px |
+|---|---|---|
+| Native (tunnel, run 37) | ≈ 99.5 | ≈ 63.7 |
+| Ours at 64 px (runs 37, 38) | ≈ 93.5 | 60 |
+
+Ours measures as built: the ring has radius 60 in its 128 px art box. The native texture's ring fills nearly its
+whole box, so at the same 64 px ours was about 6% smaller. At this 16:9 resolution, the native icon and the HUD
+movie scale by the same factor (64 × 1.5625 ≈ 100).
+
+**Change → v0.15.6 + profiler 0.1.21 (the user's choice):**
+- `SAVE_SIZE` is now 68: the ring is 63.75 stage px across, about 99.6 screen px here.
+- `SAVE_RING` is now written as 60/128. The spot follows the ring's size, so the 8 px gap and the level tops hold:
+  centre (1019.6, 66.1).
+
+**Run 39 (PC, v0.15.5, 2026-10-30; a screenshot and the log provided by the user):** the native icon was turned back
+on from the console (`set WillowHUD SavingMaterialScale 0.5`) to compare the two side by side.
+- **Size:** the native ring is ≈ 99 px tall and ours (64 px) ≈ 93, the same gap as measured before; the 68 px
+  change covers it.
+- **Gap:** at 8 px, ours sat against the map's north marker ("N"), which runs around the frame's edge. The user
+  suggested 16 px.
+- **Arch:** the user saw a slightly wider arch on the native icon. Across both icons in that screenshot, the
+  native's outer edge sits at −0.15, −0.23, −0.31, −0.39, −0.45 and −0.54 (x per ring radius) at heights −0.4 to
+  0.6. Ours sat about 0.01–0.02 inside that, so the native arch is about 1–2 px wider in total. The opening and the
+  feet matched within the measurement.
+
+**More changes in v0.15.6 (not yet installed then):**
+- `SAVE_GAP` is now 16, putting the centre at (1011.6, 66.1).
+- `SAVE_ARCH['outer']`: top radius 36 (was 30), foot (−153, 181) (was −150), with the top still 153 above the centre.
+  Fitted with a scratch script, every measured height is within 0.013 of the native.
+
+**Tests (red first):**
+- **Mod suite:** it expects scale 53.125% and the centre at (1011.575, 66.075), worked from the docked matrix.
+- **AS suite:** it checks the arch's outer edge against the native measurements at the six heights (±0.015).
+
+Both suites pass on both art variants; 129 unit tests, coverage, ruff and repository checks pass.
+`release.py --game --enhanced --profiler`: the in-mod build matches (`a82f03c1…53aa`).
+
+**Built (not installed):** `dist/releases/0.15.6/` in the `feat/save-indicator-diag` worktree holds
+`classic_minimap.sdkmod` 0.15.6 `2c8229be…51bc` and the profiler 0.1.21 `e18dc1bf…73f0`.
+
+**Unverified:**
+- the size and spot in game;
+- whether the native icon scales like the HUD movie at other aspect ratios (the Deck's 16:10, 4:3), since it is
+  drawn on the canvas.

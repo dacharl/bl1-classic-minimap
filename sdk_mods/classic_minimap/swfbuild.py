@@ -101,9 +101,10 @@ SAVE_ARC_STEPS = 12                    # segments per arch arc
 # The Λ arch, measured from the native icon (run 37, the tunnel screenshot zoomed; ring radius 270 in these units,
 # like the reference logo of run 36, whose arch was taller and rounder): each edge runs from a foot on the ring's
 # inner edge, through `foot`, up to a tangent of its top circle (centre, radius). The outer top is 153 above the
-# centre, the opening's narrowly rounded apex 108.
+# centre, the opening's narrowly rounded apex 108. Run 39 (both icons side by side) widened the outer edge slightly:
+# top radius 36 (was 30), foot -153 (was -150).
 SAVE_REF_RADIUS = 270.0
-SAVE_ARCH = {'outer': ((-150.0, 181.0), (0.0, -123.0), 30.0),
+SAVE_ARCH = {'outer': ((-153.0, 181.0), (0.0, -117.0), 36.0),
              'inner': ((-82.0, 218.0), (0.0, -100.0), 8.0)}
 THREAT_DEPTH = 1000
 

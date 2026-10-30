@@ -703,6 +703,14 @@ def main(path):
     assert abs(min(y for _, y in opening) + 24.0) < 0.6, min(y for _, y in opening)
     near_apex = [x for x, y in opening if y < min(y for _, y in opening) + 3.0]
     assert max(near_apex) - min(near_apex) < 7.0, 'a pointed opening'
+    # Run 39 (both icons side by side): the native arch is slightly wider. Its outer edge, across the icon at
+    # heights -0.4..0.6 of the ring's radius, sits at -0.15, -0.23, -0.31, -0.39, -0.45, -0.54 (x / radius).
+    def arch_edge(y):
+        xs = [ax + (y - ay) * (bx - ax) / (by - ay) for (ax, ay), (bx, by) in zip(around, around[1:] + around[:1])
+              if (ay - y) * (by - y) <= 0 and ay != by]
+        return max(x for x in xs if -42.0 < x < 0) / 60.0
+    for rel, native in ((-0.4, -0.15), (-0.2, -0.23), (0.0, -0.31), (0.2, -0.39), (0.4, -0.45), (0.6, -0.54)):
+        assert abs(arch_edge(rel * 60.0) - native) < 0.015, (rel, arch_edge(rel * 60.0), native)
 
     # icon scale (Enhanced draws icons at its map clip's 0.7; ours are scaled up to match)
     vm.call('MinimapCmd', 'clear')

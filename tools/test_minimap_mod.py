@@ -1315,7 +1315,7 @@ def main(gfx_path, on_import=None):
     assert "'save_indicator': {'SaveStartTime': 131.25" in out, out
     # PLAN_V15 step 2 (runs 34-35): our own vector Vault logo replaces the native icon while the map is docked. The
     # native one is hidden with SavingMaterialScale 0 (restored when the map isn't docked, and on disable). Ours
-    # shows while a save does (SaveDuration > 0), 64 px, beside the map. Its alpha follows the native material on
+    # shows while a save does (SaveDuration > 0), 68 px, beside the map. Its alpha follows the native material on
     # the engine's real-time clock:
     # 100 x clamp(1 - sin(2 pi t), 0, 1), with t = WorldInfo.RealTimeSeconds.
     assert hud.SavingMaterialScale == 0.0, 'map docked and shown: the native icon is hidden'
@@ -1324,9 +1324,12 @@ def main(gfx_path, on_import=None):
     # Run 38: the native's offset from the ECHO panel left ours about 85 px from the map, for no reason of its own.
     # Ours now sits beside the map's frame: the docked map matrix (0.698, 0.049, 0, 0.700) at p1 + (919.4, 73.4)
     # puts the frame's top-left corner (window -103.95, -86.8 less the 5 px margin) at stage (1059.45, 34.20); the
-    # ring (radius 30 at 64 px) ends SAVE_GAP 8 px left of it, its top level with the frame's: centre
-    # (1059.45 - 8 - 30, 34.20 + 30) = (1021.45, 64.20).
-    close(save.get('_x'), 1021.45, 0.06); close(save.get('_y'), 64.2, 0.06); close(save.get('_xscale'), 50.0)
+    # ring ends SAVE_GAP 16 px left of it (8 px left it touching the north marker, run 39), its top level with the
+    # frame's. Run 38 measurements (2000 px screenshots, 1.5625 per stage px): the native ring is ~99.5 px across
+    # (63.7 stage px), ours at 64 px was ~93.5 (60). Ours is now 68 px (68/128 = 53.125%), ring radius
+    # 60 x 68/128 = 31.875: centre (1059.45 - 16 - 31.875, 34.20 + 31.875) = (1011.575, 66.075).
+    close(save.get('_x'), 1011.575, 0.06); close(save.get('_y'), 66.075, 0.06)
+    close(save.get('_xscale'), 53.125); close(save.get('_yscale'), 53.125)
     for t, alpha in ((10.25, 0.0), (10.75, 100.0), (10.0, 100.0), (10.125, 29.3)):
         pc.WorldInfo.RealTimeSeconds = t
         with contextlib.redirect_stdout(io.StringIO()):
@@ -1355,7 +1358,7 @@ def main(gfx_path, on_import=None):
         assert save.get('_visible') is True and hud.SavingMaterialScale == 0.0
     with contextlib.redirect_stdout(buf):
         KEYBINDS['Minimap diagnostics']()
-    assert "'save_icon': {'shown': True, 'spot': (1021.5, 64.2)" in buf.getvalue(), buf.getvalue()[-400:]
+    assert "'save_icon': {'shown': True, 'spot': (1011." in buf.getvalue(), buf.getvalue()[-400:]
     assert "'native_scale': 0.5" in buf.getvalue()
     del hud.SaveStartTime, hud.SaveDuration, hud.SavingMat
     with contextlib.redirect_stdout(io.StringIO()):                    # a HUD without the fields: no crash

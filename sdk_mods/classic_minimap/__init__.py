@@ -55,7 +55,7 @@ from . import hudmovie
 from .swfmerge import MergeRefused
 from .swfmerge import merge as merge_movie
 
-__version__ = "0.15.5"
+__version__ = "0.15.6"
 
 
 STAGE_W = 1280.0                       # classic HUD stage is 1280x720
@@ -104,9 +104,9 @@ VOG_FAST_SECONDS = 15.0                # after an ECHO call: watch the root vog 
 VOG_NUMBERS = ("_x", "_y", "_width", "_height", "_xscale", "_yscale", "_alpha", "_currentframe", "_totalframes")
 SAVE_FIELDS = ("SaveStartTime", "SaveDuration", "SavingMat")   # WillowHUD autosave icon (the mod sets the scale)
 SAVE_CHECK_INTERVAL = 0.25             # autosave diagnostic: how often to read them (v0.14.8)
-SAVE_SIZE = 64.0                       # our indicator (stage px), as big as the native icon (run 35)
-SAVE_RING = 30.0 / 64.0                # the logo's ring radius per px of SAVE_SIZE (60 in its 128 px art box)
-SAVE_GAP = 8.0                         # stage px between the ring and the map's frame (run 38: was ~85 px away)
+SAVE_SIZE = 68.0                       # our indicator (stage px): its ring as wide as the native's (run 38, ~63.7 px)
+SAVE_RING = 60.0 / 128.0               # the logo's ring radius per px of SAVE_SIZE (60 in its 128 px art box)
+SAVE_GAP = 16.0                        # stage px between the ring and the map's frame (run 39: 8 met the north mark)
 BOX_MARGIN = 5.0                       # the frame's margin around the window (swfbuild.BOX_MARGIN)
 SAVE_NATIVE_SCALE = 0.5                # WillowHUD.SavingMaterialScale default, restored when ours isn't in use
 GIVER_OBJECTIVE_UU = 500.0             # a giver this close to an objective is its NPC: one mark there (PHASE3 3ak)
@@ -1932,7 +1932,7 @@ def watch_save(pc: Any) -> None:
 
 # PLAN_V15 step 2: our own save indicator beside the map (a vector Vault logo; the game texture drew opaque, run 35).
 # While the map is docked (shown or hidden: the HUD movie draws over the travel tunnel, runs 7 and 37), the native
-# icon is hidden (SavingMaterialScale 0) and ours shows whenever a save does (SaveDuration > 0): 64 px beside the
+# icon is hidden (SavingMaterialScale 0) and ours shows whenever a save does (SaveDuration > 0): 68 px beside the
 # map's frame (run 38), its alpha following the native material on the engine's real-time clock.
 
 def save_spot() -> Any:
