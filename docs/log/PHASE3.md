@@ -2300,4 +2300,11 @@ Kept: the PRE `ShowScreenParticle` hook that places Angel's video, the save icon
 **Built (not installed):** `dist/releases/0.16.0/` in the `feat/save-indicator-diag` worktree holds
 `classic_minimap.sdkmod` 0.16.0 `90599fdb…dc21` and the profiler 0.1.23 `6c1fe8cb…cce8`.
 
+**Committed** as `8b725ab` on `feat/save-indicator-diag`.
+
+**Installed on the PC (2026-10-30 21:26 UTC, game closed):** `classic_minimap.sdkmod` 0.16.0
+`90599fdb…dc21` and the profiler 0.1.23 `6c1fe8cb…cce8`, SHA-256 verified. v0.15.7 (`ac81f5c9…0848`,
+`1e54a601…a556`) is backed up in the main checkout's `dist\v0.15.7-20261030T212656.013372Z\`. The stock
+`GfxHUD.upk` is unchanged (`5c515c3e…`).
+
 **Unverified in game:** the groups and sub-menus in the SDK's menu, Angel still centered, rotation, the save icon.
