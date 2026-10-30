@@ -2,7 +2,7 @@
 
 A minimap for **Borderlands Game of the Year (classic)**, modelled on the one in Borderlands GOTY Enhanced. It sits in the top-right corner of your HUD, tilted like the rest of the HUD, and shows:
 
-- the current zone's map art, scrolling and centred on you (optionally rotating with you);
+- the current zone's map art, scrolling and centered on you (optionally rotating with you);
 - landmarks: New-U and fast-travel stations, vendors, Catch-A-Ride, bounty boards and area exits;
 - your current objective: a diamond, or, like Enhanced, the turn-in mark when the mission is ready to hand in;
 - **"!"** where a new mission can be picked up and a turn-in mark where a finished one can be handed in (one mark per spot);
@@ -11,7 +11,7 @@ A minimap for **Borderlands Game of the Year (classic)**, modelled on the one in
 
 The ECHO panel (including the Angel videos), the mission title and the objective checklist move left to make room while the minimap is shown, as they do in Enhanced. The minimap hides itself during the travel tunnel, in menus, in cutscenes and when you're down.
 
-> **Status:** v0.14.1 is a private test build: one-file install, with the HUD movie built from your own game files. v0.13 and v0.14 played well on the PC (with and without Enhanced's art, and with Extended UI). v0.14.1 keeps map icons upright when rotating, and adds an experimental Angel position option. The Steam Deck run is next. The first public release will be 1.0.0.
+> **Status:** v0.16.0 is a private test build: one-file install, with the HUD movie built from your own game files. It has been played on the PC (with and without Enhanced's art, and with Extended UI) and, up to v0.14.7, on the Steam Deck. The first public release will be 1.0.0.
 
 ## Requirements
 
@@ -47,26 +47,50 @@ Delete `classic_minimap.sdkmod`. Optionally delete `classic_minimap*` from `sdk_
 
 Open **MODS → Classic Minimap**:
 
+**Map**
+
 | Option | What it does |
 |---|---|
-| Position | **Docked** (default): where Enhanced puts it, tilted like the HUD, with ECHO and the mission text moved aside. **Custom**: uses the size and margin sliders below, with no tilt and no HUD changes. |
 | Docked size (%) | Size of the docked minimap. |
-| Size (%), Right margin, Top margin | Placement when Position is Custom. |
-| Zoom (vs Enhanced) | 100% uses Enhanced's objective-fit zoom; lower shows more of the map. Applies in either zoom mode. |
+| Zoom | 100% uses Enhanced's objective-fit zoom; lower shows more of the map. Applies in either zoom mode. |
 | Zoom mode | **Enhanced** (default): the zoom is fitted to you and your objectives once per level load, as in Enhanced; switching missions keeps it. **Objective**: also refits when your tracked mission or its status changes. **F8** refits in both modes. |
 | Icon size (%) | Size of landmark, player and enemy icons; 100% matches Enhanced. |
 | Rotate with player | Rotate the map so you always face up (north marker moves around the edge); icons stay upright, as in Enhanced. |
+
+**Markers**
+
+| Option | What it does |
+|---|---|
 | Show enemies | Red dots for enemies the radar tracks. |
 | Enemy range (m) | Only show enemies this close; 0 = no limit (like Enhanced). |
 | Show mission givers | "!" and turn-in marks at mission givers. |
 | Tint objective diamonds | Off (default, like Enhanced): a mission ready to hand in shows the turn-in mark, and one not started shows "!", in place of the objective diamond. On: the diamond stays and turns gold (ready to hand in) or green (not started), as in earlier versions. |
+
+**HUD**
+
+| Option | What it does |
+|---|---|
 | Hide compass | Hide the classic compass strip at the bottom. |
-| Angel position | **Centered** (default): Angel's ECHO video appears top centre, clear of the minimap, like GOTY Enhanced. **Classic**: top right, partly behind the minimap. Takes effect from her next call. |
+| Angel position | **Centered** (default): Angel's ECHO video appears top center, clear of the minimap, like GOTY Enhanced. **Classic**: top right, partly behind the minimap. Takes effect from her next call. |
+
+**Custom position** (sub-menu)
+
+| Option | What it does |
+|---|---|
+| Position | **Docked** (default): where Enhanced puts it, tilted like the HUD, with ECHO and the mission text moved aside. **Custom**: uses the size and margin sliders below, with no tilt and no HUD changes. |
+| Size (%), Right margin, Top margin | Placement when Position is Custom. |
+
+**Advanced** (sub-menu)
+
+| Option | What it does |
+|---|---|
 | Use Enhanced artwork | On (default): Enhanced's artwork when Enhanced is installed. Off: the mod's own art. Takes effect from the next level load. |
 | Refresh map markers | Re-collect landmarks and objectives and refit the zoom (same as F8). |
 | Rebuild HUD movie from game files | Build the minimap's HUD movie from your game files again, for example after installing Enhanced. Takes effect from the next level load. |
 
-**Keys:** **F8** rebuilds the minimap's markers. **F7** writes a diagnostic snapshot to the SDK log and confirms it in the in-game console; it includes which art is in use and which game files the movie was built from. Please include the snapshot with bug reports.
+While the map is docked, the game's autosave icon is replaced by a matching one beside the map, so it doesn't cover the minimap.
+
+**Keys:** **F8** refreshes the map markers. **F7** writes a diagnostic snapshot to the SDK log and confirms it in the in-game console; it includes which art is in use and which game files the movie was built from. Please include the snapshot with bug reports.
 
 **Enhanced installed somewhere unusual?** Set `"Enhanced folder"` in `…\sdk_mods\settings\classic_minimap.json` to Enhanced's game folder, then press **Rebuild HUD movie from game files**.
 
@@ -74,7 +98,7 @@ Open **MODS → Classic Minimap**:
 
 With Enhanced installed, the minimap uses Enhanced's own box, window, turn-in and "!" marks, north "N" and enemy diamond. Without it, the mod draws its own:
 
-- "N", a gold "!" and a green "X" (turn-in), the same colours as Enhanced's marks, drawn in the game's own HUD font with a dark outline;
+- "N", a gold "!" and a green "X" (turn-in), the same colors as Enhanced's marks, drawn in the game's own HUD font with a dark outline;
 - a dark frame around the map window, and a red enemy diamond.
 
 The zone maps, landmark icons and objective diamond always come from classic itself.

@@ -166,6 +166,12 @@ def install_stubs(helper_factory, get_pc):
     for n in ('BoolOption', 'SliderOption', 'SpinnerOption', 'ButtonOption', 'HiddenOption'):
         setattr(mb, n, type(n, (Opt,), {}))
 
+    class Group:
+        def __init__(self, identifier, children, **kw):
+            self.identifier, self.children, self.kw = identifier, list(children), kw
+
+    mb.GroupedOption, mb.NestedOption = type('GroupedOption', (Group,), {}), type('NestedOption', (Group,), {})
+
     def hook(name, typ='PRE', **kw):
         def deco(f):
             HOOKS.setdefault(name, f)                   # the first hook on a function, by name...
@@ -693,6 +699,12 @@ def main(gfx_path, on_import=None):
         assert m.get('_visible') is True, label + ' cleared: minimap back'
         close(p1c.get('echo').get('_x'), e16['echo'][0])
     # Run 25 (Deck): the game re-plays p1's first frame, putting ECHO back behind the map with the shift still on.
+    # Run 41: before any reset mmHudFixes is undefined; F7 said 'hud_fixes': inf
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        KEYBINDS['Minimap diagnostics']()
+    assert "'hud_fixes': 0" in buf.getvalue(), buf.getvalue()[-300:]
+    mod.S.warned.discard('diag-console')          # the viewport console's once-only warning is checked further down
     # The next tick moves the column again; the once-a-second check logs it, and F7 counts it.
     for n, (x, y) in P1_LAYOUTS['16:9']['column'].items():
         p1c.get(n).props.update(_x=x, _y=y, _xscale=100.04)
@@ -943,7 +955,7 @@ def main(gfx_path, on_import=None):
     # mission data unreadable: no tint, the map still runs
     saved = pc.MissionPlaythroughData
     del pc.MissionPlaythroughData
-    KEYBINDS['Rebuild minimap'](); step(); step()
+    KEYBINDS['Refresh map markers'](); step(); step()
     assert mod.S.phase == 'running' and mod.S.tint is None
     pc.MissionPlaythroughData = saved
     step(0.6); step(); step()                          # status readable again -> key changes once
@@ -955,7 +967,7 @@ def main(gfx_path, on_import=None):
 
     # 8. rebuild (F8 / status menu close) starts over: a new transient helper, released after capture
     n = len(helpers)
-    KEYBINDS['Rebuild minimap']()
+    KEYBINDS['Refresh map markers']()
     step(); step()
     assert mod.S.phase == 'running' and len(helpers) == n + 1
     assert not any(x.ObjectFlags & KEEP_ALIVE for x in helpers), 'no helper may stay pinned'
@@ -1117,137 +1129,26 @@ def main(gfx_path, on_import=None):
         assert "'%s'" % field in diag, field
     # PLAN_V13 decision 8: F7 says which art is in use and where the inputs came from
     assert "'art': 'original'" in diag and 'GfxHUD.upk' in diag and "'enhanced_folder': None" in diag, diag[-600:]
-    # Run 23 spike (PHASE3 3an): if PlayVoGEchoCall ever runs, log its 3D screen mesh (GFxUIManager.ScreenMesh) and
-    # any move of it during the watch window. Classic never used it (runs 24-30: Angel is a screen particle), so the
-    # mod no longer moves the mesh: "Angel position" acts on the particle only (v0.14.7).
-    class Mesh:
-        def __init__(self):
-            self.Translation = vec(10.0, 20.0, 30.0)
-            self.Rotation = Struct(Pitch=0, Yaw=0, Roll=0)
-            self.Scale, self.Scale3D, self.AbsoluteTranslation = 1.0, vec(1.0, 1.0, 1.0), False
-            self.Owner, self.sets = "CameraActor'Matinee'", []
-
-        def SetTranslation(self, v):
-            self.sets.append((v.X, v.Y, v.Z))
-            self.Translation = vec(v.X, v.Y, v.Z)
-    mesh = Mesh()
-    pc.GFxUIManager = Struct(ScreenMesh=mesh)
-    vog_hook = HOOKS['WillowGame.WillowPlayerController:PlayVoGEchoCall']
-    buf = _io.StringIO()
-    with contextlib.redirect_stdout(buf):
-        vog_hook(pc, None, None, None)
-    assert mesh.sets == [] and 'Angel call: screen mesh' in buf.getvalue() and '(10.0, 20.0, 30.0)' in buf.getvalue()
     assert mod.opt_angel_position.value == 'Centered', 'Angel is centred by default (v0.14.7)'
-    with contextlib.redirect_stdout(buf):
-        mesh.Translation = vec(12.0, 20.0, 30.0)               # the native moves it
-        step(1.1)
-    assert mesh.sets == [] and 'the screen mesh moved to (12.0, 20.0, 30.0)' in buf.getvalue(), buf.getvalue()
-    with contextlib.redirect_stdout(buf):
-        KEYBINDS['Minimap diagnostics']()
-    assert "'angel':" in buf.getvalue()
-    pc.GFxUIManager = None                                     # no UI manager: no crash, one warning
-    with contextlib.redirect_stdout(io.StringIO()):
-        vog_hook(pc, None, None, None)
-    del pc.GFxUIManager
-    # Run 24 (PHASE3 3an): PlayVoGEchoCall never ran and there was no screen mesh. Every HUD movie's root clip `vog`
-    # (authored at (412, 90), 456 x 256.6) shows external image "texture1", the name ECHO videos are bound to. F7
-    # records that clip, a once-a-second watch logs every change to it, and the script-level ECHO entry points log
-    # the call and watch it every tick for a while.
-    assert "'vog': None" in buf.getvalue(), 'F7 records a missing vog clip as None'
-    vog = movie2.root.add(asvm.Clip('vog'))
-    vog.props.update(_x=412.0, _y=90.0, _width=456.0, _height=256.6, _xscale=100.0, _yscale=100.0, _visible=False,
-                     _alpha=100.0, _currentframe=1.0, _totalframes=1.0)
-    buf = _io.StringIO()
-    with contextlib.redirect_stdout(buf):
-        KEYBINDS['Minimap diagnostics']()
-    assert "'vog': {" in buf.getvalue() and "'_x': 412.0" in buf.getvalue() and "'_visible': False" in buf.getvalue()
-    buf = _io.StringIO()
-    with contextlib.redirect_stdout(buf):
-        step(1.1); step(1.1)
-    assert buf.getvalue().count("Angel's screen (root vog):") == 1, buf.getvalue()   # baseline once, no repeats
-    vog.props.update(_x=700.0, _visible=True)
-    buf = _io.StringIO()
-    with contextlib.redirect_stdout(buf):
-        step(1.1)
-    assert "Angel's screen (root vog):" in buf.getvalue() and "'_x': 700.0" in buf.getvalue(), buf.getvalue()
-    for name in ('WillowGame.WillowPlayerController:Behavior_PlayEchoCall',
-                 'WillowGame.WillowPlayerController:ClientPlayEchoCall',
-                 'WillowGame.WillowHUDGFxMovie:PlayEchoCall'):
-        buf = _io.StringIO()
-        with contextlib.redirect_stdout(buf):
-            HOOKS[name](pc, Struct(CallDef="EchoCallDefinition'Angel'"), None, None)
-            vog.props.update(_y=vog.props['_y'] + 1.0)
-            step(mod.TICK_INTERVAL + 0.01)                      # the fast watch sees it on the next tick
-        out = buf.getvalue()
-        assert 'ECHO call (%s)' % name.rsplit(':', 1)[1] in out and "Angel's screen (root vog):" in out, out
-    with contextlib.redirect_stdout(io.StringIO()):
-        step(mod.VOG_FAST_SECONDS + 1.0)                        # fast watch over: back to once a second
-    vog.props.update(_y=1.0)
-    buf = _io.StringIO()
-    with contextlib.redirect_stdout(buf):
-        step(mod.TICK_INTERVAL + 0.01)
-    assert "Angel's screen" not in buf.getvalue()
-    movie2.root.children.pop('vog')
-    # Run 26 (PC): Angel's video sat top right behind the map while the root vog clip stayed 0 x 0 and there was no
-    # screen mesh. Classic shows it as a screen particle (ShowScreenParticle attaches a ParticleSystemComponent to the
-    # pawn; SetUpVoGScreenParticle puts the ECHO video in its material). Log every record: template, component
-    # placement and each emitter's modules, then the component against the camera once a second for a while.
-    # Cooked start locations have no Distribution object, only the baked lookup table: [min in, time scale, then
-    # LookupTableChunkSize floats per entry] (X forward, Y right, Z up in the camera-aligned local space)
+    # v0.16.0: the research into Angel's video and the autosave icon is finished (runs 23-41), so its hooks, watches,
+    # log lines and F7 fields are gone: the log stays small, and an ECHO call or a save runs no code of ours.
+    for name in ('WillowPlayerController:PlayVoGEchoCall', 'WillowPlayerController:Behavior_PlayEchoCall',
+                 'WillowPlayerController:ClientPlayEchoCall', 'WillowHUDGFxMovie:PlayEchoCall',
+                 'WillowPlayerController:SetUpVoGScreenParticle', 'WillowPlayerController:ShowScreenParticle:post',
+                 'WillowHUD:NotifySavingStarted', 'WillowHUD:NotifySavingComplete'):
+        assert 'WillowGame.' + name not in HOOKS, name
+    for field in ('angel', 'vog', 'screen_particles', 'save_indicator'):
+        assert "'%s'" % field not in diag, field
+    # Runs 29-30: Cooked start locations have no Distribution object, only the baked lookup table: [min in, time scale,
+    # then LookupTableChunkSize floats per entry] (X forward, Y right, Z up in the camera-aligned local space)
     table = [0.0, 0.01, 0.01, 0.0, 0.0, 0.01, 0.0, 0.0]                 # run 28's VoG table: (0.01, 0, 0) twice
     location = Struct(_type='ParticleModuleLocation', StartLocation=Struct(
         Distribution=None, Type=0, Op=1, LookupTableNumElements=1, LookupTableChunkSize=3, LookupTable=table))
-    # Run 28: the start location is ~0 and the component sits on the camera's view axis, yet Angel shows top right,
-    # so the placement must be in the material: dump the per-call material instance (the PSC's VoGMaterial instance
-    # parameter) and the template material, each with its scalar/vector/texture parameters and parent chain, and
-    # the size module's table.
     size = Struct(_type='ParticleModuleSize', StartSize=Struct(Distribution=None, LookupTableChunkSize=3,
                                                                LookupTable=[0.0, 17.76, 17.76, 10.0, 0.0, 17.76,
                                                                             10.0, 0.0]))     # run 29: 17.76 x 10
-    vog_mat = Obj(_name="Material'fx_PostProcess.VoG.VoG_Mat'", Class=Struct(Name='Material'))
-    mati = Obj(_name="MaterialInstanceConstant'fx_PostProcess.VoG.VoG_Mati'", Class=Struct(Name='MaterialInstanceConstant'),
-               Parent=vog_mat, ScalarParameterValues=[Struct(ParameterName='OffsetU', ParameterValue=0.7)],
-               VectorParameterValues=[Struct(ParameterName='Tint', ParameterValue=Struct(R=1.0, G=1.0, B=1.0, A=1.0))],
-               TextureParameterValues=[])
-    instance = Obj(_name="MaterialInstanceConstant'Transient.MaterialInstanceConstant_9'",
-                   Class=Struct(Name='MaterialInstanceConstant'), Parent=mati, ScalarParameterValues=[],
-                   VectorParameterValues=[], TextureParameterValues=[
-                       Struct(ParameterName='Movie', ParameterValue="BinkMovie'vog_binks.Angel_01'")])
-    emitter = Struct(EmitterName='VoG_Screen', LODLevels=[Struct(Modules=[location, size], RequiredModule=Struct(
-        bUseLocalSpace=True, ScreenAlignment=0, Material=mati))])
-    psc = Struct(Translation=vec(100.0, 0.0, 0.0), Rotation=Struct(Pitch=0, Yaw=0, Roll=0), Scale=1.0,
-                 Scale3D=vec(1.0, 1.0, 1.0), AbsoluteTranslation=True, AbsoluteRotation=True, DepthPriorityGroup=2,
-                 InstanceParameters=[Struct(Name='Other', Material=None),
-                                     Struct(Name='VoGMaterial', Material=instance)])
+    emitter = Struct(EmitterName='VoG_Screen', LODLevels=[Struct(Modules=[location, size], RequiredModule=None)])
     template = Obj(Emitters=[emitter], _name="ParticleSystem'fx_PostProcess.VoG.part_VoG_Pulse'")
-    pc.ScreenParticleRecords = [Struct(Template=template, Component=psc, MatParamName='VoGMaterial')]
-    pc.GetPlayerViewPoint = lambda loc, rot, *a: (None, vec(90.0, 0.0, 0.0), Struct(Pitch=-5894, Yaw=-3997, Roll=0))
-    pc.GetFOVAngle = lambda: 90.0
-    buf = _io.StringIO()
-    with contextlib.redirect_stdout(buf):
-        HOOKS['WillowGame.WillowPlayerController:SetUpVoGScreenParticle'](pc, Struct(Template=template), None, None)
-        psc.Translation = vec(150.0, 0.0, 0.0)
-        step(1.1)
-        KEYBINDS['Minimap diagnostics']()
-    out = buf.getvalue()
-    assert 'screen particle (SetUpVoGScreenParticle)' in out and 'VoG_Screen' in out, out
-    assert 'ParticleModuleLocation' in out and "'DepthPriorityGroup': 2" in out, out
-    assert "'table': [0.0, 0.01, 0.01, 0.0, 0.0, 0.01, 0.0, 0.0]" in out and "'chunk': 3" in out, out
-    assert "'StartSize': {" in out and '[0.0, 17.76, 17.76, 10.0, 0.0, 17.76, 10.0, 0.0]' in out, out
-    assert "'instance': {'name': \"MaterialInstanceConstant'Transient.MaterialInstanceConstant_9'\"" in out, out
-    assert "'textures': {'Movie': \"BinkMovie'vog_binks.Angel_01'\"}" in out, out
-    assert "'scalars': {'OffsetU': 0.7}" in out and "'vectors': {'Tint': (1.0, 1.0, 1.0, 1.0)}" in out, out
-    assert "Material'fx_PostProcess.VoG.VoG_Mat'" in out, 'the parent chain reaches the base material'
-    # Invariance check (run 30): the overlay keeps a fixed angle only if distance/scale stays ~19.3; the FOV is the one
-    # thing that can still change where she appears, so log both on every watch line.
-    assert 'screen particle at (150.0, 0.0, 0.0) rotation (0, 0, 0), camera at (90.0, 0.0, 0.0) rotation (-5894, -3997, 0)' \
-        ', fov 90.0, distance/scale 60.0' in out, out
-    assert "'screen_particles': [" in out, out
-    buf = _io.StringIO()
-    with contextlib.redirect_stdout(buf):            # other screen effects (burning, shock) repeat: log each once
-        for _ in range(3):
-            HOOKS['WillowGame.WillowPlayerController:ShowScreenParticle:post'](pc, Struct(Template=template), None, None)
-    assert buf.getvalue().count('screen particle (ShowScreenParticle)') == 1, buf.getvalue()
     # Runs 29-30: the VoG particle is a 17.76 x 10 overlay (local space, X forward, Y right, Z up) that classic shows top
     # right; Angel is centred in every video frame. "Angel position" = Centered (the default) shifts the overlay left
     # by 0.28 of its width (Y start location) before the effect starts (PRE ShowScreenParticle): 0.25 moved her from
@@ -1261,6 +1162,7 @@ def main(gfx_path, on_import=None):
         show_pre(pc, Struct(Template=template), None, None)            # idempotent
     assert table == [0.0, 0.01, 0.01, -4.97, 0.0, 0.01, -4.97, 0.0], table
     assert buf.getvalue().count("Angel's video moved left by 4.97") == 1, buf.getvalue()
+    assert 'start location' not in buf.getvalue(), buf.getvalue()
     other_table = [0.0, 0.0, 0.0, 30.0, 0.0]
     other = Obj(_name="ParticleSystem'fx_PostProcess.Burn'", Emitters=[Struct(EmitterName='Burn', LODLevels=[Struct(RequiredModule=None, Modules=[Struct(
         _type='ParticleModuleLocation', StartLocation=Struct(Distribution=None, LookupTableChunkSize=3,
@@ -1279,40 +1181,13 @@ def main(gfx_path, on_import=None):
     with contextlib.redirect_stdout(io.StringIO()):
         show_pre(pc, Struct(Template=template), None, None)
     assert table == [0.0, 0.01, 0.01, 0.0, 0.0, 0.01, 0.0, 0.0], 'Classic restores the authored offset'
-    pc.ScreenParticleRecords = None                             # missing property: no crash
-    with contextlib.redirect_stdout(io.StringIO()):
-        HOOKS['WillowGame.WillowPlayerController:SetUpVoGScreenParticle'](pc, None, None, None)
-        step(mod.VOG_WATCH_SECONDS + 1.0)
-    del pc.ScreenParticleRecords, pc.GetPlayerViewPoint, pc.GetFOVAngle
-    # Autosave diagnostic (v0.14.8, PHASE3 3ax): WillowHUD draws SavingMat natively above the minimap; its position is
-    # native code, but SaveStartTime / SaveDuration / SavingMaterialScale are plain HUD properties. Log every change
-    # (with world time) so a run shows how a save drives them; F7 reports them; the NotifySaving* hooks log if they fire.
     hud = pc.myHUD
-    hud.SaveStartTime, hud.SaveDuration, hud.SavingMaterialScale = 0.0, 0.0, 0.5
+    hud.SaveStartTime, hud.SaveDuration, hud.SavingMaterialScale = 131.25, 1.5, 0.5
     hud.SavingMat = "MaterialInstanceConstant'HUD.Materials.SavingIndicator_INST'"
-    pc.WorldInfo.TimeSeconds = 130.0
     buf = _io.StringIO()
     with contextlib.redirect_stdout(buf):
-        step(0.3); step(0.3)
-    out = buf.getvalue()
-    assert out.count('save indicator:') == 1, out                     # baseline once, no repeats
-    # (SavingMaterialScale is no longer watched: from v0.15.2 the mod itself sets it to hide the native icon)
-    assert "save indicator: {'SaveStartTime': 0.0, 'SaveDuration': 0.0, 'SavingMat':" in out, out
-    assert "'world_time': 130.0" in out and 'SavingIndicator_INST' in out, out
-    for field, value in (('SaveStartTime', 131.25), ('SaveDuration', 1.5)):
-        setattr(hud, field, value)
-        buf = _io.StringIO()
-        with contextlib.redirect_stdout(buf):
-            step(0.3)
-        assert "'%s': %s" % (field, value) in buf.getvalue(), buf.getvalue()
-    buf = _io.StringIO()
-    with contextlib.redirect_stdout(buf):
-        HOOKS['WillowGame.WillowHUD:NotifySavingStarted'](hud, None, None, None)
-        HOOKS['WillowGame.WillowHUD:NotifySavingComplete'](hud, Struct(InSaveDuration=1.5), None, None)
-        KEYBINDS['Minimap diagnostics']()
-    out = buf.getvalue()
-    assert 'save started (NotifySavingStarted)' in out and 'save complete (NotifySavingComplete, 1.5 s)' in out, out
-    assert "'save_indicator': {'SaveStartTime': 131.25" in out, out
+        step(0.3)
+    assert 'save ' not in buf.getvalue().replace('native save icon', ''), buf.getvalue()    # a save logs nothing
     # PLAN_V15 step 2 (runs 34-35): our own vector Vault logo replaces the native icon while the map is docked. The
     # native one is hidden with SavingMaterialScale 0 (restored when the map isn't docked, and on disable). Ours
     # shows while a save does (SaveDuration > 0), 68 px, beside the map. Its alpha follows the native material on
@@ -1431,14 +1306,33 @@ def main(gfx_path, on_import=None):
     step(0.6); step()
     close(fitted_art.get('_xscale'), 185.27, 0.02)
     # F8 ("Refresh map markers") refits in either mode
-    KEYBINDS['Rebuild minimap']()
+    KEYBINDS['Refresh map markers']()
     step()
     close(fitted_art.get('_xscale'), 400)
     assert mod.opt_rebuild.identifier == 'Refresh map markers'
+    # v0.16.0: the menu is grouped; each option appears once, and the keybind and the button share one name
+    menu = [(type(o).__name__, o.identifier, [c.identifier for c in getattr(o, 'children', ())])
+            for o in mod.mod.options]
+    assert menu == [
+        ('GroupedOption', 'Map', ['Docked size (%)', 'Zoom', 'Zoom mode', 'Icon size (%)', 'Rotate with player']),
+        ('GroupedOption', 'Markers', ['Show enemies', 'Enemy range (m)', 'Show mission givers',
+                                      'Tint objective diamonds']),
+        ('GroupedOption', 'HUD', ['Hide compass', 'Angel position']),
+        ('NestedOption', 'Custom position', ['Position', 'Size (%)', 'Right margin', 'Top margin']),
+        ('NestedOption', 'Advanced', ['Use Enhanced artwork', 'Refresh map markers',
+                                      'Rebuild HUD movie from game files']),
+        ('HiddenOption', 'Enhanced folder', [])], menu             # top level, where the README says to set it
+    in_menu = [c for o in mod.mod.options for c in getattr(o, 'children', [o])]
+    module_options = [v for k, v in vars(mod).items() if k.startswith('opt_')]
+    assert sorted(o.identifier for o in in_menu) == sorted(o.identifier for o in module_options)
+    assert not hasattr(mod, 'opt_rotation_offset')
+    assert sorted(KEYBINDS) == ['Minimap diagnostics', 'Refresh map markers'], sorted(KEYBINDS)
+    assert not any('centre' in o.description or 'colour' in o.description
+                   for o in in_menu if hasattr(o, 'description')), 'American spelling'
     assert mod.opt_rebuild_movie.identifier == 'Rebuild HUD movie from game files'
     for offset, expected in ((None, 108), ((20000, 30000, 0), 108), ((6000, 9000, 0), 185.27)):
         slots[0].WaypointLocation = vec(*offset) if offset else vec(0, 0, 0)
-        KEYBINDS['Rebuild minimap']()
+        KEYBINDS['Refresh map markers']()
         step()
         close(fitted_art.get('_xscale'), expected, 0.02)
     # The multiplier changes the displayed zoom without changing the captured fit.
@@ -1463,7 +1357,7 @@ def main(gfx_path, on_import=None):
         FakeAnchor.Location = old_location
     # The native gates waypoint collection on RadarMgr; the pawn alone uses 108%.
     world.GRI.RadarMgr = None
-    KEYBINDS['Rebuild minimap']()
+    KEYBINDS['Refresh map markers']()
     step()
     close(fitted_art.get('_xscale'), 108)
     world.GRI.RadarMgr = radar

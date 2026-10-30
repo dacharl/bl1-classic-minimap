@@ -46,8 +46,8 @@ from pathlib import Path
 from typing import Any
 
 import unrealsdk
-from mods_base import (SETTINGS_DIR, BoolOption, ButtonOption, HiddenOption, ObjectFlags, SliderOption, SpinnerOption,
-                       build_mod, get_pc, hook, keybind)
+from mods_base import (SETTINGS_DIR, BoolOption, ButtonOption, GroupedOption, HiddenOption, NestedOption,
+                       ObjectFlags, SliderOption, SpinnerOption, build_mod, get_pc, hook, keybind)
 from unrealsdk.hooks import Type
 from unrealsdk.unreal import WeakPointer
 
@@ -55,7 +55,7 @@ from . import hudmovie
 from .swfmerge import MergeRefused
 from .swfmerge import merge as merge_movie
 
-__version__ = "0.15.7"
+__version__ = "0.16.0"
 
 
 STAGE_W = 1280.0                       # classic HUD stage is 1280x720
@@ -99,11 +99,6 @@ RADAR_PROBE_EVERY = 8                  # probe every Nth empty radar read (THREA
 MS_NOT_STARTED, MS_READY_TO_TURN_IN = 0, 2     # IMission.EMissionStatus
 STATUS_FRAME = {MS_NOT_STARTED: "newmission", MS_READY_TO_TURN_IN: "turnin"}   # Enhanced's objective icon types
 STATUS_TINT = {MS_NOT_STARTED: 0x50E050, MS_READY_TO_TURN_IN: 0xFFC420}   # "Tint objective diamonds" (v0.6 style)
-VOG_WATCH_SECONDS = 10.0               # after an Angel call: log her screen mesh / particle once a second
-VOG_FAST_SECONDS = 15.0                # after an ECHO call: watch the root vog clip every tick (run 24 diagnostic)
-VOG_NUMBERS = ("_x", "_y", "_width", "_height", "_xscale", "_yscale", "_alpha", "_currentframe", "_totalframes")
-SAVE_FIELDS = ("SaveStartTime", "SaveDuration", "SavingMat")   # WillowHUD autosave icon (the mod sets the scale)
-SAVE_CHECK_INTERVAL = 0.25             # autosave diagnostic: how often to read them (v0.14.8)
 SAVE_SIZE = 68.0                       # our indicator (stage px): its ring as wide as the native's (run 38, ~63.7 px)
 SAVE_RING = 60.0 / 128.0               # the logo's ring radius per px of SAVE_SIZE (60 in its 128 px art box)
 SAVE_GAP = 16.0                        # stage px between the ring and the map's frame (run 39: 8 met the north mark)
@@ -126,7 +121,7 @@ opt_dock_size = SliderOption("Docked size (%)", 100, 60, 160, description="Size 
 opt_scale = SliderOption("Size (%)", 28, 15, 60, description="Custom position: size of the minimap window.")
 opt_margin_x = SliderOption("Right margin", 24, 0, 400, description="Custom position: distance from the right edge.")
 opt_margin_y = SliderOption("Top margin", 20, 0, 600, description="Custom position: distance from the top.")
-opt_zoom = SpinnerOption("Zoom (vs Enhanced)", "100%", ZOOM_CHOICES,
+opt_zoom = SpinnerOption("Zoom", "100%", ZOOM_CHOICES,
                          description="Map zoom; 100% matches the Enhanced edition's minimap.")
 opt_zoom_mode = SpinnerOption("Zoom mode", "Enhanced", ["Enhanced", "Objective"],
                               description="Enhanced: fit the zoom to you and your objectives once per level load, "
@@ -143,8 +138,6 @@ opt_objective_tint = BoolOption("Tint objective diamonds", False,
                                             "the diamond stays and turns gold (ready to hand in) or green (not "
                                             "started).")
 opt_rotate = BoolOption("Rotate with player", False, description="Rotate the map so you always face up.")
-opt_rotation_offset = SpinnerOption("Rotation offset", "0", ["0", "90", "180", "270"], is_hidden=True,
-                                    description="Correction if the player arrow doesn't point up when rotating.")
 opt_threats = BoolOption("Show enemies", True, description="Show enemies the compass radar tracks as red dots.")
 opt_threat_range = SliderOption("Enemy range (m)", 0, 0, 200,
                                 description="Only show enemies this close. 0 = no limit, like Enhanced.")
@@ -156,7 +149,7 @@ opt_enhanced_art = BoolOption("Use Enhanced artwork", True,
                                           "mod's own art. Takes effect from the next level load.",
                               on_change_while_enabled=lambda _, value: remake_movie(use_enhanced=value))
 opt_angel_position = SpinnerOption("Angel position", "Centered", ["Classic", "Centered"],
-                                   description="Where Angel's ECHO video appears. Centered: top centre, clear of the "
+                                   description="Where Angel's ECHO video appears. Centered: top center, clear of the "
                                                "minimap, like GOTY Enhanced. Classic: top right, partly behind the "
                                                "minimap. Applies from her next call.")
 opt_enhanced_folder = HiddenOption("Enhanced folder", "",
@@ -220,16 +213,6 @@ class State:
         self.last_hidden_reason = "start"
         self.rebuild_pending = False       # rebuild the markers on the next tick...
         self.rebuild_refit = False         # ...and refit the zoom (F8, option changes; not the status menu)
-        self.vog_until = 0.0               # Angel-call watch window end (run 23 spike)...
-        self.vog_next = 0.0                # ...next check...
-        self.vog_last: Any = None          # ...and the mesh translation last seen
-        self.vog_clip: Any = ()            # root vog clip state last logged (() = not read yet; run 24 diagnostic)...
-        self.vog_clip_next = 0.0           # ...next once-a-second read...
-        self.vog_fast_until = 0.0          # ...and the end of the every-tick watch after an ECHO call
-        self.sp_until = 0.0                # screen-particle watch window end (run 26 diagnostic)...
-        self.sp_next = 0.0                 # ...and its next once-a-second log
-        self.save_state: Any = ()          # autosave fields last logged (() = not read yet; v0.14.8 diagnostic)...
-        self.save_next = 0.0               # ...and the next read
         self.save_shown = False            # PLAN_V15: our save indicator is showing...
         self.save_spot: Any = None         # ...where (stage px)...
         self.save_alpha: Any = None        # ...its last alpha...
@@ -1377,9 +1360,6 @@ def tick(pc: Any) -> None:
         return
     if pc.Pawn is None:                  # main menu, loading, dead/respawning: nothing to show
         return
-    if now >= S.save_next:
-        S.save_next = now + SAVE_CHECK_INTERVAL
-        watch_save(pc)
     if now >= S.next_epoch_check:
         S.next_epoch_check = now + EPOCH_CHECK_INTERVAL
         update_epoch(pc, now)
@@ -1412,13 +1392,6 @@ def tick(pc: Any) -> None:
     elif now >= S.next_dock_check:
         S.next_dock_check = now + DOCK_CHECK_INTERVAL
         check_dock(movie)
-    if S.vog_until > now and now >= S.vog_next:
-        watch_vog(pc, now)
-    if S.sp_until > now and now >= S.sp_next:
-        watch_particles(pc, now)
-    if S.vog_fast_until > now or now >= S.vog_clip_next:
-        S.vog_clip_next = now + DOCK_CHECK_INTERVAL
-        watch_vog_clip(movie)
     if S.rebuild_pending:
         if S.rebuild_refit:
             S.fit_anchor = None
@@ -1443,7 +1416,7 @@ def tick(pc: Any) -> None:
     px, py = to_map(*vec3(pawn.Location))
     if math.isfinite(px) and math.isfinite(py):
         deg = pawn.Rotation.Yaw * 360.0 / 65536.0       # native Angle conversion (PHASE0, classic-decision)
-        cmd(movie, "tick", px, py, deg, opt_rotate.value, float(opt_rotation_offset.value))
+        cmd(movie, "tick", px, py, deg, opt_rotate.value)
 
     if now >= S.next_threats:
         S.next_threats = now + THREAT_INTERVAL
@@ -1492,7 +1465,7 @@ def rebuild(refit: bool = True) -> None:
             pass
 
 
-@keybind("Rebuild minimap", "F8", description="Re-collect landmarks and objectives.")
+@keybind("Refresh map markers", "F8", description="Re-collect landmarks and objectives and refit the zoom.")
 def on_rebuild_key() -> None:
     rebuild()
 
@@ -1506,16 +1479,8 @@ def on_diag_key() -> None:
                             "template.MovieInfo": str(Redirect.template.MovieInfo) if Redirect.template else None,
                             "hud_merge": Redirect.status or None,
                             "hud.MovieInfo": str(movie.MovieInfo) if movie is not None else None}
-    mesh = vog_mesh(pc) if pc is not None else None
-    info["angel"] = vog_state(mesh) if mesh is not None else None
-    info["vog"] = vog_clip_state(movie) if movie is not None else None
-    info["save_indicator"] = save_state(pc) if pc is not None else None
     info["save_icon"] = {"shown": S.save_shown, "spot": S.save_spot, "alpha": S.save_alpha,
                          "native_scale": S.native_scale}
-    try:
-        info["screen_particles"] = [particle_record(r) for r in particle_records(pc)] if pc is not None else None
-    except Exception as ex:
-        info["screen_particles"] = f"<{type(ex).__name__}: {ex}>"
     r = Redirect.result
     info["hud_movie"] = None if r is None else {
         "art": r.art, "cached": r.cached, "seconds": round(r.seconds, 2), "bytes": len(r.data),
@@ -1534,7 +1499,7 @@ def on_diag_key() -> None:
                 p1=S.p1_sig)
     if movie is not None:
         info.update(dock_b=get_num(movie, "mmDockB"), echo_x=get_num(movie, "p1.echo._x"),
-                    echo_x0=get_num(movie, "mmEchoX0"), hud_fixes=get_num(movie, "mmHudFixes"))
+                    echo_x0=get_num(movie, "mmEchoX0"), hud_fixes=S.hud_fixes)
     if pc is not None:
         try:
             pts = radar_threats(pc)
@@ -1558,267 +1523,7 @@ def on_status_menu_close(obj: Any, args: Any, ret: Any, func: Any) -> None:
     rebuild(refit=False)  # missions/waypoints may have changed while the menu was open; the zoom mode decides refits
 
 
-# ---- Angel's screen (run 23 spike, PHASE3 3an) ---------------------------------------------------------
-# PlayVoGEchoCall renders Angel's video onto GFxUIManager.ScreenMesh, a 3D mesh attached to the camera, so the HUD
-# always draws over it; classic places it top right, behind the minimap. Enhanced positions it from
-# GlobalsDefinition.VoG*Position (which classic lacks). This logs the mesh and optionally tries Enhanced's value.
-
-def vog_mesh(pc: Any) -> Any:
-    manager = getattr(pc, "GFxUIManager", None)
-    return getattr(manager, "ScreenMesh", None) if manager is not None else None
-
-
-def vog_translation(mesh: Any) -> tuple[float, float, float]:
-    t = mesh.Translation
-    return round(float(t.X), 3), round(float(t.Y), 3), round(float(t.Z), 3)
-
-
-def vog_state(mesh: Any) -> dict[str, Any]:
-    out: dict[str, Any] = {"mesh": str(mesh)}
-    for name, fields in (("Translation", "XYZ"), ("Rotation", ("Pitch", "Yaw", "Roll")), ("Scale", None),
-                         ("Scale3D", "XYZ"), ("AbsoluteTranslation", None), ("Owner", None)):
-        try:
-            v = getattr(mesh, name)
-            out[name] = tuple(float(getattr(v, f)) for f in fields) if fields else str(v)
-        except Exception as ex:
-            out[name] = f"<{type(ex).__name__}>"
-    return out
-
-
-@hook("WillowGame.WillowPlayerController:PlayVoGEchoCall", Type.POST)
-def on_vog_call(obj: Any, args: Any, ret: Any, func: Any) -> None:
-    try:
-        mesh = vog_mesh(obj)
-        if mesh is None:
-            warn_once("vog:nomesh", "Angel call: no GFxUIManager.ScreenMesh to inspect")
-            return
-        log(f"Angel call: screen mesh {vog_state(mesh)}")
-        S.vog_last, S.vog_until, S.vog_next = vog_translation(mesh), time.time() + VOG_WATCH_SECONDS, time.time() + 1.0
-    except Exception as ex:  # an experiment must never break the call
-        warn_once("vog:" + type(ex).__name__, f"Angel call inspection failed ({type(ex).__name__}: {ex})")
-
-
-def watch_vog(pc: Any, now: float) -> None:
-    """During the watch window: log native moves of the screen mesh (never seen in classic; runs 24-30)."""
-    S.vog_next = now + 1.0
-    try:
-        mesh = vog_mesh(pc)
-        t = vog_translation(mesh)
-    except Exception:
-        S.vog_until = 0.0
-        return
-    if t != S.vog_last:
-        log(f"Angel call: the screen mesh moved to {t} (was {S.vog_last})")
-        S.vog_last = t
-
-
-# Run 24 (PHASE3 3an): PlayVoGEchoCall never ran and there was no screen mesh. The HUD movie's root clip `vog`
-# (every edition authors it top centre, (412, 90), 456 x 256.6) shows external image "texture1", the name ECHO videos
-# are bound to, so Angel probably plays there. Log that clip: on F7, on every change (once a second), and every tick
-# for a while after a script-level ECHO call, to see whether classic moves it top right.
-
-def vog_clip_state(movie: Any) -> Any:
-    """The root vog clip's placement, or None when the movie has no such clip."""
-    nums = {k: get_num(movie, "vog." + k) for k in VOG_NUMBERS}
-    if not finite(nums["_x"]):
-        return None
-    out: dict[str, Any] = {k: round(v, 1) if finite(v) else v for k, v in nums.items()}
-    try:
-        out["_visible"] = bool(movie.GetVariableBool("vog._visible"))
-    except Exception as ex:
-        out["_visible"] = f"<{type(ex).__name__}>"
-    return out
-
-
-def watch_vog_clip(movie: Any) -> None:
-    try:
-        state = vog_clip_state(movie)
-    except Exception as ex:  # a diagnostic must never break the tick
-        warn_once("vogclip:" + type(ex).__name__, f"vog clip check failed ({type(ex).__name__}: {ex})")
-        return
-    if state != S.vog_clip:
-        S.vog_clip = state
-        log(f"Angel's screen (root vog): {state}")
-
-
-def on_echo_call(name: str) -> None:
-    log(f"ECHO call ({name}); watching the root vog clip for {VOG_FAST_SECONDS:g}s")
-    S.vog_fast_until = time.time() + VOG_FAST_SECONDS
-
-
-@hook("WillowGame.WillowPlayerController:Behavior_PlayEchoCall", Type.PRE)
-def on_behavior_echo_call(obj: Any, args: Any, ret: Any, func: Any) -> None:
-    on_echo_call("Behavior_PlayEchoCall")
-
-
-@hook("WillowGame.WillowPlayerController:ClientPlayEchoCall", Type.PRE)
-def on_client_echo_call(obj: Any, args: Any, ret: Any, func: Any) -> None:
-    on_echo_call("ClientPlayEchoCall")
-
-
-@hook("WillowGame.WillowHUDGFxMovie:PlayEchoCall", Type.PRE)
-def on_hud_echo_call(obj: Any, args: Any, ret: Any, func: Any) -> None:
-    on_echo_call("PlayEchoCall")
-
-
-# Run 26 (PHASE3 3aq): with the root vog clip 0 x 0 and no screen mesh, Angel's video still sat behind the map.
-# Classic shows it as a screen particle: ShowScreenParticle attaches a ParticleSystemComponent to the pawn and
-# SetUpVoGScreenParticle puts the ECHO video into its material. Log the records (template, component placement,
-# each emitter's modules) and, for a while, the component against the camera, to find what places it.
-
-def type_name(o: Any) -> str:
-    cls = getattr(o, "Class", None)
-    return str(getattr(cls, "Name", None) or getattr(o, "_type", None) or type(o).__name__)
-
-
-def vec_tuple(v: Any) -> tuple[float, float, float]:
-    return round(float(v.X), 1), round(float(v.Y), 1), round(float(v.Z), 1)
-
-
-def safe_fields(o: Any, names: tuple[str, ...]) -> dict[str, Any]:
-    out: dict[str, Any] = {}
-    for name in names:
-        try:
-            v = getattr(o, name)
-            if hasattr(v, "X"):
-                v = vec_tuple(v)
-            elif hasattr(v, "Pitch"):
-                v = (int(v.Pitch), int(v.Yaw), int(v.Roll))
-            elif not isinstance(v, (bool, int, float)):
-                v = str(v)
-            out[name] = v
-        except Exception as ex:
-            out[name] = f"<{type(ex).__name__}>"
-    return out
-
-
-def distribution_state(raw: Any) -> Any:
-    table = getattr(raw, "LookupTable", None)
-    if table is not None:                       # cooked: only the baked lookup table is left (run 27)
-        dist = getattr(raw, "Distribution", None)
-        return {"dist": type_name(dist) if dist is not None else None, "op": str(getattr(raw, "Op", "")),
-                "chunk": getattr(raw, "LookupTableChunkSize", None), "table": [round(float(v), 2) for v in table]}
-    dist = getattr(raw, "Distribution", raw)
-    const = getattr(dist, "Constant", None)
-    return vec_tuple(const) if const is not None else type_name(dist)
-
-
-def module_state(m: Any) -> Any:
-    name = type_name(m)
-    dists = {p: distribution_state(getattr(m, p)) for p in ("StartLocation", "StartSize", "StartVelocity", "Lifetime")
-             if getattr(m, p, None) is not None}
-    if not dists:
-        return name
-    return {name: dists["StartLocation"] if list(dists) == ["StartLocation"] else dists}
-
-
-# Run 28: the start location is ~0 and the component sits on the camera's view axis, yet Angel shows top right, so the
-# placement must be in the material. Dump each material with its parameters and parent chain.
-
-def material_state(m: Any, depth: int = 0) -> Any:
-    if m is None:
-        return None
-    out: dict[str, Any] = {"name": str(m), "class": type_name(m)}
-    for key, prop in (("scalars", "ScalarParameterValues"), ("vectors", "VectorParameterValues"),
-                      ("textures", "TextureParameterValues")):
-        values = {}
-        for p in list(getattr(m, prop, None) or []):
-            v = p.ParameterValue
-            if hasattr(v, "R"):
-                v = (round(float(v.R), 3), round(float(v.G), 3), round(float(v.B), 3), round(float(v.A), 3))
-            elif isinstance(v, float):
-                v = round(v, 4)
-            elif not isinstance(v, (int, bool)):
-                v = str(v)
-            values[str(p.ParameterName)] = v
-        out[key] = values
-    parent = getattr(m, "Parent", None)
-    if parent is not None and depth < 4:
-        out["parent"] = material_state(parent, depth + 1)
-    return out
-
-
-def instance_material(component: Any, param: Any) -> Any:
-    for p in list(getattr(component, "InstanceParameters", None) or []):
-        if str(p.Name) == str(param):
-            return p.Material
-    return None
-
-
-def particle_record(rec: Any) -> dict[str, Any]:
-    out: dict[str, Any] = {"template": str(getattr(rec, "Template", None)), "param": str(getattr(rec, "MatParamName", ""))}
-    out["component"] = safe_fields(getattr(rec, "Component", None), (
-        "Translation", "Rotation", "Scale", "Scale3D", "AbsoluteTranslation", "AbsoluteRotation", "AbsoluteScale",
-        "DepthPriorityGroup", "bOnlyOwnerSee"))
-    try:
-        out["instance"] = material_state(instance_material(getattr(rec, "Component", None), out["param"]))
-    except Exception as ex:
-        out["instance"] = f"<{type(ex).__name__}: {ex}>"
-    emitters = []
-    for e in list(getattr(getattr(rec, "Template", None), "Emitters", None) or []):
-        lods = list(getattr(e, "LODLevels", None) or [])
-        lod = lods[0] if lods else None
-        required = getattr(lod, "RequiredModule", None)
-        req = safe_fields(required, ("bUseLocalSpace", "ScreenAlignment", "bOrientZAxisTowardCamera"))
-        try:
-            req["Material"] = material_state(getattr(required, "Material", None))
-        except Exception as ex:
-            req["Material"] = f"<{type(ex).__name__}: {ex}>"
-        emitters.append({"name": str(getattr(e, "EmitterName", "")), "required": req,
-                         "modules": [module_state(m) for m in list(getattr(lod, "Modules", None) or [])]})
-    out["emitters"] = emitters
-    return out
-
-
-def particle_records(pc: Any) -> list[Any]:
-    return list(getattr(pc, "ScreenParticleRecords", None) or [])
-
-
-def rot_tuple(r: Any) -> tuple[int, int, int]:
-    return int(r.Pitch), int(r.Yaw), int(r.Roll)
-
-
-def view_point(pc: Any) -> tuple[tuple[float, float, float], tuple[int, int, int]]:
-    out = pc.GetPlayerViewPoint(unrealsdk.make_struct("Vector"), unrealsdk.make_struct("Rotator"))
-    return next(vec_tuple(v) for v in out if hasattr(v, "X")), next(rot_tuple(v) for v in out if hasattr(v, "Pitch"))
-
-
-def particle_view(pc: Any, component: Any) -> str:
-    """Camera, FOV and distance/scale for one watch line: the overlay keeps a fixed angle while distance/scale stays
-    constant (~19.3, runs 27-30), so only the FOV can still change where Angel appears."""
-    try:
-        loc, rot = view_point(pc)
-    except Exception as ex:
-        return f"<{type(ex).__name__}>"
-    try:
-        fov: Any = round(float(pc.GetFOVAngle()), 1)
-    except Exception as ex:
-        fov = f"<{type(ex).__name__}>"
-    t, scale = vec_tuple(component.Translation), float(component.Scale)
-    ratio = round(math.dist(t, loc) / scale, 2) if scale else None
-    return f"{loc} rotation {rot}, fov {fov}, distance/scale {ratio}"
-
-
-def on_screen_particle(pc: Any, name: str) -> None:
-    try:
-        log(f"screen particle ({name}): {[particle_record(r) for r in particle_records(pc)]}")
-        S.sp_until, S.sp_next = time.time() + VOG_WATCH_SECONDS, time.time() + 1.0
-    except Exception as ex:  # a diagnostic must never break the call
-        warn_once("sp:" + type(ex).__name__, f"screen particle inspection failed ({type(ex).__name__}: {ex})")
-
-
-def watch_particles(pc: Any, now: float) -> None:
-    S.sp_next = now + 1.0
-    try:
-        for rec in particle_records(pc):
-            c = rec.Component
-            log(f"screen particle at {vec_tuple(c.Translation)} rotation {rot_tuple(c.Rotation)}, "
-                f"camera at {particle_view(pc, c)}")
-    except Exception as ex:
-        S.sp_until = 0.0
-        warn_once("spwatch:" + type(ex).__name__, f"screen particle watch failed ({type(ex).__name__}: {ex})")
-
-
+# ---- Angel's video ------------------------------------------------------------------------------------
 # Runs 27-30: the VoG particle (fx_PostProcess.VoG.part_VoG_Pulse; part_VoG_SimpleFade is 20 x 10) is a 17.76 x 10
 # overlay whose component the native keeps on the camera's view axis, scaled with its distance (local space: X forward,
 # Y right, Z up). Classic shows it top right although Angel is centred in every video frame (all 14 PostLook videos
@@ -1865,7 +1570,7 @@ def place_vog_particle(template: Any) -> None:
             sideways = [i for k in range(2, len(table) - 1, chunk) for i in (k + 1, k + 4) if i < min(k + chunk, len(table))]
             for i in sideways:
                 table[i] = round(float(table[i]) - shift, 4)
-            log(f"Angel's video moved left by {shift}: start location {VOG_ORIGINAL[key]} -> {[float(v) for v in table]}")
+            log(f"Angel's video moved left by {shift}")
         elif key in VOG_ORIGINAL:
             for i, v in enumerate(VOG_ORIGINAL.pop(key)):
                 table[i] = v
@@ -1877,57 +1582,8 @@ def place_vog_particle(template: Any) -> None:
 def on_show_screen_particle_pre(obj: Any, args: Any, ret: Any, func: Any) -> None:
     try:
         place_vog_particle(getattr(args, "Template", None))
-    except Exception as ex:  # an experiment must never break the effect
+    except Exception as ex:  # a placement must never break the effect
         warn_once("vogplace:" + type(ex).__name__, f"Angel placement failed ({type(ex).__name__}: {ex})")
-
-
-SEEN_PARTICLES: set[str] = set()     # ShowScreenParticle also runs for repeating effects (burning, shock): log each once
-
-
-@hook("WillowGame.WillowPlayerController:ShowScreenParticle", Type.POST)
-def on_show_screen_particle(obj: Any, args: Any, ret: Any, func: Any) -> None:
-    template = str(getattr(args, "Template", None))
-    if template not in SEEN_PARTICLES:
-        SEEN_PARTICLES.add(template)
-        on_screen_particle(obj, "ShowScreenParticle")
-
-
-@hook("WillowGame.WillowPlayerController:SetUpVoGScreenParticle", Type.POST)
-def on_vog_screen_particle(obj: Any, args: Any, ret: Any, func: Any) -> None:
-    on_screen_particle(obj, "SetUpVoGScreenParticle")
-
-
-# Autosave diagnostic (v0.14.8, PHASE3 3ax): WillowHUD draws SavingMat natively on the canvas, above the minimap, at a
-# position fixed in native code (no position property in either edition). Its plain properties SaveStartTime,
-# SaveDuration and SavingMaterialScale are readable, so log how a save drives them before deciding on a fix.
-
-def save_state(pc: Any) -> Any:
-    hud = getattr(pc, "myHUD", None)
-    if hud is None:
-        return None
-    out: dict[str, Any] = {}
-    for name in SAVE_FIELDS:
-        try:
-            v = getattr(hud, name)
-        except Exception:
-            continue
-        out[name] = round(float(v), 3) if isinstance(v, (int, float)) and not isinstance(v, bool) else str(v)
-    return out or None
-
-
-def watch_save(pc: Any) -> None:
-    try:
-        state = save_state(pc)
-    except Exception as ex:  # a diagnostic must never break the tick
-        warn_once("save:" + type(ex).__name__, f"save indicator check failed ({type(ex).__name__}: {ex})")
-        return
-    if state != S.save_state:
-        S.save_state = state
-        try:
-            world_time: Any = round(float(pc.WorldInfo.TimeSeconds), 2)
-        except Exception as ex:
-            world_time = f"<{type(ex).__name__}>"
-        log(f"save indicator: {state}, 'world_time': {world_time}")
 
 
 # PLAN_V15 step 2: our own save indicator beside the map (a vector Vault logo; the game texture drew opaque, run 35).
@@ -1987,23 +1643,7 @@ def update_save_icon(pc: Any, movie: Any, now: float) -> None:
     alpha = save_alpha(pc) if show else 100.0
     x, y = spot if spot is not None else (0.0, 0.0)
     cmd(movie, "save", 1 if show else 0, x, y, SAVE_SIZE, alpha)
-    if show and not S.save_shown:
-        clocks = {k: getattr(pc.WorldInfo, "RealTimeSeconds", None) if k == "RealTimeSeconds"
-                  else getattr(hud, "SaveStartTime", None) for k in ("RealTimeSeconds", "SaveStartTime")}
-        log(f"save icon shown at {spot}; clocks {clocks}")
-    elif not show:
-        log("save icon hidden")
     S.save_shown, S.save_spot, S.save_alpha = show, spot, alpha
-
-
-@hook("WillowGame.WillowHUD:NotifySavingStarted", Type.PRE)
-def on_saving_started(obj: Any, args: Any, ret: Any, func: Any) -> None:
-    log("save started (NotifySavingStarted)")
-
-
-@hook("WillowGame.WillowHUD:NotifySavingComplete", Type.PRE)
-def on_saving_complete(obj: Any, args: Any, ret: Any, func: Any) -> None:
-    log(f"save complete (NotifySavingComplete, {getattr(args, 'InSaveDuration', '?')} s)")
 
 
 def apply_layout_now(movie: Any) -> None:
@@ -2054,9 +1694,13 @@ def on_disable() -> None:
     unredirect()
 
 
-mod = build_mod(options=[opt_position, opt_dock_size, opt_scale, opt_margin_x, opt_margin_y, opt_zoom, opt_zoom_mode,
-                         opt_icon_size,
-                         opt_rotate, opt_rotation_offset, opt_threats, opt_threat_range, opt_givers, opt_objective_tint,
-                         opt_hide_compass,
-                         opt_enhanced_art, opt_angel_position, opt_rebuild, opt_rebuild_movie, opt_enhanced_folder])
+mod = build_mod(options=[
+    GroupedOption("Map", [opt_dock_size, opt_zoom, opt_zoom_mode, opt_icon_size, opt_rotate]),
+    GroupedOption("Markers", [opt_threats, opt_threat_range, opt_givers, opt_objective_tint]),
+    GroupedOption("HUD", [opt_hide_compass, opt_angel_position]),
+    NestedOption("Custom position", [opt_position, opt_scale, opt_margin_x, opt_margin_y],
+                 description="Place the minimap yourself instead of docking it."),
+    NestedOption("Advanced", [opt_enhanced_art, opt_rebuild, opt_rebuild_movie],
+                 description="The artwork, and rebuilding the markers or the HUD movie."),
+    opt_enhanced_folder])
 BASE_DESCRIPTION = getattr(mod, "description", "") or ""

@@ -1,9 +1,0 @@
-[project]
-name = "Minimap Probe"
-version = "0.2.0"
-description = "Phase 0 probe for the classic BL1 minimap: logs map-helper state and tests HUD access."
-authors = [{ name = "bl1-classic-minimap" }]
-
-[tool.sdkmod]
-supported_games = ["BL1"]
-coop_support = "ClientSide"

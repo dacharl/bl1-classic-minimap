@@ -36,7 +36,6 @@ docs/
 sdk_mods/
   classic_minimap/   the mod (__init__.py, pyproject.toml)
   classic_minimap_profiler/  optional performance-capture add-on (PLAN_V11); never part of the standard release
-  minimap_probe/     early diagnostic probe (obsolete; keep disabled)
 tools/               package, Flash and binary tooling, and the two offline test suites
 dist/                build outputs, version backups (vNNN/), decoded exes, REA output (not source)
 ```

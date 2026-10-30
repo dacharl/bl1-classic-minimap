@@ -1,5 +1,5 @@
 """Package an sdk_mods/<name> folder as <name>.sdkmod (a zip with <name>/ as its single top folder).
-Usage: python -I tools/build_sdkmod.py sdk_mods/minimap_probe [out_dir]
+Usage: python -I tools/build_sdkmod.py sdk_mods/classic_minimap [out_dir]
 """
 import sys
 import zipfile

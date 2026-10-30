@@ -23,7 +23,7 @@ HUD movie that additionally contains:
         UpdateLandmark(clip,x,y,r)  SetMapScale(scale)  InitDLC(frame,pkg)  SetMarkerColor(color,clip)
       - called by the SDK mod:
         MinimapCreate(x,y,scale)  MinimapDestroy()  MinimapClear()  MinimapPing(v)
-        MinimapRecenter(rotate,offset)  UpdateThreats("u,v|u,v|...")
+        MinimapRecenter(rotate)  UpdateThreats("u,v|u,v|...")
         MinimapCmd("op~args")  - the single entry point for the mod, via WillowGFxMovie.SingleArgInvokeS
     Classic GFxMovie.Invoke doesn't fill in its return value (calling it from Python crashed the game), so
     the mod only uses SingleArgInvokeS, and outcomes are left in _root.mmCreateMode / mmPing.
@@ -240,7 +240,7 @@ def new_functions():
     a.ret(True)
     a.label('c_recenter')
     a.if_not(('==', 'op', ('s', 'recenter')), 'c_threats')
-    a.do(('fn', 'MinimapRecenter', ('==', ('idx', 'parts', 1), ('s', '1')), ('fn', 'Number', ('idx', 'parts', 2))))
+    a.do(('fn', 'MinimapRecenter', ('==', ('idx', 'parts', 1), ('s', '1'))))
     a.ret(True)
     a.label('c_threats')
     a.if_not(('==', 'op', ('s', 'threats')), 'c_ping')
@@ -261,11 +261,11 @@ def new_functions():
           ('fn', 'Number', ('idx', 'parts', 3)), ('fn', 'Number', ('idx', 'parts', 4)),
           ('fn', 'Number', ('idx', 'parts', 5))))
     a.ret(True)
-    a.label('c_tick')        # tick~u~v~deg~rotate~offset: place the player icon, then centre/rotate
+    a.label('c_tick')        # tick~u~v~deg~rotate: place the player icon, then centre/rotate
     a.if_not(('==', 'op', ('s', 'tick')), 'c_add')
     a.do(('fn', 'MinimapPlayer', ('fn', 'Number', ('idx', 'parts', 1)), ('fn', 'Number', ('idx', 'parts', 2)),
           ('fn', 'Number', ('idx', 'parts', 3))))
-    a.do(('fn', 'MinimapRecenter', ('==', ('idx', 'parts', 4), ('s', '1')), ('fn', 'Number', ('idx', 'parts', 5))))
+    a.do(('fn', 'MinimapRecenter', ('==', ('idx', 'parts', 4), ('s', '1'))))
     a.do(('fn', 'MinimapEdges'))
     a.do(('fn', 'MinimapHudKeep'))
     a.ret(True)
@@ -608,7 +608,7 @@ def new_functions():
     a.ret(True)
     fns.append(function('MinimapClear', (), a))
 
-    a = Fn()  # MinimapRecenter(rotate, offset): keep the player icon at the mask centre
+    a = Fn()  # MinimapRecenter(rotate): keep the player icon at the mask centre
     a.local('p', '_root.mmPlayer')
     a.if_not(('!', ('==', 'p', Ellipsis)), 'nop')
     a.local('mk', ('mem', 'map', 'mask'))
@@ -618,7 +618,7 @@ def new_functions():
     a.local('s', ('/', ('mem', 'ms', '_xscale'), 100))
     a.local('R', 0)
     a.if_not('rotate', 'norot')
-    a.setv('R', ('-', ('fn', 'Number', 'offset'), ('mem', 'p', '_rotation')))
+    a.setv('R', ('-', 0, ('mem', 'p', '_rotation')))
     a.label('norot')
     a.setm('ms', '_rotation', 'R')
     # every icon and threat marker stays upright while the map turns: Enhanced's CancelOutIconRotation sets
@@ -651,7 +651,7 @@ def new_functions():
     a.ret(True)
     a.label('nop')
     a.ret(False)
-    fns.append(function('MinimapRecenter', ('rotate', 'offset'), a))
+    fns.append(function('MinimapRecenter', ('rotate',), a))
 
     a = Fn()  # UpdateThreats("u,v|u,v|..."): u,v are 0-1 across themap, like Enhanced's UpdateThreats
     a.local('ms', ('mem', 'map', 'maps'))

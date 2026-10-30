@@ -483,13 +483,13 @@ def main(path):
     # MinimapRecenter, north-up: player icon lands on the mask centre
     mk, ms = m.get('mask'), m.get('maps')
     cx = mk.get('_x') + mk.get('_width') / 2; cy = mk.get('_y') + mk.get('_height') / 2
-    assert vm.call('MinimapRecenter', False, 0) is True
+    assert vm.call('MinimapRecenter', False) is True
     close(ms.get('_rotation'), 0)
     close(ms.get('_x') + player.get('_x'), cx); close(ms.get('_y') + player.get('_y'), cy)
 
-    # rotating: maps rotated by offset - heading, player still at the centre
-    vm.call('MinimapRecenter', True, 90)
-    R = 90 - 45
+    # rotating: maps rotated by -heading, player still at the centre
+    vm.call('MinimapRecenter', True)
+    R = -45
     close(ms.get('_rotation'), R)
     a = math.radians(R)
     sx = ms.get('_x') + (player.get('_x') * math.cos(a) - player.get('_y') * math.sin(a))
@@ -506,10 +506,11 @@ def main(path):
     # counter-rotated against the map like Enhanced's CancelOutIconRotation, so it stays a diamond
     assert pool[0].frame == 'bl1mm_enemy' and not pool[0].drawn
     close(pool[0].get('_rotation'), -ms.get('_rotation')); close(pool[1].get('_rotation'), -ms.get('_rotation'))
-    vm.call('MinimapRecenter', True, 120)          # the map turns between threat updates
+    player.props['_rotation'] = 15.0
+    vm.call('MinimapRecenter', True)               # the map turns between threat updates
     assert abs(ms.get('_rotation') - R) > 1
     close(pool[0].get('_rotation'), -ms.get('_rotation'))
-    vm.call('MinimapRecenter', False, 0)
+    vm.call('MinimapRecenter', False)
     close(ms.get('_rotation'), 0); close(pool[1].get('_rotation'), 0)
     vm.call('UpdateThreats', '0.5,0.5|')
     assert len(pool) == 2 and pool[0].get('_visible') is True and pool[1].get('_visible') is False
@@ -520,7 +521,7 @@ def main(path):
     vm.call('MinimapClear')
     assert {c.name for c in ms.children.values()} == {'themap', 'landmarks', 'players'}, list(ms.children)
     assert root.get('mmPlayer') is UNDEF and root.get('mmThreats') is UNDEF
-    assert vm.call('MinimapRecenter', False, 0) is False, 'no player -> no-op'
+    assert vm.call('MinimapRecenter', False) is False, 'no player -> no-op'
 
     # InitDLC (copied)
     vm.call('InitDLC', 'dlcmap1', 'dlc1_maps.dlcmap_island')
@@ -531,12 +532,12 @@ def main(path):
     assert ms.frame == 'dry'
     vm.call('MinimapCmd', 'scale~300')
     close(tm.get('_xscale'), 300); close(tm.get('_x'), -0.5 * tm.get('_width'))
-    vm.call('MinimapCmd', 'tick~0.6~0.4~30~0~0')          # first tick creates the player icon
+    vm.call('MinimapCmd', 'tick~0.6~0.4~30~0')          # first tick creates the player icon
     pl = root.get('mmPlayer')
     assert isinstance(pl, Clip) and pl.frame == 'player'
     close(pl.get('_x'), tm.get('_x') + 0.6 * tm.get('_width')); close(pl.get('_rotation'), 30)
     close(ms.get('_x') + pl.get('_x'), cx); close(ms.get('_y') + pl.get('_y'), cy)
-    vm.call('MinimapCmd', 'tick~0.61~0.42~-90~1~0')       # later ticks move/turn it; rotate on
+    vm.call('MinimapCmd', 'tick~0.61~0.42~-90~1')       # later ticks move/turn it; rotate on
     assert root.get('mmPlayer') is pl
     close(pl.get('_x'), tm.get('_x') + 0.61 * tm.get('_width')); close(pl.get('_rotation'), -90)
     close(ms.get('_rotation'), 90)
@@ -551,10 +552,10 @@ def main(path):
     close(added[0].get('_y'), tm.get('_y') + 0.75 * tm.get('_height'))
     # Run 23 (PHASE3 3an): like Enhanced's CancelOutIconRotation (every icon in iconPathArray, not only threats),
     # every map icon stays upright while the map turns; the player icon keeps its heading
-    vm.call('MinimapCmd', 'tick~0.61~0.42~-60~1~0')
+    vm.call('MinimapCmd', 'tick~0.61~0.42~-60~1')
     close(ms.get('_rotation'), 60)
     close(added[0].get('_rotation'), -60); close(pl.get('_rotation'), -60)
-    vm.call('MinimapCmd', 'tick~0.61~0.42~-60~0~0')       # north-up again: icons straight
+    vm.call('MinimapCmd', 'tick~0.61~0.42~-60~0')       # north-up again: icons straight
     close(ms.get('_rotation'), 0); close(added[0].get('_rotation'), 0)
     assert tint_of(added[0]) is None, 'untinted add must not touch the colour'
     vm.call('MinimapCmd', 'add~map.maps.landmarks~0.3~0.3~0~objective~16761888')     # 0xFFC420 tint
@@ -571,7 +572,7 @@ def main(path):
     src_l, src_p = ms.get('landmarks'), ms.get('players')
     assert src_l.get('_visible') is False and src_p.get('_visible') is False, 'icon templates must be hidden'
     vm.call('MinimapCmd', 'add~map.maps.landmarks~0.4~0.4~0~poi')
-    vm.call('MinimapCmd', 'tick~0.5~0.5~10~0~0')
+    vm.call('MinimapCmd', 'tick~0.5~0.5~10~0')
     shown = [c for c in ms.dynamic() if c.frame in ('poi', 'player')]
     assert len(shown) == 2 and all(c.get('_visible') is True for c in shown), [(c.frame, c.props) for c in shown]
     assert src_l.get('_visible') is False and src_p.get('_visible') is False
@@ -605,13 +606,13 @@ def main(path):
     close(p1.get('check5').get('_xscale'), 92.02); close(p1.get('echo').get('_xscale'), 100.04)
     # Run 25 (Deck): the game re-plays p1's first frame, which puts the column back at its authored places while
     # the shift is on (F7: hud_shifted True, echo_x 791.45). Each tick re-applies the shift and counts it.
-    vm.call('MinimapCmd', 'tick~0.5~0.5~0~0~0')
+    vm.call('MinimapCmd', 'tick~0.5~0.5~0~0')
     assert root.get('mmHudFixes') in (None, UNDEF, 0), 'no fix while the column is where the shift put it'
     for n, (x, y) in authored.items():
         c = p1.get(n); c.props.update(_x=x, _y=y, _xscale=100.04, _yscale=100.0)
-    vm.call('MinimapCmd', 'tick~0.5~0.5~0~0~0')
+    vm.call('MinimapCmd', 'tick~0.5~0.5~0~0')
     close(p1.get('echo').get('_x'), 610); close(p1.get('quest').get('_y'), 129.1); close(p1.get('check5').get('_xscale'), 92.02)
-    vm.call('MinimapCmd', 'tick~0.5~0.5~0~0~0')
+    vm.call('MinimapCmd', 'tick~0.5~0.5~0~0')
     assert root.get('mmHudFixes') == 1, root.get('mmHudFixes')
     close(root.get('mmEchoX0'), 791.5)
     # The user saw a brief flicker behind the map even with the 1 s re-dock: the map clip also runs the check on
@@ -630,7 +631,7 @@ def main(path):
         close(c.get('_x'), x); close(c.get('_y'), y); close(c.get('_xscale'), 100.04); close(c.get('_yscale'), 100.0)
     close(root.get('mmEchoX0'), 791.5), 'originals must not be re-recorded from shifted values'
     assert root.get('mmHudMode') == 0
-    vm.call('MinimapCmd', 'tick~0.5~0.5~0~0~0')
+    vm.call('MinimapCmd', 'tick~0.5~0.5~0~0')
     close(p1.get('echo').get('_x'), 791.5); assert root.get('mmHudFixes') == 2, 'restored: ticks leave it alone'
     root.children.pop('p1')
 
@@ -737,12 +738,12 @@ def main(path):
 
     # icon scale (Enhanced draws icons at its map clip's 0.7; ours are scaled up to match)
     vm.call('MinimapCmd', 'clear')
-    vm.call('MinimapCmd', 'recenter~0~0')
+    vm.call('MinimapCmd', 'recenter~0')
     ms._rotation = 0
     ms.props['_rotation'] = 0.0
     vm.call('MinimapCmd', 'iconscale~373')
     vm.call('MinimapCmd', 'add~map.maps.landmarks~0.5~0.5~0~newmission')
-    vm.call('MinimapCmd', 'tick~0.5~0.5~0~0~0')
+    vm.call('MinimapCmd', 'tick~0.5~0.5~0~0')
     nm = [c for c in ms.dynamic() if c.frame == 'newmission'][0]
     close(nm.get('_xscale'), 373); close(root.get('mmPlayer').get('_xscale'), 373)
     vm.call('MinimapCmd', 'threats~0.5,0.5')
@@ -757,7 +758,7 @@ def main(path):
     vm.call('MinimapCmd', 'add~map.maps.landmarks~0.52~0.5~0~objective')          # just right of the player
     vm.call('MinimapCmd', 'add~map.maps.landmarks~2.5~0.5~0~objective~16761888')  # far east, off the window
     assert len(root.get('mmObjectives')) == 2
-    vm.call('MinimapCmd', 'tick~0.5~0.5~0~0~0')
+    vm.call('MinimapCmd', 'tick~0.5~0.5~0~0')
     e0, e1 = m.get('mmEdge0'), m.get('mmEdge1')
     assert e0.get('_visible') is False, 'an objective inside the window gets no edge indicator'
     assert e1.get('_visible') is True and e1.frame == 'bl1mm_objective'
@@ -769,10 +770,10 @@ def main(path):
     o_in, o_out = root.get('mmObjectives')[0], root.get('mmObjectives')[1]
     assert o_out.get('_visible') is False and o_in.get('_visible') is True
     o_out.props['_x'] = o_in.get('_x')                 # the far objective comes back inside the window
-    vm.call('MinimapCmd', 'tick~0.5~0.5~0~0~0')
+    vm.call('MinimapCmd', 'tick~0.5~0.5~0~0')
     assert e1.get('_visible') is False and o_out.get('_visible') is True
     o_out.props['_x'] = tm.get('_x') + 2.5 * tm.get('_width')
-    vm.call('MinimapCmd', 'tick~0.5~0.5~0~0~0')
+    vm.call('MinimapCmd', 'tick~0.5~0.5~0~0')
     assert e1.get('_visible') is True and o_out.get('_visible') is False
     # Run 13: hand over before the objective is partly clipped by the actual window.
     # Use the measured objective art extent (24.8 units at Icon size 100%).
@@ -780,14 +781,14 @@ def main(path):
     o_out.base_w = o_out.base_h = 24.8
     o_out.props['_xscale'] = o_out.props['_yscale'] = 100
     o_out.props.update(_x=0, _y=-80)
-    vm.call('MinimapCmd', 'tick~0.5~0.5~0~0~0')
+    vm.call('MinimapCmd', 'tick~0.5~0.5~0~0')
     assert e1.get('_visible') is True and o_out.get('_visible') is False, 'partial icon must become an edge diamond'
     close(e1.get('_y'), cy - EY, 1e-6)
     for dx, dy, size, outside in ((0, -70, 100, False), (95, 0, 100, True),
                                   (90, 0, 100, False), (0, -70, 150, True),
                                   (0, 80, 100, True), (-95, 0, 100, True)):
         o_out.props.update(_x=dx, _y=dy, _xscale=size, _yscale=size)
-        vm.call('MinimapCmd', 'tick~0.5~0.5~0~0~0')
+        vm.call('MinimapCmd', 'tick~0.5~0.5~0~0')
         assert e1.get('_visible') is outside and o_out.get('_visible') is not outside, (dx, dy, size)
     # Run 14 "wobble": classic's objective art animates (sprite 1050's ring, shape 1049, scales 1.0 -> 2.2 over
     # 12 frames), so the icon's live _width pulses between ~24.8 and ~48 units. The handoff must use the icon's
@@ -795,15 +796,15 @@ def main(path):
     o_out.props.update(_x=0, _y=-70, _xscale=100, _yscale=100)
     for pulse in (24.8, 48.0, 30.0, 48.0, 24.8):
         o_out.base_w = o_out.base_h = pulse
-        vm.call('MinimapCmd', 'tick~0.5~0.5~0~0~0')
+        vm.call('MinimapCmd', 'tick~0.5~0.5~0~0')
         assert e1.get('_visible') is False and o_out.get('_visible') is True, pulse
     # rotating the map moves north along the edge (Enhanced northMC.gotoAndStop(currentRot))
-    vm.call('MinimapCmd', 'tick~0.5~0.5~-90~1~0')            # heading east -> maps rotated +90
+    vm.call('MinimapCmd', 'tick~0.5~0.5~-90~1')            # heading east -> maps rotated +90
     close(ms.get('_rotation'), 90)
     close(north.get('_x'), cx + EX, 1e-6); close(north.get('_y'), cy, 1e-6)
     vm.call('MinimapCmd', 'clear')
     assert root.get('mmObjectives') is UNDEF and root.get('mmEdges') is UNDEF and m.get('mmEdge1') is UNDEF
-    vm.call('MinimapCmd', 'tick~0.5~0.5~0~0~0')
+    vm.call('MinimapCmd', 'tick~0.5~0.5~0~0')
 
     # MinimapDestroy (it also removes PLAN_V15's save indicator)
     assert isinstance(root.get('mmsave'), Clip)
@@ -826,7 +827,7 @@ def main(path):
         vm.call('SetMapScale', 300.0)
         p = vm.call('AddLandmark', 'map.maps.players', 0.5, 0.5, 0.0, 'player')
         assert str(p).startswith('_level0.map.maps.player') and root.get('mmPlayer') is not UNDEF
-        assert vm.call('MinimapRecenter', False, 0) is True
+        assert vm.call('MinimapRecenter', False) is True
         vm.call('MinimapDestroy')
         fb = root.get('mmfallback')
         assert root.get('map') is UNDEF and isinstance(fb, Clip), 'fallback must get its name back'

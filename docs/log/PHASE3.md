@@ -2229,3 +2229,75 @@ Two remaining differences:
 `GfxHUD.upk` is unchanged (`5c515c3e…`).
 
 **Unverified:** the new joins, opening and ring side by side with the native in game.
+
+## 3bi. Run 41: v0.15.7 looks good; the save icon is done at 16:9 (2026-10-30)
+
+**Run (PC, Enhanced art, Extended UI, Crimson Lance HQ area, 20:50–21:10 UTC; log and two screenshots provided by the
+user, with the native icon turned on from the console):** "looks good". The two icons match at full and low pulse.
+
+**Evidence (log):**
+- Three saves showed ours at (1011.5, 66.1), each within 0.04 s of `SaveStartTime`.
+- The native stayed hidden from the first HUD until the console turned it on.
+- No ECHO reset happened in this run.
+
+**Two things F7 showed:**
+- **`hud_fixes` read `inf`.** `mmHudFixes` stays undefined until the first reset, so F7's read of it is meaningless
+  in a run with none. Cosmetic; the logging path already guards with `finite()`.
+- **The 108% zoom floor again, with a cause.** `zoom_fit` held the pawn and a point about 57,600 units away
+  (`raw` 30.1, fitted 108). A far objective drives the fit to the floor, which is the open "zoom without a nearby
+  objective" item. Enhanced's behaviour for such a slot is still to compare.
+
+**Unverified:** 4:3, and how the native icon scales at 16:10 (Deck).
+
+## 3bj. v0.16.0: the options menu and the research code cleaned up for 1.0 (2026-10-30, offline only)
+
+**Why:** after run 41 the user asked what is left for 1.0 and for a pass over the options, then approved the proposal.
+The Angel and autosave research was finished but still ran: its hooks and watches filled the log (each new screen
+particle, a sniper scope included, wrote thousands of characters).
+
+**Options menu:**
+- **Groups** (`GroupedOption`, shown inline): Map, Markers, HUD.
+- **Sub-menus** (`NestedOption`): Custom position, Advanced.
+- **"Rotation offset" removed:** it was hidden and always 0. It also left the movie: `tick~u~v~deg~rotate`,
+  `recenter~rotate` and `MinimapRecenter(rotate)`.
+- **Names:** "Zoom (vs Enhanced)" is now "Zoom". The F8 keybind "Rebuild minimap" is now "Refresh map markers",
+  matching its button.
+- **American spelling:** in the option descriptions and the README.
+- **Saved settings:** `mods_base` nests a group's values under its name in `classic_minimap.json`, so values saved
+  before v0.16.0 go back to their defaults once. "Enhanced folder" stays at the top level, as the README says.
+  `mods_base` associates group children with the mod recursively, so saving and the on-change callbacks work as
+  before (read from the installed `mods_base`; not yet seen in game).
+
+**Code removed (about 370 lines):**
+- the screen-mesh, root `vog` clip and screen-particle watches and dumps;
+- the hooks on `PlayVoGEchoCall`, `Behavior_PlayEchoCall`, `ClientPlayEchoCall`, `PlayEchoCall`,
+  `SetUpVoGScreenParticle` and `ShowScreenParticle` POST;
+- the `NotifySavingStarted`/`Complete` hooks, which never fired;
+- the save-state watch and the "save icon shown/hidden" lines;
+- the F7 fields `angel`, `vog`, `screen_particles` and `save_indicator`.
+
+Kept: the PRE `ShowScreenParticle` hook that places Angel's video, the save icon, F7's `save_icon`, and the
+"moved it again" line for ECHO resets.
+
+**Other cleanup:**
+- **`hud_fixes`:** F7 reports the mod's own count, 0 before any reset, instead of reading an undefined movie
+  variable (`inf`, run 41).
+- **`sdk_mods/minimap_probe` removed** from the repository. The installed `minimap_probe.sdkmod` on the PC is
+  untouched.
+- **README:** the status line, the grouped options tables, and a line about the save icon.
+
+**Tests (red first):**
+- **Mod suite:**
+  - the menu's exact structure, each option once;
+  - the keybind names, and no "centre" or "colour" in descriptions;
+  - the removed hooks and F7 fields are absent, and a save logs nothing;
+  - `'hud_fixes': 0` before any reset;
+  - the stub gained `GroupedOption`/`NestedOption`.
+- **AS suite:** the tick and recenter commands without the offset; rotation is now minus the heading.
+- Both suites pass on both art variants; 129 unit tests, coverage (floors unchanged), ruff and repository checks
+  pass. `release.py --game --enhanced --profiler`: the in-mod build matches (`eb36814b…4db2`).
+
+**Built (not installed):** `dist/releases/0.16.0/` in the `feat/save-indicator-diag` worktree holds
+`classic_minimap.sdkmod` 0.16.0 `90599fdb…dc21` and the profiler 0.1.23 `6c1fe8cb…cce8`.
+
+**Unverified in game:** the groups and sub-menus in the SDK's menu, Angel still centered, rotation, the save icon.
