@@ -2114,4 +2114,11 @@ coverage, ruff and repository checks pass. `release.py --game --enhanced --profi
 **Built (not installed):** `dist/releases/0.15.5/` in the `feat/save-indicator-diag` worktree holds
 `classic_minimap.sdkmod` 0.15.5 `97a91818…cdc3` and the profiler 0.1.20 `f7bdd932…0e9d`.
 
+**Committed** as `b54ff98` on `feat/save-indicator-diag`.
+
+**Installed on the PC (2026-10-30 01:22 UTC, game closed):** `classic_minimap.sdkmod` 0.15.5
+`97a91818…cdc3` and the profiler 0.1.20 `f7bdd932…0e9d`, SHA-256 verified. v0.15.4 (`a355b946…96a0`,
+`41fec364…6b74`) is backed up in the main checkout's `dist\v0.15.4-20261030T012212.165175Z\`. The stock
+`GfxHUD.upk` is unchanged (`5c515c3e…`).
+
 **Unverified:** the new spot in game (16:9 and 4:3).
