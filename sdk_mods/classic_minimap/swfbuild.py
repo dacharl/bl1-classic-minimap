@@ -95,7 +95,8 @@ SAVE_IDS = {SAVE_LOGO, SAVE_ART}
 SAVE_EXPORT = 'bl1mm_save'
 SAVE_ART_SIZE = 128                    # art box (px), like the 128 px texture; the mod scales the sprite to its size
 SAVE_DEPTH = 9002                      # above the map (ATTACH_DEPTH)
-SAVE_RING_RADII = (60.0, 50.0)         # outer / inner (px in the 128 box): the reference ring is 270 / 225 (run 36)
+SAVE_RING_RADII = (60.0, 52.0)         # outer / inner (px in the 128 box): the native's ring is thinner than the
+                                       # reference logo's 270 / 225 (run 40: inner edge at ~0.87 of the radius)
 SAVE_RING_STEPS = 64                   # polygon sides per circle
 SAVE_ARC_STEPS = 12                    # segments per arch arc
 # The Λ arch, measured from the native icon (run 37, the tunnel screenshot zoomed; ring radius 270 in these units,
@@ -104,8 +105,10 @@ SAVE_ARC_STEPS = 12                    # segments per arch arc
 # centre, the opening's narrowly rounded apex 108. Run 39 (both icons side by side) widened the outer edge slightly:
 # top radius 36 (was 30), foot -153 (was -150).
 SAVE_REF_RADIUS = 270.0
+SAVE_FILLETS = {'outer': 16.0, 'inner': 18.0}   # run 40: the legs meet the ring in rounded fillets (radius, units above)
+SAVE_FILLET_STEPS = 8
 SAVE_ARCH = {'outer': ((-153.0, 181.0), (0.0, -117.0), 36.0),
-             'inner': ((-82.0, 218.0), (0.0, -100.0), 8.0)}
+             'inner': ((-92.0, 218.0), (0.0, -102.0), 8.0)}
 THREAT_DEPTH = 1000
 
 
@@ -908,7 +911,8 @@ def logo_paths():
     """The Vault logo as one shape (run 37: the ring and a separate arch overlapped, and the alpha doubled there):
     the outer circle, filled inside, and two holes cut from it, both clockwise on screen like the circle: the hole
     around the arch (along the ring's inner edge over the top, back over the arch) and the arch's opening (up the
-    left leg, over the apex, down the right leg, back along the ring's inner edge at the bottom)."""
+    left leg, over the apex, down the right leg, back along the ring's inner edge at the bottom). Each leg meets the
+    ring in a fillet (SAVE_FILLETS, run 40), so both outlines are smooth."""
     r_out, r_in = SAVE_RING_RADII
     scale = r_out / SAVE_REF_RADIUS
     inner = r_in / scale                                     # the ring's inner edge, in SAVE_ARCH units
@@ -921,24 +925,46 @@ def logo_paths():
     def angle(p, centre=(0.0, 0.0)):
         return math.atan2(p[1] - centre[1], p[0] - centre[0])
 
-    def edge(name):     # the left leg: its top (tangent to the top circle) and its foot on the ring's inner edge
-        foot, c, r = SAVE_ARCH[name]
-        d = math.hypot(foot[0] - c[0], foot[1] - c[1])
-        a = angle(foot, c) + math.acos(r / d)
-        top = (c[0] + r * math.cos(a), c[1] + r * math.sin(a))
-        dx, dy = foot[0] - top[0], foot[1] - top[1]
-        qa, qb = dx * dx + dy * dy, 2 * (top[0] * dx + top[1] * dy)
-        t = (-qb + math.sqrt(qb * qb - 4 * qa * (top[0] ** 2 + top[1] ** 2 - inner ** 2))) / (2 * qa)
-        return (top[0] + t * dx, top[1] + t * dy), a, c, r
+    def mirror(points):
+        return [(-x, y) for x, y in points]
 
-    fl, a_l, oc, o_r = edge('outer')
-    a_r = math.pi - a_l                                       # the mirrored tangent, on the right
-    around = arc((0.0, 0.0), inner, angle(fl), math.pi - angle(fl) + 2 * math.pi)       # over the top, to the right
-    around += arc(oc, o_r, a_r, a_l - 2 * math.pi, SAVE_ARC_STEPS)                      # back over the arch's top
-    il, b_l, ic, i_r = edge('inner')
-    b_r = math.pi - b_l
-    opening = arc(ic, i_r, b_l, b_r + 2 * math.pi, SAVE_ARC_STEPS)                      # over the apex
-    opening += arc((0.0, 0.0), inner, math.pi - angle(il), angle(il))                   # along the bottom
+    def join(*parts):                                       # concatenated, without the shared end points
+        out = []
+        for part in parts:
+            out += [p for p in part if not out or math.hypot(p[0] - out[-1][0], p[1] - out[-1][1]) > 1e-6]
+        return out
+
+    def edge(name, side):
+        """The left leg: its top (tangent to the top circle, at angle a) and the fillet from the leg into the ring's
+        inner edge, on the hole's side (-1: left of the leg, +1: right), as points from the leg to the ring."""
+        foot, c, r = SAVE_ARCH[name]
+        a = angle(foot, c) + math.acos(r / math.hypot(foot[0] - c[0], foot[1] - c[1]))
+        top = (c[0] + r * math.cos(a), c[1] + r * math.sin(a))
+        length = math.hypot(foot[0] - top[0], foot[1] - top[1])
+        d = ((foot[0] - top[0]) / length, (foot[1] - top[1]) / length)
+        n = (-d[1], d[0]) if -d[1] * side > 0 else (d[1], -d[0])
+        rf = SAVE_FILLETS[name]
+        p0 = (top[0] + n[0] * rf, top[1] + n[1] * rf)       # the fillet's centre runs along the leg, rf off it,
+        b = p0[0] * d[0] + p0[1] * d[1]                     # and lies rf inside the ring's inner edge
+        t = -b + math.sqrt(b * b - (p0[0] ** 2 + p0[1] ** 2 - (inner - rf) ** 2))
+        fc = (p0[0] + t * d[0], p0[1] + t * d[1])
+        on_leg, on_ring = (top[0] + t * d[0], top[1] + t * d[1]), angle(fc)
+        f0, f1 = angle(on_leg, fc), on_ring
+        f1 = f0 + (f1 - f0 + math.pi) % (2 * math.pi) - math.pi                      # the short way round
+        return a, c, r, arc(fc, rf, f0, f1, SAVE_FILLET_STEPS)
+
+    a_l, oc, o_r, fillet = edge('outer', -1)                 # the hole around the arch is left of the left leg
+    q = angle(fillet[-1])
+    around = join(arc((0.0, 0.0), inner, q, math.pi - q + 2 * math.pi),                # over the top, to the right
+                  mirror(fillet)[::-1],                                                # into the right leg
+                  arc(oc, o_r, math.pi - a_l, a_l - 2 * math.pi, SAVE_ARC_STEPS),      # back over the arch's top
+                  fillet[:-1])                                                         # down the left leg
+    b_l, ic, i_r, fillet = edge('inner', 1)                  # the opening is right of the left leg
+    q = angle(fillet[-1])
+    opening = join(arc(ic, i_r, b_l, math.pi - b_l + 2 * math.pi, SAVE_ARC_STEPS),     # over the apex
+                   mirror(fillet),                                                     # down the right leg
+                   arc((0.0, 0.0), inner, math.pi - q, q),                             # along the bottom
+                   fillet[::-1])                                                       # up the left leg
     ring = arc((0.0, 0.0), SAVE_REF_RADIUS, 0.0, 2 * math.pi, SAVE_RING_STEPS)[:-1]
 
     def px(points):

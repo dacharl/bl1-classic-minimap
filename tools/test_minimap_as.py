@@ -690,14 +690,15 @@ def main(path):
     assert len(paths) == 3, len(paths)
     outer, holes = paths[0], sorted(paths[1:], key=lambda p: min(y for _, y in p))
     assert all(abs(math.hypot(x, y) - 60.0) < 0.05 for x, y in outer), 'outer circle, radius 60'
-    assert all(math.hypot(x, y) < 50.05 for p in holes for x, y in p), 'holes inside the ring (inner radius 50)'
+    # Run 40: the native's ring is thinner than the reference logo's: its inner edge at ~0.87 of the radius (52 px)
+    assert all(math.hypot(x, y) < 52.05 for p in holes for x, y in p), 'holes inside the ring (inner radius 52)'
     for p in holes:
         assert sorted(round(x, 1) for x, _ in p) == sorted(round(-x, 1) for x, _ in p), 'symmetric'
     # Run 37: the native icon (zoomed from the tunnel screenshot, ring radius 270 in the reference's units) has a
     # lower, more pointed arch than the reference logo: its outer top 153 above the centre (-34 px), the opening's
     # apex 108 above (-24 px), narrowly rounded.
     around, opening = holes
-    assert abs(min(y for _, y in around) + 50.0) < 0.05, 'the hole around the arch reaches the ring at the top'
+    assert abs(min(y for _, y in around) + 52.0) < 0.05, 'the hole around the arch reaches the ring at the top'
     arch_top = max(y for x, y in around if abs(x) < 1.0 and y < 0)
     assert abs(arch_top + 34.0) < 0.6, arch_top
     assert abs(min(y for _, y in opening) + 24.0) < 0.6, min(y for _, y in opening)
@@ -711,6 +712,28 @@ def main(path):
         return max(x for x in xs if -42.0 < x < 0) / 60.0
     for rel, native in ((-0.4, -0.15), (-0.2, -0.23), (0.0, -0.31), (0.2, -0.39), (0.4, -0.45), (0.6, -0.54)):
         assert abs(arch_edge(rel * 60.0) - native) < 0.015, (rel, arch_edge(rel * 60.0), native)
+    # Run 40: the native's opening is wider lower down, so its legs are slimmer at the base. Its inner edge (run 39
+    # measurements, less the 0.02 our own icon measured wide by) sits at 0.131, 0.171, 0.231, 0.291 (x / radius) at
+    # heights 0, 0.2, 0.4, 0.6 of the radius.
+    def opening_edge(y):
+        xs = [ax + (y - ay) * (bx - ax) / (by - ay) for (ax, ay), (bx, by) in zip(opening, opening[1:] + opening[:1])
+              if (ay - y) * (by - y) <= 0 and ay != by]
+        return max(xs) / 60.0
+    for rel, native in ((0.0, 0.131), (0.2, 0.171), (0.4, 0.231), (0.6, 0.291)):
+        assert abs(opening_edge(rel * 60.0) - native) < 0.015, (rel, opening_edge(rel * 60.0), native)
+    # Run 40: the native's legs meet the ring in rounded fillets, inside the opening too; ours met it in sharp
+    # corners. Both holes' outlines are now smooth: no vertex turns by more than 20 degrees (vertices between
+    # segments under 0.5 px, at the opening's 2 px apex, are skipped: rounding to twips bends them a few degrees).
+    def max_turn(p):
+        turns = [0.0]
+        for a, b, c in zip(p[-1:] + p[:-1], p, p[1:] + p[:1]):
+            if min(math.dist(a, b), math.dist(b, c)) < 0.5:
+                continue
+            h1, h2 = math.atan2(b[1] - a[1], b[0] - a[0]), math.atan2(c[1] - b[1], c[0] - b[0])
+            turns.append(abs((h2 - h1 + math.pi) % (2 * math.pi) - math.pi))
+        return math.degrees(max(turns))
+    for p in holes:
+        assert max_turn(p) < 20.0, max_turn(p)
 
     # icon scale (Enhanced draws icons at its map clip's 0.7; ours are scaled up to match)
     vm.call('MinimapCmd', 'clear')

@@ -2179,3 +2179,46 @@ Both suites pass on both art variants; 129 unit tests, coverage, ruff and reposi
 - the size and spot in game;
 - whether the native icon scales like the HUD movie at other aspect ratios (the Deck's 16:10, 4:3), since it is
   drawn on the canvas.
+
+## 3bh. Run 40: v0.15.6 "much better"; rounded joins, wider opening, thinner ring → v0.15.7 (2026-10-30)
+
+**Run (PC, v0.15.6, native turned back on from the console; a screenshot provided by the user):** "much better".
+Two remaining differences:
+1. Where the arch meets the ring, the native's corners are rounded and ours are sharp.
+2. The arch's inner edge is still slightly narrower, so the base of the legs looks wider.
+
+**Evidence (zoomed screenshot and the run 39 measurements):**
+- **Joins:** the native's legs meet the ring in fillets, outside the arch and inside its opening.
+- **Opening:** native's inner edge sits at 0.15, 0.19, 0.25, 0.31 (x / radius) at heights 0–0.6. Our own icon
+  measured about 0.019 wide of its model at the same heights, so the native's corrected edge is 0.131, 0.171,
+  0.231, 0.291. Our model gave 0.116, 0.163, 0.209, 0.256, so the opening was narrower lower down.
+- **Ring:** the native's inner ring edge sits at ~0.87 of the radius at three separate heights, against ours at
+  0.833 (our measurement was within 0.01 of the model). The native ring is thinner, and its legs reach further down.
+
+**Change → v0.15.7 + profiler 0.1.22:**
+- **Ring:** 60/52 (was 60/50).
+- **Inner edge:** foot (−92, 218) (was −82), apex circle centre (0, −102) radius 8 (apex at −110, was −108).
+  It is within about 0.01 of the corrected native edge at every height.
+- **Fillets:** `logo_paths()` rounds each leg's join with the ring's inner edge (`SAVE_FILLETS` outer 16, inner
+  18, in reference units; 8 segments).
+  - The fillet's centre lies the fillet radius off the leg and inside the ring, and its arc runs from the leg's
+    tangent point to the ring's.
+  - The holes' outlines are now smooth.
+  - An outer fillet of 22 closed the hole above 0.6 of the radius, and 18 bent the edge past the native's
+    there; the tests caught both.
+- **A slip along the way:** the opening's path first dropped its last point on the left leg, which made it
+  asymmetric. The symmetry assertion caught it.
+
+**Tests (red first):**
+- **AS suite:**
+  - the opening's inner edge matches the corrected native at four heights (±0.015);
+  - no vertex of either hole turns by more than 20°, skipping vertices between segments under 0.5 px, where
+    rounding to twips bends the 2 px apex;
+  - the holes stay inside radius 52, and the outer hole reaches the ring's inner edge at the top.
+- Both suites pass on both art variants; 129 unit tests, coverage, ruff and repository checks pass.
+- `release.py --game --enhanced --profiler`: the in-mod build matches (`ad5d5a3a…9763`).
+
+**Built (not installed):** `dist/releases/0.15.7/` in the `feat/save-indicator-diag` worktree holds
+`classic_minimap.sdkmod` 0.15.7 `ac81f5c9…0848` and the profiler 0.1.22 `1e54a601…a556`.
+
+**Unverified:** the new joins, opening and ring side by side with the native in game.
