@@ -2062,6 +2062,13 @@ library rasterizer matches the zoomed native icon.
 **Built (not installed):** `dist/releases/0.15.4/` in the `feat/save-indicator-diag` worktree holds
 `classic_minimap.sdkmod` 0.15.4 `a355b946…96a0` and the profiler 0.1.19 `41fec364…6b74`.
 
+**Committed** as `cf622ec` on `feat/save-indicator-diag`.
+
+**Installed on the PC (2026-10-30 01:02 UTC, game closed):** `classic_minimap.sdkmod` 0.15.4
+`a355b946…96a0` and the profiler 0.1.19 `41fec364…6b74`, SHA-256 verified. v0.15.3 (`903a8091…cb04`,
+`c67090fc…7016`) is backed up in the main checkout's `dist\v0.15.3-20261030T010236.901635Z\`. The stock
+`GfxHUD.upk` is unchanged (`5c515c3e…`).
+
 **Unverified:**
 - whether our icon draws over the tunnel itself (run 7 suggests so) and with the HUD off;
 - the new proportions in game;
