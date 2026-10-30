@@ -2168,6 +2168,13 @@ Both suites pass on both art variants; 129 unit tests, coverage, ruff and reposi
 **Built (not installed):** `dist/releases/0.15.6/` in the `feat/save-indicator-diag` worktree holds
 `classic_minimap.sdkmod` 0.15.6 `2c8229be…51bc` and the profiler 0.1.21 `e18dc1bf…73f0`.
 
+**Committed** as `9b521ee` on `feat/save-indicator-diag`.
+
+**Installed on the PC (2026-10-30 02:01 UTC, game closed):** `classic_minimap.sdkmod` 0.15.6
+`2c8229be…51bc` and the profiler 0.1.21 `e18dc1bf…73f0`, SHA-256 verified. v0.15.5 (`97a91818…cdc3`,
+`f7bdd932…0e9d`) is backed up in the main checkout's `dist\v0.15.5-20261030T020140.697518Z\`. The stock
+`GfxHUD.upk` is unchanged (`5c515c3e…`).
+
 **Unverified:**
 - the size and spot in game;
 - whether the native icon scales like the HUD movie at other aspect ratios (the Deck's 16:10, 4:3), since it is
