@@ -2221,4 +2221,11 @@ Two remaining differences:
 **Built (not installed):** `dist/releases/0.15.7/` in the `feat/save-indicator-diag` worktree holds
 `classic_minimap.sdkmod` 0.15.7 `ac81f5c9…0848` and the profiler 0.1.22 `1e54a601…a556`.
 
+**Committed** as `35e6e7d` on `feat/save-indicator-diag`.
+
+**Installed on the PC (2026-10-30 02:34 UTC, game closed):** `classic_minimap.sdkmod` 0.15.7
+`ac81f5c9…0848` and the profiler 0.1.22 `1e54a601…a556`, SHA-256 verified. v0.15.6 (`2c8229be…51bc`,
+`e18dc1bf…73f0`) is backed up in the main checkout's `dist\v0.15.6-20261030T023412.707147Z\`. The stock
+`GfxHUD.upk` is unchanged (`5c515c3e…`).
+
 **Unverified:** the new joins, opening and ring side by side with the native in game.
