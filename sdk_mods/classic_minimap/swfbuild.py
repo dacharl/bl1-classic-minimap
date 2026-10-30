@@ -90,21 +90,21 @@ HUD_CLIPS = ('echo', 'quest', 'check1', 'check2', 'check3', 'check4', 'check5') 
 HUD_ARGS = ('ex', 'ey', 'qx', 'qy', 'cx', 'cy', 'cdy', 'csx', 'csy')                # MinimapHudShift's placements
 # PLAN_V15: our save indicator, a vector Vault logo like the game's HUD.Textures.saving_indicator (a ring and a
 # Λ mark). The game texture itself drew opaque in GFx, which has no blend modes (run 35), so the art is our own.
-SAVE_RING, SAVE_MARK, SAVE_ART = 1330, 1331, 1334
-SAVE_IDS = {SAVE_RING, SAVE_MARK, SAVE_ART}
+SAVE_LOGO, SAVE_ART = 1330, 1334
+SAVE_IDS = {SAVE_LOGO, SAVE_ART}
 SAVE_EXPORT = 'bl1mm_save'
 SAVE_ART_SIZE = 128                    # art box (px), like the 128 px texture; the mod scales the sprite to its size
 SAVE_DEPTH = 9002                      # above the map (ATTACH_DEPTH)
 SAVE_RING_RADII = (60.0, 50.0)         # outer / inner (px in the 128 box): the reference ring is 270 / 225 (run 36)
 SAVE_RING_STEPS = 64                   # polygon sides per circle
 SAVE_ARC_STEPS = 12                    # segments per arch arc
-# The Λ arch, measured from the user's reference logo (600 px, centre (300, 300), ring radius 270), in its units:
-# the outer edge runs from the feet up to a rounded top (circle centre (0, -145), radius 65), the inner edge to a
-# rounded opening (centre (0, -132.9), radius 32.1). The legs are extended to radius 232 so they run into the ring.
+# The Λ arch, measured from the native icon (run 37, the tunnel screenshot zoomed; ring radius 270 in these units,
+# like the reference logo of run 36, whose arch was taller and rounder): each edge runs from a foot on the ring's
+# inner edge, through `foot`, up to a tangent of its top circle (centre, radius). The outer top is 153 above the
+# centre, the opening's narrowly rounded apex 108.
 SAVE_REF_RADIUS = 270.0
-SAVE_ARCH = {'outer': ((-60.0, -170.0), (-170.0, 140.0), (0.0, -145.0), 65.0),
-             'inner': ((-32.0, -130.0), (-110.0, 190.0), (0.0, -132.9), 32.1)}
-SAVE_FOOT_RADIUS = 232.0
+SAVE_ARCH = {'outer': ((-150.0, 181.0), (0.0, -123.0), 30.0),
+             'inner': ((-82.0, 218.0), (0.0, -100.0), 8.0)}
 THREAT_DEPTH = 1000
 
 
@@ -884,15 +884,14 @@ def original_art(hud):
     return out + art_wrappers()
 
 
-def ring_shape(sid, r_out, r_in, steps, fill):
-    """DefineShape3: a ring centred on the origin. Both circles run clockwise on screen: the outer one fills its
-    inside (FillStyle1), the inner one its outside (FillStyle0), so the centre stays empty."""
-    body = struct.pack('<H', sid) + rect_bytes(-r_out, r_out, -r_out, r_out) + bytes([1, 0x00]) + fill + bytes([0])
+def paths_shape(sid, paths, fill, r):
+    """DefineShape3 of closed straight-edged paths (px points) in one solid fill, bounded by radius r. Each path is
+    (points, fill0, fill1): the side its edges fill, so one shape can have holes and nothing is drawn twice."""
+    body = struct.pack('<H', sid) + rect_bytes(-r, r, -r, r) + bytes([1, 0x00]) + fill + bytes([0])
     w = BitWriter()
     w.u(1, 4); w.u(0, 4)                                            # NumFillBits, NumLineBits
-    for r, fill0, fill1 in ((r_out, 0, 1), (r_in, 1, 0)):
-        pts = [(int(round(r * math.cos(2 * math.pi * k / steps) * 20)),
-                int(round(r * math.sin(2 * math.pi * k / steps) * 20))) for k in range(steps)]
+    for points, fill0, fill1 in paths:
+        pts = [(int(round(x * 20)), int(round(y * 20))) for x, y in points]
         w.u(0, 1); w.u(0, 1); w.u(0, 1); w.u(1, 1); w.u(1, 1); w.u(1, 1)   # new fill1, fill0, moveTo
         n = signed_bits(*pts[0]); w.u(n, 5); w.s(pts[0][0], n); w.s(pts[0][1], n)
         w.u(fill0, 1); w.u(fill1, 1)
@@ -904,49 +903,53 @@ def ring_shape(sid, r_out, r_in, steps, fill):
     return tag(32, body + w.data())
 
 
-def arch_points():
-    """The Λ arch (SAVE_ARCH) as one clockwise outline, scaled from the reference logo to our ring: up the left outer
-    leg, over the rounded top, down the right outer leg, along the ring to the right inner foot, up and back over the
-    rounded opening, down the left inner leg and along the ring to the start."""
-    scale = SAVE_RING_RADII[0] / SAVE_REF_RADIUS
+def logo_paths():
+    """The Vault logo as one shape (run 37: the ring and a separate arch overlapped, and the alpha doubled there):
+    the outer circle, filled inside, and two holes cut from it, both clockwise on screen like the circle: the hole
+    around the arch (along the ring's inner edge over the top, back over the arch) and the arch's opening (up the
+    left leg, over the apex, down the right leg, back along the ring's inner edge at the bottom)."""
+    r_out, r_in = SAVE_RING_RADII
+    scale = r_out / SAVE_REF_RADIUS
+    inner = r_in / scale                                     # the ring's inner edge, in SAVE_ARCH units
 
-    def foot(top, low):     # extend the leg from its top through `low` to SAVE_FOOT_RADIUS (into the ring)
-        dx, dy = low[0] - top[0], low[1] - top[1]
-        a, b = dx * dx + dy * dy, 2 * (top[0] * dx + top[1] * dy)
-        c = top[0] ** 2 + top[1] ** 2 - SAVE_FOOT_RADIUS ** 2
-        t = (-b + math.sqrt(b * b - 4 * a * c)) / (2 * a)
-        return top[0] + t * dx, top[1] + t * dy
-
-    def arc(centre, r, a0, a1, steps, ends=False):
-        rng = range(steps + 1) if ends else range(1, steps)
+    def arc(centre, r, a0, a1, steps=None):                 # from a0 to a1, both ends included
+        steps = steps or max(2, round(abs(a1 - a0) / (2 * math.pi) * SAVE_RING_STEPS))
         return [(centre[0] + r * math.cos(a0 + (a1 - a0) * k / steps),
-                 centre[1] + r * math.sin(a0 + (a1 - a0) * k / steps)) for k in rng]
+                 centre[1] + r * math.sin(a0 + (a1 - a0) * k / steps)) for k in range(steps + 1)]
 
     def angle(p, centre=(0.0, 0.0)):
         return math.atan2(p[1] - centre[1], p[0] - centre[0])
 
-    (o_top, o_low, o_c, o_r), (i_top, i_low, i_c, i_r) = SAVE_ARCH['outer'], SAVE_ARCH['inner']
-    fl, il = foot(o_top, o_low), foot(i_top, i_low)
-    fr, ir = (-fl[0], fl[1]), (-il[0], il[1])
-    a_ol, a_or = angle(o_top, o_c), angle((-o_top[0], o_top[1]), o_c)
-    a_il, a_ir = angle(i_top, i_c), angle((-i_top[0], i_top[1]), i_c)
-    pts = [fl] + arc(o_c, o_r, a_ol, a_or, SAVE_ARC_STEPS, ends=True)            # left leg, rounded top
-    pts += [fr] + arc((0.0, 0.0), SAVE_FOOT_RADIUS, angle(fr), angle(ir), 4)     # right foot along the ring
-    pts += [ir] + arc(i_c, i_r, a_ir, a_il - 2 * math.pi, SAVE_ARC_STEPS, ends=True)   # up, the opening's top
-    pts += [il] + arc((0.0, 0.0), SAVE_FOOT_RADIUS, angle(il), angle(fl), 4)     # left foot along the ring
-    return [(x * scale, y * scale) for x, y in pts]
+    def edge(name):     # the left leg: its top (tangent to the top circle) and its foot on the ring's inner edge
+        foot, c, r = SAVE_ARCH[name]
+        d = math.hypot(foot[0] - c[0], foot[1] - c[1])
+        a = angle(foot, c) + math.acos(r / d)
+        top = (c[0] + r * math.cos(a), c[1] + r * math.sin(a))
+        dx, dy = foot[0] - top[0], foot[1] - top[1]
+        qa, qb = dx * dx + dy * dy, 2 * (top[0] * dx + top[1] * dy)
+        t = (-qb + math.sqrt(qb * qb - 4 * qa * (top[0] ** 2 + top[1] ** 2 - inner ** 2))) / (2 * qa)
+        return (top[0] + t * dx, top[1] + t * dy), a, c, r
+
+    fl, a_l, oc, o_r = edge('outer')
+    a_r = math.pi - a_l                                       # the mirrored tangent, on the right
+    around = arc((0.0, 0.0), inner, angle(fl), math.pi - angle(fl) + 2 * math.pi)       # over the top, to the right
+    around += arc(oc, o_r, a_r, a_l - 2 * math.pi, SAVE_ARC_STEPS)                      # back over the arch's top
+    il, b_l, ic, i_r = edge('inner')
+    b_r = math.pi - b_l
+    opening = arc(ic, i_r, b_l, b_r + 2 * math.pi, SAVE_ARC_STEPS)                      # over the apex
+    opening += arc((0.0, 0.0), inner, math.pi - angle(il), angle(il))                   # along the bottom
+    ring = arc((0.0, 0.0), SAVE_REF_RADIUS, 0.0, 2 * math.pi, SAVE_RING_STEPS)[:-1]
+
+    def px(points):
+        return [(x * scale, y * scale) for x, y in points]
+    return [(px(ring), 0, 1), (px(around), 1, 0), (px(opening), 1, 0)]
 
 
 def save_art():
     """PLAN_V15: the save indicator, exported as SAVE_EXPORT: the game's Vault logo (a ring and the Λ arch) redrawn
-    white in a SAVE_ART_SIZE box from the reference measurements (run 36). The mod sets its alpha (the pulse)."""
-    r_out, r_in = SAVE_RING_RADII
-    mark = arch_points()
-    sprite = struct.pack('<HH', SAVE_ART, 1)
-    sprite += tag(26, bytes([0x02]) + struct.pack('<HH', 1, SAVE_RING))
-    sprite += tag(26, bytes([0x02]) + struct.pack('<HH', 2, SAVE_MARK))
-    return [ring_shape(SAVE_RING, r_out, r_in, SAVE_RING_STEPS, rgba(0xFFFFFF)),
-            polygon_shape(SAVE_MARK, mark, rgba(0xFFFFFF)),
+    white in a SAVE_ART_SIZE box, measured from the native icon (run 37). The mod sets its alpha (the pulse)."""
+    sprite = struct.pack('<HH', SAVE_ART, 1) + tag(26, bytes([0x02]) + struct.pack('<HH', 1, SAVE_LOGO))
+    return [paths_shape(SAVE_LOGO, logo_paths(), rgba(0xFFFFFF), SAVE_RING_RADII[0]),
             tag(39, sprite + tag(1, b'') + tag(0, b''))]
 
 

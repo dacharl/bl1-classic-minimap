@@ -55,7 +55,7 @@ from . import hudmovie
 from .swfmerge import MergeRefused
 from .swfmerge import merge as merge_movie
 
-__version__ = "0.15.3"
+__version__ = "0.15.4"
 
 
 STAGE_W = 1280.0                       # classic HUD stage is 1280x720
@@ -1929,8 +1929,8 @@ def watch_save(pc: Any) -> None:
 
 
 # PLAN_V15 step 2: our own save indicator beside the map (a vector Vault logo; the game texture drew opaque, run 35).
-# While the map is docked and shown, the native icon is hidden (SavingMaterialScale 0) and ours shows whenever a
-# save does (SaveDuration > 0): 64 px at the native spot moved by the ECHO panel's shift, its alpha following the
+# While the map is docked (shown or hidden: the HUD movie draws over the travel tunnel, runs 7 and 37), the native
+# icon is hidden (SavingMaterialScale 0) and ours shows whenever a save does (SaveDuration > 0): 64 px at the native spot moved by the ECHO panel's shift, its alpha following the
 # native material on the engine's real-time clock.
 
 def save_spot() -> Any:
@@ -1973,7 +1973,7 @@ def hide_native_save(hud: Any, hide: bool) -> None:
 def update_save_icon(pc: Any, movie: Any, now: float) -> None:
     hud = pc.myHUD
     spot = save_spot()
-    active = S.shown is True and spot is not None          # ours replaces the native icon
+    active = spot is not None          # ours replaces the native icon, map shown or not (run 37: the tunnel)
     hide_native_save(hud, active)
     try:
         saving = float(hud.SaveDuration) > 0

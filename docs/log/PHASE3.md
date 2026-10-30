@@ -1995,7 +1995,74 @@ Extended UI merge keeps the ids. `release.py --game --enhanced`: the in-mod buil
 **Built (not installed):** `dist/releases/0.15.3/` in the `feat/save-indicator-diag` worktree holds
 `classic_minimap.sdkmod` 0.15.3 `903a8091…cb04` and the profiler 0.1.18 `c67090fc…7016`.
 
-**Installed on the PC (2026-10-29 15:51 UTC, game closed), not yet committed:** `classic_minimap.sdkmod` 0.15.3
+**Committed** as `d5a4401` on `feat/save-indicator-diag`.
+
+**Installed on the PC (2026-10-29 15:51 UTC, game closed):** `classic_minimap.sdkmod` 0.15.3
 `903a8091…cb04` and the profiler 0.1.18 `c67090fc…7016`, SHA-256 verified. v0.15.2 (`3a75b9f3…ef91`,
 `a8f8f9b8…df9d`) is backed up in the main checkout's `dist\v0.15.2-20261029T155131.712655Z\`. The stock
 `GfxHUD.upk` is unchanged (`5c515c3e…`).
+
+## 3be. Run 37: v0.15.3 looks much better; one shape, the native's proportions, no native icon in the tunnel → v0.15.4 (2026-10-29)
+
+**Run (PC, Enhanced art, Extended UI, Scrap Trap → Crimson Lance HQ, 19:03–19:14 UTC; log and three screenshots
+provided by the user):** "looks much better, pulse is good". Three quibbles:
+1. Where the arch meets the ring the art looked overlaid, faintly visible in the first screenshot.
+2. During a blue tunnel the native icon appeared at its usual spot.
+3. The third screenshot is a good one.
+
+Later, comparing ours with the native icon: the native arch is more pointed and does not reach as high.
+
+**Evidence (log):**
+- **Four saves showed ours** (`save icon shown at (938.5, 78.0)`), with `RealTimeSeconds` within 0.05 s of
+  `SaveStartTime` each time.
+- **Two saves came during the tunnel** (19:09:03 and 19:09:30), right after `minimap hidden: loading movie` and
+  `native save icon restored (0.5)`, so the native icon drew there; the second load also passed through
+  `minimap hidden: HUD off`.
+
+**Causes:**
+1. **The overlap.** The ring and the arch were two shapes in one sprite, and the arch's feet ran into the ring band.
+   GFx applies the sprite's `_alpha` to each child separately, so during the pulse the overlap was blended twice.
+2. **The tunnel.** v0.15.2 hid the native icon only while the map was shown, so every hidden state (tunnel, HUD
+   off, settling) gave it back. The HUD movie draws over the tunnel (run 7: the map showed there), so ours can stand in.
+3. **The proportions.** The reference logo (run 36) is not the game's icon. Zoomed 4× from the tunnel screenshot,
+   in the reference's units (ring radius 270):
+   - the ring is the same, 270/225;
+   - the arch's outer top is 153 above the centre (ours was 210), rounded with a radius of about 30;
+   - the opening's apex is 108 above it, narrowly rounded (radius about 8);
+   - the outer legs meet the ring's inner edge near (∓150, 181), the inner ones near (∓82, 218).
+
+**Change → v0.15.4 + profiler 0.1.19:**
+- **One shape.** `swfbuild.logo_paths()` builds one shape (`paths_shape`) from three paths:
+  - the outer circle (filled inside);
+  - a hole around the arch: along the ring's inner edge over the top, then back over the arch;
+  - a hole for the arch's opening: up the left leg, over the apex, down, then back along the ring's inner edge.
+
+  The legs end on the ring's inner edge, so nothing is drawn twice. Shape 1331 is gone, and the sprite places only
+  1330.
+- **The native's proportions.** `SAVE_ARCH` now holds each edge's foot and its top circle (`outer`: centre
+  (0, −123), radius 30; `inner`: centre (0, −100), radius 8). The legs run tangent to those circles.
+- **Native icon hidden whenever ours can stand in.** `update_save_icon` keeps `SavingMaterialScale` at 0 while the
+  mod has a save spot (docked), whether or not the map shows. It is restored when the mod is idle and on disable.
+  Ours shows during every save.
+
+**Tests (red first):**
+- **AS suite:**
+  - it decodes the logo's paths from the built movie: one placed shape with three paths;
+  - the outer circle has radius 60, and the holes stay inside radius 50;
+  - both holes are symmetric;
+  - the hole around the arch reaches the ring at the top;
+  - the arch's top is at −34 px, and the opening's apex at −24 px, narrow.
+- **Mod suite:** during the tunnel and with the HUD off, the map hides, but ours stays visible and the native
+  stays at 0. Nothing is restored.
+
+Both suites pass on both art variants; 129 unit tests, coverage, ruff and repository checks pass.
+`release.py --game --enhanced --profiler`: the in-mod build matches (`551c4b30…f43f`). A preview from the standard
+library rasterizer matches the zoomed native icon.
+
+**Built (not installed):** `dist/releases/0.15.4/` in the `feat/save-indicator-diag` worktree holds
+`classic_minimap.sdkmod` 0.15.4 `a355b946…96a0` and the profiler 0.1.19 `41fec364…6b74`.
+
+**Unverified:**
+- whether our icon draws over the tunnel itself (run 7 suggests so) and with the HUD off;
+- the new proportions in game;
+- the 4:3 spot.

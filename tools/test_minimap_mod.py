@@ -1332,19 +1332,23 @@ def main(gfx_path, on_import=None):
     with contextlib.redirect_stdout(io.StringIO()):
         step(0.3)
     assert save.get('_visible') is False and hud.SavingMaterialScale == 0.0, 'save over: ours hidden, native stays off'
+    # Run 37: a save during the travel tunnel showed the native icon at its usual spot (the map hides there). The
+    # icon stays ours whether or not the map shows (the HUD movie draws over the tunnel, run 7): the native one
+    # stays hidden while the mod runs and ours shows beside the map's place.
     hud.SaveDuration = 3.0
-    pc.myHUD.bShowHUD = False
-    buf = _io.StringIO()
-    with contextlib.redirect_stdout(buf):
-        step(0.3)
-    assert save.get('_visible') is False, 'minimap hidden (HUD off): ours stays hidden too'
-    assert hud.SavingMaterialScale == 0.5 and 'native save icon restored (0.5)' in buf.getvalue(), buf.getvalue()
-    pc.myHUD.bShowHUD = True
-    buf = _io.StringIO()
-    with contextlib.redirect_stdout(buf):
-        step(mod.SETTLE_SECONDS); step(0.3)
-    assert save.get('_visible') is True and hud.SavingMaterialScale == 0.0
-    assert 'native save icon hidden (scale 0.5 -> 0)' in buf.getvalue(), buf.getvalue()
+    for hide, unhide in ((lambda: setattr(pc, 'loading_movie', True), lambda: setattr(pc, 'loading_movie', False)),
+                         (lambda: setattr(hud, 'bShowHUD', False), lambda: setattr(hud, 'bShowHUD', True))):
+        hide()
+        buf = _io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            step(0.3)
+        assert 'minimap hidden' in buf.getvalue(), buf.getvalue()
+        assert save.get('_visible') is True and hud.SavingMaterialScale == 0.0, 'map hidden: still ours, native off'
+        assert 'native save icon restored' not in buf.getvalue(), buf.getvalue()
+        unhide()
+        with contextlib.redirect_stdout(io.StringIO()):
+            step(mod.SETTLE_SECONDS); step(0.3)
+        assert save.get('_visible') is True and hud.SavingMaterialScale == 0.0
     with contextlib.redirect_stdout(buf):
         KEYBINDS['Minimap diagnostics']()
     assert "'save_icon': {'shown': True, 'spot': (938.6, " in buf.getvalue(), buf.getvalue()[-400:]

@@ -21,6 +21,46 @@ PROPS = {0: '_x', 1: '_y', 2: '_xscale', 3: '_yscale', 7: '_visible', 10: '_rota
 UNDEF = Ellipsis
 
 
+def shape_paths(records):
+    """The closed paths (px points) of a DefineShape's records, from its NumFillBits/NumLineBits byte: straight
+    edges and style changes with moveTo, as our builder writes them (no curves, no new styles)."""
+    bits = ''.join(format(b, '08b') for b in records)
+    pos = 0
+
+    def u(n):
+        nonlocal pos
+        pos += n
+        return int(bits[pos - n:pos], 2) if n else 0
+
+    def s(n):
+        v = u(n)
+        return v - (1 << n) if n and v >> (n - 1) else v
+    nfill, nline = u(4), u(4)
+    paths, x, y = [], 0, 0
+    while True:
+        if u(1) == 0:                                   # style change or end
+            flags = u(5)
+            if flags == 0:
+                return paths
+            assert not flags & 0x10, 'new styles'
+            if flags & 1:
+                n = u(5)
+                x, y = s(n), s(n)
+                paths.append([(x / 20.0, y / 20.0)])
+            u(nfill * (bool(flags & 2) + bool(flags & 4)) + nline * bool(flags & 8))
+        else:
+            assert u(1) == 1, 'straight edges only'
+            n = u(4) + 2
+            if u(1):
+                x, y = x + s(n), y + s(n)
+            elif u(1):
+                y += s(n)
+            else:
+                x += s(n)
+            if (x / 20.0, y / 20.0) != paths[-1][0]:     # the closing edge returns to the start
+                paths[-1].append((x / 20.0, y / 20.0))
+
+
 class Clip:
     def __init__(self, name, parent=None, depth=0, w=0.0, h=0.0):
         self.name, self.parent, self.depth = name, parent, depth
@@ -630,36 +670,39 @@ def main(path):
     m4 = by_depth[4]
     assert m4[0] & 0x40 and m4.endswith(b'mask\0' + struct.pack('<H', 6)), m4.hex()  # clip layer to depth 6
     assert by_depth[6].endswith(b'maps\0') and struct.unpack_from('<H', by_depth[6], 3)[0] == 1132
-    # PLAN_V15 step 2 (run 35: the game texture drew opaque, GFx has no blend modes): our own vector Vault logo, a
-    # white ring (shape 1330) and Λ mark (1331) centred in a 128 px box, no bitmaps and no external image left.
-    for sid in (1330, 1331):
-        code, shape = mv.defs[sid]
-        assert code == 32 and not shape_bitmaps(code, shape), (sid, code)
-        nbits = shape[2] >> 3
-        rect_len = (5 + 4 * nbits + 7) // 8
-        assert shape[2 + rect_len:2 + rect_len + 6] == bytes([1, 0x00]) + b'\xff\xff\xff\xff', 'one solid white fill'
-    # Run 36: the six-point Λ looked crude. Measured from the user's reference logo (600 px, ring radius 270): the
-    # ring is 45 thick (inner radius 225), and the mark is an arch whose rounded top reaches 210 above the centre and
-    # whose legs run into the ring. Scaled to our 60 px ring: inner radius 50, the arch's top at -46.7, and the
-    # legs' feet past the inner radius (overlapping the ring, no seam).
-    def shape_rect(sid):
-        b = mv.defs[sid][1]
-        n = b[2] >> 3
-        bits = ''.join(format(x, '08b') for x in b[2:2 + (5 + 4 * n + 7) // 8])[5:]
-        vals = [int(bits[i * n:(i + 1) * n], 2) for i in range(4)]
-        return [(v - (1 << n) if v >> (n - 1) else v) / 20.0 for v in vals]      # xmin, xmax, ymin, ymax (px)
-    xmin, xmax, ymin, ymax = shape_rect(1331)
-    assert abs(ymin + 46.7) < 0.3, ymin
-    assert abs(xmin + xmax) < 0.1, 'symmetric'
-    assert math.hypot(xmax, ymax) > 50.0 and math.hypot(xmax, ymax) < 60.0, 'the feet end inside the ring band'
-    assert abs(shape_rect(1330)[1] - 60.0) < 0.1
-    assert len(mv.defs[1331][1]) > 120, 'arcs, not a six-point polygon'
+    # PLAN_V15 step 2 (run 35: the game texture drew opaque, GFx has no blend modes): our own vector Vault logo,
+    # white, centred in a 128 px box, no bitmaps and no external image left.
+    code, shape = mv.defs[1330]
+    assert code == 32 and not shape_bitmaps(code, shape), code
+    nbits = shape[2] >> 3
+    rect_len = (5 + 4 * nbits + 7) // 8
+    assert shape[2 + rect_len:2 + rect_len + 6] == bytes([1, 0x00]) + b'\xff\xff\xff\xff', 'one solid white fill'
     assert not any(code in (1001, 1009) and cid >= 1300 for cid, (code, _) in mv.defs.items()), 'no placeholder left'
     assert 'mmSaveTex' not in mv.exports.values()
     assert mv.exports.get(1334) == 'bl1mm_save'
+    # Run 37: the ring and the arch were two shapes overlapping where the legs meet the ring, so the pulse's alpha
+    # doubled there. Now one shape: the outer circle and two holes (inside the ring around the arch, and the arch's
+    # opening), so nothing is drawn twice.
     placed = [struct.unpack_from('<H', b, 3)[0] for c, b in read_tags(mv.defs[1334][1], 4, len(mv.defs[1334][1]))
               if c == 26]
-    assert placed == [1330, 1331], placed
+    assert placed == [1330], placed
+    paths = shape_paths(shape[2 + rect_len + 7:])
+    assert len(paths) == 3, len(paths)
+    outer, holes = paths[0], sorted(paths[1:], key=lambda p: min(y for _, y in p))
+    assert all(abs(math.hypot(x, y) - 60.0) < 0.05 for x, y in outer), 'outer circle, radius 60'
+    assert all(math.hypot(x, y) < 50.05 for p in holes for x, y in p), 'holes inside the ring (inner radius 50)'
+    for p in holes:
+        assert sorted(round(x, 1) for x, _ in p) == sorted(round(-x, 1) for x, _ in p), 'symmetric'
+    # Run 37: the native icon (zoomed from the tunnel screenshot, ring radius 270 in the reference's units) has a
+    # lower, more pointed arch than the reference logo: its outer top 153 above the centre (-34 px), the opening's
+    # apex 108 above (-24 px), narrowly rounded.
+    around, opening = holes
+    assert abs(min(y for _, y in around) + 50.0) < 0.05, 'the hole around the arch reaches the ring at the top'
+    arch_top = max(y for x, y in around if abs(x) < 1.0 and y < 0)
+    assert abs(arch_top + 34.0) < 0.6, arch_top
+    assert abs(min(y for _, y in opening) + 24.0) < 0.6, min(y for _, y in opening)
+    near_apex = [x for x, y in opening if y < min(y for _, y in opening) + 3.0]
+    assert max(near_apex) - min(near_apex) < 7.0, 'a pointed opening'
 
     # icon scale (Enhanced draws icons at its map clip's 0.7; ours are scaled up to match)
     vm.call('MinimapCmd', 'clear')
