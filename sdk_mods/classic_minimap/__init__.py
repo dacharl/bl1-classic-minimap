@@ -55,7 +55,7 @@ from . import hudmovie
 from .swfmerge import MergeRefused
 from .swfmerge import merge as merge_movie
 
-__version__ = "0.15.4"
+__version__ = "0.15.5"
 
 
 STAGE_W = 1280.0                       # classic HUD stage is 1280x720
@@ -105,7 +105,9 @@ VOG_NUMBERS = ("_x", "_y", "_width", "_height", "_xscale", "_yscale", "_alpha", 
 SAVE_FIELDS = ("SaveStartTime", "SaveDuration", "SavingMat")   # WillowHUD autosave icon (the mod sets the scale)
 SAVE_CHECK_INTERVAL = 0.25             # autosave diagnostic: how often to read them (v0.14.8)
 SAVE_SIZE = 64.0                       # our indicator (stage px), as big as the native icon (run 35)
-SAVE_FROM_ECHO = (112.5, 34.45)        # native icon - classic echo, p1 px (run 35: native at stage (1120, 102))
+SAVE_RING = 30.0 / 64.0                # the logo's ring radius per px of SAVE_SIZE (60 in its 128 px art box)
+SAVE_GAP = 8.0                         # stage px between the ring and the map's frame (run 38: was ~85 px away)
+BOX_MARGIN = 5.0                       # the frame's margin around the window (swfbuild.BOX_MARGIN)
 SAVE_NATIVE_SCALE = 0.5                # WillowHUD.SavingMaterialScale default, restored when ours isn't in use
 GIVER_OBJECTIVE_UU = 500.0             # a giver this close to an objective is its NPC: one mark there (PHASE3 3ak)
 LANDMARK_CLIP = "map.maps.landmarks"   # icon template clip (frames objective .. questionmark, turnin, newmission)
@@ -1930,18 +1932,18 @@ def watch_save(pc: Any) -> None:
 
 # PLAN_V15 step 2: our own save indicator beside the map (a vector Vault logo; the game texture drew opaque, run 35).
 # While the map is docked (shown or hidden: the HUD movie draws over the travel tunnel, runs 7 and 37), the native
-# icon is hidden (SavingMaterialScale 0) and ours shows whenever a save does (SaveDuration > 0): 64 px at the native spot moved by the ECHO panel's shift, its alpha following the
-# native material on the engine's real-time clock.
+# icon is hidden (SavingMaterialScale 0) and ours shows whenever a save does (SaveDuration > 0): 64 px beside the
+# map's frame (run 38), its alpha following the native material on the engine's real-time clock.
 
 def save_spot() -> Any:
-    """Stage position: the native icon's spot moved like the ECHO panel, i.e. Enhanced echo + (native - classic echo)
-    in p1 space."""
+    """Stage position beside the docked map (run 38): the ring SAVE_GAP left of the frame's top-left corner, its top
+    level with the frame's, wherever Docked size and the HUD layout put the map."""
     if S.dock is None or S.p1_sig is None:
         return None
-    px, py, sx, sy = S.p1_sig[:4]
-    ex, ey = LAYOUTS[S.dock]["echo"]
-    dx, dy = SAVE_FROM_ECHO
-    return round(px + (ex + dx) * sx / 100.0, 1), round(py + (ey + dy) * sy / 100.0, 1)
+    a, b, c, d, tx, ty = dock_matrix(LAYOUTS[S.dock], S.p1_sig)
+    x0, y0 = MASK_LEFT - BOX_MARGIN, MASK_TOP - BOX_MARGIN
+    r = SAVE_RING * SAVE_SIZE
+    return round(a * x0 + c * y0 + tx - SAVE_GAP - r, 1), round(b * x0 + d * y0 + ty + r, 1)
 
 
 def save_alpha(pc: Any) -> float:

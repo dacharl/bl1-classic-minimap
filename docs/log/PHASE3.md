@@ -2073,3 +2073,45 @@ library rasterizer matches the zoomed native icon.
 - whether our icon draws over the tunnel itself (run 7 suggests so) and with the HUD off;
 - the new proportions in game;
 - the 4:3 spot.
+
+## 3bf. Run 38: v0.15.4 looks good (2026-10-30)
+
+**Run (PC, Enhanced art, Extended UI, Crimson Lance HQ, 01:04–01:13 UTC; log and a screenshot provided by the
+user):** "looks good". The screenshot shows our logo left of the map with the lower, pointed arch.
+
+**Evidence (log):**
+- **The native icon stayed hidden from the first HUD.** `native save icon hidden (scale 0.5 -> 0)` came at
+  01:06:11, while the map was still hidden (`HUD off`), and was never restored during the session.
+- **Four saves showed ours** at (938.5, 78.0), each with `RealTimeSeconds` within 0.07 s of `SaveStartTime`.
+- **A save into the tunnel stayed ours.** The save at 01:13:06 was followed 0.5 s later by
+  `minimap hidden: loading movie`. Our icon stayed shown through the tunnel and hid when the save ended (01:13:11),
+  with no native restore.
+- The ECHO reset fix fired nine times; Angel's scope particle was logged as before.
+
+**Result:** the run 37 quibbles are resolved: one shape (no doubled overlap reported), the native's proportions,
+and no native icon in the tunnel.
+
+**Two follow-up questions from the user:**
+- **"Does it need to sit that far away from the minimap?"** No. Its ring ended about 85 stage px left of the map's
+  frame only because v0.15.2 kept the native icon's offset from the ECHO panel. The user chose to align it closer.
+- **"Did we impact the checkmarks for the objectives?"** No. The save work doesn't touch `check1..5`. Zoomed from the
+  run 37 and 38 screenshots, the boxes draw with their ticks (two ticked, one empty in run 37; three empty in
+  run 38), and the notched corner looks like the game's own box art.
+
+**Change → v0.15.5 + profiler 0.1.20:** `save_spot()` now places ours beside the docked map's frame:
+- It takes the map's stage matrix (`dock_matrix`, so Docked size and the HUD layout count) at the frame's top-left
+  corner, which is the window less `BOX_MARGIN` 5.
+- The ring (radius 30 at 64 px, `SAVE_RING`) ends `SAVE_GAP` 8 px left of that corner, with its top level with the
+  frame's.
+- At the 16:9 layout that puts the centre at stage (1021.5, 64.2), where it was (938.5, 78.0). `SAVE_FROM_ECHO` is
+  gone.
+
+**Tests (red first):** the mod suite works the example through from the docked matrix: the centre lands at
+(1021.45, 64.20), and F7 reports the spot as (1021.5, 64.2). Both suites pass on both art variants; 129 unit tests,
+coverage, ruff and repository checks pass. `release.py --game --enhanced --profiler`: the in-mod build matches
+(`657d3b16…4605`).
+
+**Built (not installed):** `dist/releases/0.15.5/` in the `feat/save-indicator-diag` worktree holds
+`classic_minimap.sdkmod` 0.15.5 `97a91818…cdc3` and the profiler 0.1.20 `f7bdd932…0e9d`.
+
+**Unverified:** the new spot in game (16:9 and 4:3).
