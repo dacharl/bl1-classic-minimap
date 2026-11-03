@@ -4,8 +4,8 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from quality_checks import (MOD_FOLDERS, ROOT, ci_trigger_errors, coverage_errors, mod_errors,  # noqa: E402
-                            mutation_errors, release_gate_errors)
+from quality_checks import (MOD_FOLDERS, ROOT, ci_trigger_errors, coverage_errors,  # noqa: E402
+                            line_ending_errors, mod_errors, mutation_errors, release_gate_errors)
 
 CI = 'on:\n  push:\n  workflow_call:\n\njobs:\n  lint:\n    runs-on: ubuntu-latest\n'
 TRIGGERS = '''on:
@@ -112,6 +112,13 @@ class GateChecks(unittest.TestCase):
         self.assertTrue(ci_trigger_errors(TRIGGERS.replace("      - '!docs/**'\n", '')), 'nothing skipped')
         self.assertTrue(ci_trigger_errors(TRIGGERS.replace("      - 'docs/research/PERF_REPORT_V1.md'\n", '')),
                         'bumped doc skipped')
+
+    def test_fixtures_check_out_with_lf_on_every_runner(self):
+        """Windows runners set core.autocrlf, which turned the byte-compared fixtures into CRLF (PHASE3 3bm)."""
+        self.assertEqual(line_ending_errors(), [])
+        self.assertEqual(line_ending_errors(['tools/fixtures/a.json: eol: lf']), [])
+        self.assertEqual(line_ending_errors(['tools/fixtures/a.json: eol: unspecified']),
+                         ['tools/fixtures/a.json: must check out with LF (.gitattributes eol=lf)'])
 
     def test_the_real_ci_triggers_are_safe(self):
         self.assertEqual(ci_trigger_errors((ROOT / '.github/workflows/ci.yml').read_text(encoding='utf-8')), [])

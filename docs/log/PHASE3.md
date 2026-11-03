@@ -2358,3 +2358,20 @@ Coverage is identical per gated file between a grouped run and a per-case run of
 **Unverified:** the Linux jobs and Python 3.11 under grouping (suites sharing a process could behave differently
 there), the path filter on a real push, and the hosted minutes saved, until the first hosted run. `land_branch` and
 `test_workflow` fixtures were not changed.
+
+## 3bm. First hosted CI run: Windows checked out the fixtures with CRLF (2026-11-02, offline only)
+
+**What happened:** the first hosted run of `7724aa8` failed on Windows/Python 3.11:
+`test_profiler.FixtureChecks.test_regenerated_fixtures_match_committed_bytes` found `invalid-bucket-sum.json` with
+CRLF line endings. Ubuntu/Python 3.13 passed every suite shown in the log the user pasted (the log ended before
+`test_runners` and the coverage combine).
+
+**Cause:** Windows runners set `core.autocrlf=true`, so Git converted the LF fixtures to CRLF on checkout. Local
+checkouts don't, which is why it never failed here. Grouping (§3bl) was not involved.
+
+**Fix:** `.gitattributes` checks out every text file with LF (`* text=auto eol=lf`); the index was already all LF,
+so no file changed. `quality_checks.py repository` calls a new `line_ending_errors()`, which fails unless every
+tracked fixture has `eol=lf`.
+
+**Tests (red first):** `test_quality.py` failed on the real repository before the attribute was added. A clone made
+with `core.autocrlf=true` passes the whole default run.

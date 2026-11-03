@@ -136,6 +136,16 @@ def ci_trigger_errors(ci):
     return errors
 
 
+def line_ending_errors(attributes=None):
+    """Tests compare fixtures byte for byte, so they must check out with LF even where core.autocrlf is set."""
+    if attributes is None:
+        fixtures = subprocess.check_output(['git', 'ls-files', 'tools/fixtures'], cwd=ROOT, text=True).split()
+        attributes = subprocess.check_output(['git', 'check-attr', 'eol', '--', *fixtures], cwd=ROOT,
+                                             text=True).splitlines()
+    return [f'{line.split(": ")[0]}: must check out with LF (.gitattributes eol=lf)'
+            for line in attributes if not line.endswith(': eol: lf')]
+
+
 def repository_errors():
     errors = []
     quality = tomllib.loads((ROOT / 'pyproject.toml').read_text())['tool']['quality']
@@ -143,6 +153,7 @@ def repository_errors():
     errors += release_gate_errors((workflows / 'ci.yml').read_text(encoding='utf-8'),
                                   (workflows / 'release.yml').read_text(encoding='utf-8'))
     errors += ci_trigger_errors((workflows / 'ci.yml').read_text(encoding='utf-8'))
+    errors += line_ending_errors()
     for folder in MOD_FOLDERS:
         errors += mod_errors(ROOT / folder, ROOT, quality)
     tree = ast.parse((ROOT / 'sdk_mods/classic_minimap/__init__.py').read_text(encoding='utf-8'))
