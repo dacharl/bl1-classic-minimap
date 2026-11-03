@@ -4,7 +4,41 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from quality_checks import MOD_FOLDERS, ROOT, coverage_errors, mod_errors, mutation_errors  # noqa: E402
+from quality_checks import (MOD_FOLDERS, ROOT, ci_trigger_errors, coverage_errors, mod_errors,  # noqa: E402
+                            mutation_errors, release_gate_errors)
+
+CI = 'on:\n  push:\n  workflow_call:\n\njobs:\n  lint:\n    runs-on: ubuntu-latest\n'
+TRIGGERS = '''on:
+  push:
+    branches: [main]
+    paths:
+      - '**'
+      - '!docs/**'
+      - 'docs/research/PERF_REPORT_V1.md'
+      - 'docs/plans/PLAN_V11_MCP_HANDOFF.md'
+  pull_request:
+    branches: [main]
+  merge_group:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+'''
+RELEASE = '''on:
+  workflow_dispatch:
+
+jobs:
+  main-only:
+    steps:
+      - run: test "$REF" = refs/heads/main
+  checks:
+    needs: main-only
+    uses: ./.github/workflows/ci.yml
+  release:
+    needs: checks
+    steps:
+      - run: gh release create "$TAG"
+'''
 
 
 class GateChecks(unittest.TestCase):
@@ -57,6 +91,35 @@ class GateChecks(unittest.TestCase):
         quality = tomllib.loads((ROOT / 'pyproject.toml').read_text())['tool']['quality']
         for folder in MOD_FOLDERS:
             self.assertEqual(mod_errors(ROOT / folder, ROOT, quality), [], folder)
+
+    def test_a_release_needs_ci_on_main(self):
+        self.assertEqual(release_gate_errors(CI, RELEASE), [])
+        self.assertTrue(release_gate_errors(CI.replace('  workflow_call:\n', ''), RELEASE), 'CI not callable')
+        self.assertTrue(release_gate_errors(CI, RELEASE.replace('    uses: ./.github/workflows/ci.yml\n', '')),
+                        'no CI job')
+        self.assertTrue(release_gate_errors(CI, RELEASE.replace('    needs: checks\n', '')), 'publishes without CI')
+        self.assertTrue(release_gate_errors(CI, RELEASE.replace('    needs: main-only\n', '')), 'any branch')
+        self.assertTrue(release_gate_errors(CI, RELEASE.replace('refs/heads/main', 'refs/heads/dev')), 'wrong branch')
+        self.assertTrue(release_gate_errors(CI, RELEASE.replace('gh release create', 'echo')), 'nothing publishes')
+
+    def test_docs_only_pushes_skip_ci_without_blocking_required_checks(self):
+        """A path-filtered workflow leaves required checks pending, so only pushes may filter; docs that
+        bump_version edits are inputs to the tests, so a change to them must still run CI."""
+        self.assertEqual(ci_trigger_errors(TRIGGERS), [])
+        for event in ('pull_request', 'merge_group'):
+            filtered = TRIGGERS.replace(f'  {event}:\n', f"  {event}:\n    paths-ignore: ['docs/**']\n")
+            self.assertTrue(ci_trigger_errors(filtered), event)
+        self.assertTrue(ci_trigger_errors(TRIGGERS.replace("      - '!docs/**'\n", '')), 'nothing skipped')
+        self.assertTrue(ci_trigger_errors(TRIGGERS.replace("      - 'docs/research/PERF_REPORT_V1.md'\n", '')),
+                        'bumped doc skipped')
+
+    def test_the_real_ci_triggers_are_safe(self):
+        self.assertEqual(ci_trigger_errors((ROOT / '.github/workflows/ci.yml').read_text(encoding='utf-8')), [])
+
+    def test_the_real_release_workflow_is_gated(self):
+        workflows = ROOT / '.github/workflows'
+        self.assertEqual(release_gate_errors((workflows / 'ci.yml').read_text(encoding='utf-8'),
+                                             (workflows / 'release.yml').read_text(encoding='utf-8')), [])
 
 
 if __name__ == '__main__':

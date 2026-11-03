@@ -16,7 +16,27 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  main-only:
+    name: Require main
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Refuse any other branch or tag
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          if [ "$REF" != "refs/heads/main" ]; then
+            echo "Releases are published from main only, not $REF."
+            exit 1
+          fi
+
+  checks:
+    name: CI
+    needs: main-only
+    uses: ./.github/workflows/ci.yml
+
   release:
+    needs: checks
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

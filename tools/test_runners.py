@@ -158,6 +158,28 @@ class RunnerChecks(unittest.TestCase):
         with self.assertRaises(SystemExit):
             selected_modules(configured, ['missing.py'])
 
+    def test_default_run_shares_a_process_per_suite_except_cases_that_need_their_own(self):
+        """A process costs about 0.5 s under coverage, which was over half of a 2-vCPU run (PHASE3 3bl)."""
+        from run_tests import DEFAULT_TESTS, process_jobs
+
+        jobs = process_jobs(['test_runners.ParallelExample', 'test_runners.FailingExample'],
+                            per_case=['test_runners.ParallelExample'])
+        self.assertEqual(jobs, ['test_runners.ParallelExample.test_first', 'test_runners.ParallelExample.test_second',
+                                'test_runners.FailingExample'])
+        jobs = process_jobs(DEFAULT_TESTS)
+        self.assertIn('test_land.LandChecks', jobs)
+        self.assertNotIn('test_ci.SourceChecks', jobs)
+        self.assertIn('test_ci.SourceChecks.test_original_art_movie_passes_both_suites', jobs)
+
+    def test_explicit_test_ids_keep_one_process_per_case(self):
+        result = subprocess.run(
+            [sys.executable, '-B', '-I', str(Path(__file__).with_name('run_tests.py')),
+             '--workers', '1', 'test_runners.WorkerExample'],
+            capture_output=True, text=True, timeout=30,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('1 processes', result.stdout)
+
     def test_runs_test_cases_in_parallel_processes(self):
         with tempfile.TemporaryDirectory() as directory:
             result = subprocess.run(

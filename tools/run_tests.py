@@ -1,5 +1,6 @@
 """Run unit tests in separate Python processes (default: --workers auto).
 
+The default run uses one process per suite; explicit test IDs get one per case.
 Use --coverage to merge branch coverage from every child before applying gates.
 Mutation workers use test_ci.py directly so they do not start nested pools.
 """
@@ -17,6 +18,8 @@ from parallel_workers import worker_count  # noqa: E402
 
 DEFAULT_TESTS = ['test_ci.SourceChecks', 'test_quality.GateChecks', 'test_runners.RunnerChecks', 'test_profiler',
                  'test_land.LandChecks', 'test_workflow.WorkflowChecks', 'test_swfmerge', 'test_hudmovie']
+# These cases run the real mod's main(), which works only once per process.
+PER_CASE = ['test_ci.SourceChecks']
 
 
 def test_ids(suite):
@@ -25,6 +28,17 @@ def test_ids(suite):
             yield from test_ids(test)
         else:
             yield test.id()
+
+
+def case_ids(names):
+    return list(test_ids(unittest.defaultTestLoader.loadTestsFromNames(names)))
+
+
+def process_jobs(suites, per_case=PER_CASE):
+    jobs = []
+    for suite in suites:
+        jobs += case_ids([suite]) if suite in per_case else [suite]
+    return jobs
 
 
 def run_case(name, coverage):
@@ -45,7 +59,7 @@ def main():
     if args.case:
         result = unittest.TextTestRunner().run(unittest.defaultTestLoader.loadTestsFromName(args.case))
         return 0 if result.wasSuccessful() else 1
-    names = list(test_ids(unittest.defaultTestLoader.loadTestsFromNames(args.tests or DEFAULT_TESTS)))
+    names = case_ids(args.tests) if args.tests else process_jobs(DEFAULT_TESTS)
     try:
         workers = worker_count(args.workers, tasks=len(names))
     except ValueError as error:
@@ -53,7 +67,8 @@ def main():
     if args.coverage:
         (ROOT / 'dist/ci').mkdir(parents=True, exist_ok=True)
         subprocess.run([sys.executable, '-I', '-m', 'coverage', 'erase'], cwd=ROOT, check=True)
-    print(f'Running {len(names)} unit tests using {workers} workers ({args.workers})', flush=True)
+    cases = unittest.defaultTestLoader.loadTestsFromNames(names).countTestCases()
+    print(f'Running {cases} unit tests in {len(names)} processes using {workers} workers ({args.workers})', flush=True)
     failed = False
     with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
         futures = {pool.submit(run_case, name, args.coverage): name for name in names}

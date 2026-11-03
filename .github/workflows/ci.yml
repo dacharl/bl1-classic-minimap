@@ -3,10 +3,17 @@ name: CI
 on:
   push:
     branches: [main]
+    paths:   # skip docs-only pushes; filtering a PR event would leave required checks pending
+      - '**'
+      - '!docs/**'
+      - '!*.md'
+      - 'docs/research/PERF_REPORT_V1.md'     # bump_version edits these two, and the tests read them
+      - 'docs/plans/PLAN_V11_MCP_HANDOFF.md'
   pull_request:
     branches: [main]
   merge_group:
   workflow_dispatch:
+  workflow_call:   # the release workflow runs these same checks before publishing
 
 permissions:
   contents: read

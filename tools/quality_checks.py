@@ -2,6 +2,7 @@
 import argparse
 import ast
 import json
+import re
 import subprocess
 import tomllib
 from pathlib import Path
@@ -80,9 +81,68 @@ def mod_errors(source, root, quality):
     return errors
 
 
+def workflow_jobs(text):
+    """Each job's lines by name, read from the two-space job keys under `jobs:` (no YAML parser in the CI tools)."""
+    jobs, name = {}, None
+    for line in text.split('\njobs:\n', 1)[-1].splitlines():
+        match = re.fullmatch(r'  ([\w-]+):', line)
+        if match:
+            name = match[1]
+            jobs[name] = ''
+        elif name:
+            jobs[name] += line + '\n'
+    return jobs
+
+
+def job_needs(body):
+    match = re.search(r'^    needs: \[?([^\]\n]*)', body, re.M)
+    return {name.strip() for name in match[1].split(',')} if match else set()
+
+
+def release_gate_errors(ci, release):
+    """A release must run the whole of CI, on main, before it publishes anything."""
+    errors = []
+    if not re.search(r'^  workflow_call:', ci, re.M):
+        errors.append('ci.yml must allow workflow_call so the release workflow can run it')
+    jobs = workflow_jobs(release)
+    checks = {name for name, body in jobs.items() if 'uses: ./.github/workflows/ci.yml' in body}
+    publish = [body for body in jobs.values() if 'gh release create' in body]
+    if not checks:
+        errors.append('release.yml must run ci.yml')
+    if not publish or not all(job_needs(body) & checks for body in publish):
+        errors.append('release.yml must not publish before ci.yml passes')
+    before_checks = set().union(*(job_needs(jobs[name]) for name in checks)) if checks else set()
+    if not any('refs/heads/main' in jobs.get(name, '') for name in before_checks):
+        errors.append('release.yml must refuse other branches before running ci.yml')
+    return errors
+
+
+BUMPED_DOCS = ('docs/research/PERF_REPORT_V1.md', 'docs/plans/PLAN_V11_MCP_HANDOFF.md')  # bump_version edits these
+
+
+def trigger_block(ci, event):
+    match = re.search(rf'^  {event}:.*\n((?:    .*\n)*)', ci, re.M)
+    return match[1] if match else ''
+
+
+def ci_trigger_errors(ci):
+    """Docs-only pushes skip CI, but a path filter on a PR event would leave required checks pending."""
+    errors = [f'ci.yml must not filter {event} by path: required checks would stay pending'
+              for event in ('pull_request', 'merge_group') if 'paths' in trigger_block(ci, event)]
+    push = trigger_block(ci, 'push')
+    if "- '!docs/**'" not in push:
+        errors.append('ci.yml must skip docs-only pushes')
+    errors += [f'ci.yml must run on pushes that change {doc}' for doc in BUMPED_DOCS if f"- '{doc}'" not in push]
+    return errors
+
+
 def repository_errors():
     errors = []
     quality = tomllib.loads((ROOT / 'pyproject.toml').read_text())['tool']['quality']
+    workflows = ROOT / '.github/workflows'
+    errors += release_gate_errors((workflows / 'ci.yml').read_text(encoding='utf-8'),
+                                  (workflows / 'release.yml').read_text(encoding='utf-8'))
+    errors += ci_trigger_errors((workflows / 'ci.yml').read_text(encoding='utf-8'))
     for folder in MOD_FOLDERS:
         errors += mod_errors(ROOT / folder, ROOT, quality)
     tree = ast.parse((ROOT / 'sdk_mods/classic_minimap/__init__.py').read_text(encoding='utf-8'))

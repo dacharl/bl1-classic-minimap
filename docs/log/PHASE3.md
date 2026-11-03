@@ -2308,3 +2308,53 @@ Kept: the PRE `ShowScreenParticle` hook that places Angel's video, the save icon
 `GfxHUD.upk` is unchanged (`5c515c3e…`).
 
 **Unverified in game:** the groups and sub-menus in the SDK's menu, Angel still centered, rotation, the save icon.
+
+## 3bk. The release workflow runs CI first (2026-11-02, offline only)
+
+**Why:** `release.yml` only checked the version fields, Python syntax and the archive, so it could publish a build
+that fails CI, from any branch. The user asked to tighten it before the first push.
+
+**Change (no mod version change):**
+- `ci.yml` also runs through `workflow_call`, so a release uses the same checks.
+- `release.yml` has three jobs: `main-only` refuses any other branch or tag, `checks` runs `ci.yml`, and `release`
+  (publishing) needs `checks`.
+- `quality_checks.py repository` calls a new `release_gate_errors()`, which fails if that order is removed. It reads
+  the jobs line by line, because the CI tools have no YAML parser.
+- `docs/CI.md`: the release flow, plus stale notes (the test count, the removed probe, the mod's mutation score).
+
+**Tests (red first):** `test_quality.py` checks a passing sample, each way of removing the gate, and the real
+workflows, which failed all four rules before the change. 131 unit tests, coverage, ruff and repository checks pass.
+
+**Unverified:** the workflow syntax (no actionlint, Docker or YAML parser here; the hosted lint job runs actionlint),
+and the release path itself until the pre-release.
+
+## 3bl. Fewer billable CI minutes (2026-11-02, offline only)
+
+**Why:** the repository is private, with 2,000 Actions minutes a month, and earlier concurrent runs used them all.
+
+**Cause:** no single test stood out. The slowest cases take 5–8 s and do real work (release builds, installs, a real
+hang being killed). The cost was one process per case: about 0.5 s each under coverage, on top of the test itself.
+Run as one process each, the suites took 0.3–1.6 s (fast suites), 11 s (`test_runners`), 27 s (`test_workflow`) and
+29 s (`test_land`).
+
+**Change (no mod version change):**
+- `run_tests.py`: the default run uses one process per suite. `test_ci.SourceChecks` stays per case because its cases
+  run the real mod's `main()`, which fails on a second run in one process. Explicit test IDs stay per case.
+- `ci.yml`: pushes that change only `docs/` or a root `.md` file skip CI, except the two docs `bump_version.py` edits,
+  which the tests read. The filter is on `push` only, because GitHub leaves required checks pending on a path-filtered
+  PR workflow. `quality_checks.py repository` calls a new `ci_trigger_errors()` that enforces both rules.
+- `docs/CI.md`: billable-minute notes and the new process model.
+
+**Tests (red first):** four new cases in `test_quality.py` and `test_runners.py`. 135 unit tests, the coverage gate,
+ruff and repository checks pass.
+
+| Run (Windows, i7-6700K) | Processes | 2 workers | Automatic (8) |
+|---|---:|---:|---:|
+| Before | 135 (131 when timed) | about 90 s | about 45 s |
+| After | 14 | 50 s | 36 s |
+
+Coverage is identical per gated file between a grouped run and a per-case run of the same tests.
+
+**Unverified:** the Linux jobs and Python 3.11 under grouping (suites sharing a process could behave differently
+there), the path filter on a real push, and the hosted minutes saved, until the first hosted run. `land_branch` and
+`test_workflow` fixtures were not changed.
