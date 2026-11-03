@@ -1,5 +1,5 @@
 [tool.ruff]
-target-version = "py311"
+target-version = "py313"
 extend-exclude = ["dist", ".claude", "tools/pk"]
 
 [tool.ruff.lint]

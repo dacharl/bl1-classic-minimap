@@ -1,6 +1,6 @@
 # Release and diagnostic tools
 
-Run these commands from the task worktree. All tools support `--help` and Python 3.11+.
+Run these commands from the task worktree. All tools support `--help` and Python 3.13+.
 No command publishes files or installs automatically as part of a build. Game-derived outputs stay local.
 
 ## Synchronize versions

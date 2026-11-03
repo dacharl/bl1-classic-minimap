@@ -2,6 +2,8 @@
 
 **Continuous, blocking checks:** `.github/workflows/ci.yml` runs on pushes to `main` (including merged PRs), PRs targeting `main`, merge-queue events and manual dispatch. It has two jobs: **lint** (Ruff, dependency consistency, repository checks, actionlint) and **unit tests with per-file line and branch coverage floors**. These are the only checks that run continuously; configure them as required status checks.
 
+**Test matrix:** two jobs. **Windows/Python 3.14** is the game's OS and the interpreter the PythonSDK embeds (`python314.dll` in `Binaries\Plugins`). **Ubuntu/Python 3.13** is the version the local tools run on, and covers the mutation runner's POSIX process-group cleanup. Lint and mutation testing use Python 3.13. Python 3.11 was dropped in PHASE3 §3bn: nothing runs on it.
+
 **Billable minutes:** the repository is private, so hosted runs draw on the plan's monthly Actions minutes.
 - **Pushes that change only `docs/` or a root `.md` file skip CI.** The filter is on `push` alone: a path-filtered workflow leaves required checks pending, so PRs and the merge queue always run. The two docs `bump_version.py` edits still trigger CI, because the tests read them. `quality_checks.py repository` fails if either rule is removed.
 - **Prefer running mutation testing locally.** One hosted run can use up to 180 minutes.

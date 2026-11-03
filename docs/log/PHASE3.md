@@ -2375,3 +2375,20 @@ tracked fixture has `eol=lf`.
 
 **Tests (red first):** `test_quality.py` failed on the real repository before the attribute was added. A clone made
 with `core.autocrlf=true` passes the whole default run.
+
+The user later reported that the Ubuntu/3.13 job was cancelled before its coverage step.
+
+## 3bn. CI tests the game's Python: Windows/3.14 and Ubuntu/3.13 (2026-11-02, offline only)
+
+**Why:** CI tested Python 3.11 (the tools' stated minimum) on two of its three jobs, but nothing runs on 3.11. The
+PythonSDK in the user's install embeds Python 3.14 (`Binaries\Plugins\python314.dll`), which CI never tested, and the
+local tools run on 3.13.
+
+**Change:** the test matrix is two jobs: Windows/Python 3.14 (the game's OS and interpreter) and Ubuntu/Python 3.13
+(the tools' Python and POSIX process groups for the mutation runner). Lint and mutation testing move from 3.11 to
+3.13; ruff targets `py313`; TOOLS.md states 3.13+. One fewer Linux job per run.
+
+**Tests:** configuration only. Ruff, repository checks, 136 unit tests and the coverage gate pass on Python 3.13.
+
+**Unverified:** Python 3.14 is not installed here, so the Windows/3.14 job (and the pinned ruff, coverage and Cosmic
+Ray on it) is first tested by the hosted run.

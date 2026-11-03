@@ -33,7 +33,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-python@v7
         with:
-          python-version: '3.11'
+          python-version: '3.13'
           cache: pip
           cache-dependency-path: requirements-ci.txt
       - run: python -I -m pip install -r requirements-ci.txt
@@ -54,11 +54,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
-            python: '3.11'
-          - os: windows-latest
-            python: '3.11'
-          - os: ubuntu-latest
+          - os: windows-latest   # the game's OS and the PythonSDK's interpreter (python314.dll)
+            python: '3.14'
+          - os: ubuntu-latest    # the local tools' Python, and POSIX process groups for the mutation runner
             python: '3.13'
     steps:
       - uses: actions/checkout@v7
