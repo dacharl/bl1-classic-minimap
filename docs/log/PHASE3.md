@@ -2421,7 +2421,11 @@ byte for byte the same as before.
 on both readers; this part is a refactor). Both suites on both art variants, 138 unit tests, the coverage floors
 (swfmerge 98.93% line / 95.69% branch), ruff and repository checks pass. `release.py --game --enhanced --profiler`:
 the in-mod build matches (`6dc743b6…4708`). Bundle in the worktree's `dist/releases/0.16.1/`:
-`classic_minimap.sdkmod` `e0312eec…a01e`, `classic_minimap_profiler.sdkmod` `38807f92…7693`. Not installed.
+`classic_minimap.sdkmod` `e0312eec…a01e`, `classic_minimap_profiler.sdkmod` `38807f92…7693`.
+
+**Installed on the PC (2026-11-26 00:33 UTC, game closed):** both files through `install.py --profiler`, SHA-256
+verified. v0.16.0 `90599fdb…dc21` and profiler 0.1.23 `6c1fe8cb…cce8` are backed up in the main checkout's
+`dist\v0.16.0-20261126T003305.719998Z\`. v0.16.0 was never played, so this is also its first in-game check (§3bj).
 
 **Unverified:** the in-game times. The new log line will show where the unexplained second goes. Still open from the
 plan: reading the foreign movie from its package instead of `RawData` (about 0.65 s), and caching the merged movie
