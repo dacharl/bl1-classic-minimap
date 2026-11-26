@@ -2659,3 +2659,29 @@ verified. v0.16.4 `9a301fb5…7b89` and profiler 0.1.27 `853dc238…3cdf` are ba
 `dist\v0.16.4-20261126T140815.105610Z\`.
 
 **Unverified (in game):** a fast travel should log which gate holds the map after the tunnel.
+
+## 3bw. Run 46: v0.16.5 on the PC; after a fast travel the HUD-off gate holds the map 3.6 s (2026-11-26)
+
+**Run 46 (v0.16.5, PC, Extended UI):** the merge took 1.37 s and the movie build 0.68 s. Seven trips, every one drawn
+with the new area's map and one rebuild line each. The new line appeared on both fast travels and on no walked trip:
+
+| Trip | Kind | Anchor found | Then | Shown |
+|---|---|---|---|---|
+| dry → Arid | walked | 18:06.36 (6.26 s) | | 06.36 |
+| Arid → dry | walked | 22.28 (3.50 s) | | 22.28 |
+| dry → arid_mine | fast travel | 31.79 (3.80 s) | 31.80 "HUD off (was: loading movie)" | 35.41 |
+| arid_mine → Arid | walked | 48.06 (6.42 s) | | 48.06 |
+| Arid → arid_mine | walked | 19:08.15 (3.98 s) | | 08.15 |
+| arid_mine → dry | fast travel | 17.83 (3.46 s) | 17.84 "HUD off (was: loading movie)" | 21.51 |
+| dry → Arid | walked | 33.17 (6.47 s) | | 33.18 |
+
+**Result:** this settles the §3bu question. After a fast travel's tunnel the game keeps the rest of the HUD off for
+3.6–3.7 s, and the minimap follows the HUD, as the user described. On walked trips the HUD is already back when the
+tunnel ends, so the map shows the moment the anchor arrives.
+
+**Note:** the "after the tunnel" figure (0.25–0.45 s here) is measured from the last retry that saw the loading movie,
+so it is coarse by up to one retry interval (about 0.25–0.33 s). The visibility gates run every tick (0.05 s), between
+the retries, so a tunnel that ended before the anchor arrived would have logged "new area loading (was: loading movie)"
+or "HUD off (was: loading movie)" at that tick. No walked trip logged either, and both fast travels logged "HUD off" in
+the same tick as the anchor: on every trip the anchor was found within one tick of the loading movie stopping. So a
+shorter `AREA_RETRY` would not show the map any sooner.
