@@ -43,6 +43,14 @@ def stock_package(movie):
 
 class WorkflowChecks(unittest.TestCase):
     def setUp(self):
+        # Git hooks (the pre-push coverage gate) export the repository's location; the tests' own temporary
+        # repositories and "not a repository" folders must not resolve to it.
+        environment = patch.dict(os.environ)
+        environment.start()
+        self.addCleanup(environment.stop)
+        for name in ('GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_COMMON_DIR', 'GIT_PREFIX',
+                     'GIT_OBJECT_DIRECTORY', 'GIT_ALTERNATE_OBJECT_DIRECTORIES', 'GIT_QUARANTINE_PATH'):
+            os.environ.pop(name, None)
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)

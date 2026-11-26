@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -31,6 +32,15 @@ def commit(cwd, name, text='x'):
 
 class LandChecks(unittest.TestCase):
     def setUp(self):
+        # Git hooks (the pre-push coverage gate) export the repository's location. These tests run `git init`,
+        # `symbolic-ref` and commits, so with it set they would rewrite the real repository instead of the
+        # throwaway ones (they once set core.bare on it and switched a worktree's branch).
+        environment = mock.patch.dict(os.environ)
+        environment.start()
+        self.addCleanup(environment.stop)
+        for name in ('GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_COMMON_DIR', 'GIT_PREFIX',
+                     'GIT_OBJECT_DIRECTORY', 'GIT_ALTERNATE_OBJECT_DIRECTORIES', 'GIT_QUARANTINE_PATH'):
+            os.environ.pop(name, None)
         os.environ.update(IDENTITY)
         self.tmp = Path(tempfile.mkdtemp())
         self.main = self.tmp / 'main'
