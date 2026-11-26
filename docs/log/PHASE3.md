@@ -2585,3 +2585,27 @@ verified. v0.16.2 `7adf78b4…e98d` and profiler 0.1.25 `d71f7a21…82b9` are ba
 
 **Unverified (in game):** after a trip on the same HUD the log should show "new area's map anchor
 found after …" and the map should appear with the new area's art, at most about 0.2 s after the tunnel.
+
+## 3bt. Run 44: v0.16.3 on the PC; a long tunnel used up the wait, fixed in v0.16.4 (2026-11-26)
+
+**Run 44 (v0.16.3, PC, Extended UI):** the merge took 1.41 s and the movie build 0.58 s. Of five trips, three drew
+the new area straight away: Arid → dry (anchor after 3.53 s, shown at once), → arid_bunker (3.23 s, inside the
+tunnel) and → arid_mine (3.94 s, inside the tunnel). The two trips into Arid still showed the old map for 0.32 s:
+their tunnels lasted 6.9 s and 6.8 s, the 5 s wait ran out inside them ("keeping the current markers"), and Arid's
+anchor streams in only about 0.3 s after the tunnel ends. The retries also logged "tracked mission or visible area
+changed; rebuilding" about every 0.25 s, about 20 lines per trip.
+
+**Change → core v0.16.4, profiler 0.1.27:** the `READY_TIMEOUT` clock restarts while the loading movie plays, so the
+5 s count from the tunnel's end. The rebuild line is logged once per wait, and the found line reads "new area's map
+anchor found after T.TTs (U.UUs after the tunnel)".
+
+**Tests (red first):** the mod suite runs a tunnel longer than `READY_TIMEOUT` with the anchor missing; after the
+tunnel the map must stay hidden (it failed: the old map showed), then show once the anchor streams in, with one
+rebuild line and the new found line. The scenario's extra 20 s of ticks with an empty radar list and an enemy nearby
+tripped the pawn-scan fallback, so the test resets the radar probe after it. Both suites on both art variants, the
+unit tests, the coverage floors (core 90.86% line / 87.50% branch), ruff and repository checks pass. `release.py
+--game --enhanced --profiler`: the in-mod build matches (`266e1138…689a`). Bundle in the worktree's
+`dist/releases/0.16.4/`: `classic_minimap.sdkmod` `9a301fb5…7b89`, `classic_minimap_profiler.sdkmod` `853dc238…3cdf`.
+
+**Unverified (in game):** not installed yet. Trips into Arid should show the Arid map at once, with the found line
+giving about 0.3 s after the tunnel.

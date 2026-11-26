@@ -743,6 +743,26 @@ def main(gfx_path, on_import=None):
     assert m.get('_visible') is True and mod.S.phase == 'running'
     world.StreamingLevels.pop()
     step(0.6); step()
+    # run 44: Arid's anchor streams in only ~0.3 s after a 6.9 s tunnel. The timeout counts from the tunnel's end
+    # (it ran out inside the tunnel and the old map showed again), and the retries log the rebuild once.
+    pc.loading_movie = True
+    WORLD.anchor_loaded = False
+    world.StreamingLevels.append(types.SimpleNamespace(bIsVisible=True, LoadedLevel='Level arid_long.TheWorld'))
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        for _ in range(int(mod.READY_TIMEOUT / 0.5) + 4):
+            step(0.5)
+        pc.loading_movie = False
+        step(); step(0.2); step()
+        assert m.get('_visible') is False, 'a long tunnel must not use up the wait: old map shown'
+        WORLD.anchor_loaded = True
+        step(0.3); step()
+    assert m.get('_visible') is True and mod.S.phase == 'running'
+    out = buf.getvalue()
+    assert out.count('rebuilding map objects in place') == 1, out
+    assert re.search(r"new area's map anchor found after \d+\.\d\ds \(\d\.\d\ds after the tunnel\)", out), out
+    world.StreamingLevels.pop()
+    step(0.6); step()
     # an area that never gets an anchor: after READY_TIMEOUT the current map shows again
     WORLD.anchor_loaded = False
     world.StreamingLevels.append(types.SimpleNamespace(bIsVisible=True, LoadedLevel='Level arid_nomap.TheWorld'))
@@ -756,6 +776,8 @@ def main(gfx_path, on_import=None):
     world.StreamingLevels.pop()
     step(0.6); step()
     assert m.get('_visible') is True
+    # the waits above ran ~20 s of ticks with an empty radar list and an enemy nearby: start the radar probe over
+    mod.S.threat_source, mod.S.radar_empty, mod.S.radar_misses = 'radar', 0, 0
     # a failing check never hides the map for good or resets it
     pc.IsLoadingMoviePlaying = None                    # calling it raises TypeError
     step()

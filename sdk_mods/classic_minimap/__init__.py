@@ -55,7 +55,7 @@ from . import hudmovie
 from .swfmerge import MergeRefused
 from .swfmerge import merge as merge_movie
 
-__version__ = "0.16.3"
+__version__ = "0.16.4"
 
 
 STAGE_W = 1280.0                       # classic HUD stage is 1280x720
@@ -208,7 +208,8 @@ class State:
         self.last_hidden_reason = "start"
         self.rebuild_pending = False       # rebuild the markers on the next tick...
         self.rebuild_refit = False         # ...and refit the zoom (F8, option changes; not the status menu)
-        self.area_wait: Any = None         # when an in-place rebuild first found no anchor (map hidden; run 43)
+        self.area_wait: Any = None         # when an in-place rebuild first found no anchor (map hidden; run 43)...
+        self.area_clock = 0.0              # ...and when its timeout started: the tunnel's end (run 44)
         self.save_shown = False            # PLAN_V15: our save indicator is showing...
         self.save_spot: Any = None         # ...where (stage px)...
         self.save_alpha: Any = None        # ...its last alpha...
@@ -769,7 +770,9 @@ def rebuild_in_place(pc: Any, movie: Any) -> None:
     whose frame isn't on stage yet waits in framewait with the old markers showing. No anchor (travel on
     the same HUD: the level list changes inside the tunnel before the new area's anchor streams in, run 43):
     the map hides ("new area loading") and the rebuild retries every AREA_RETRY until the anchor appears;
-    after READY_TIMEOUT it gives up and shows the current map again (an area without a map).
+    READY_TIMEOUT after the tunnel ends it gives up and shows the current map again (an area without a map).
+    The timeout clock restarts while the tunnel plays: Arid's anchor streams in only ~0.3 s after a 6.9 s
+    tunnel (run 44).
     """
     old_frame = S.anchor.get("MapFrame")
     now = time.time()
@@ -777,7 +780,13 @@ def rebuild_in_place(pc: Any, movie: Any) -> None:
         S.phase = "running"
         if S.area_wait is None:
             S.area_wait = now
-        if now - S.area_wait <= READY_TIMEOUT:
+        try:
+            tunnel = bool(pc.IsLoadingMoviePlaying())
+        except Exception:
+            tunnel = False
+        if tunnel or S.area_clock < S.area_wait:
+            S.area_clock = now
+        if now - S.area_clock <= READY_TIMEOUT:
             S.next_objective_check = now + AREA_RETRY   # the key still differs: the next check retries
             return
         S.area_wait = None
@@ -788,7 +797,7 @@ def rebuild_in_place(pc: Any, movie: Any) -> None:
         warn_once("rebuild-noanchor", "map anchor missing during a rebuild; keeping the current markers")
         return
     if S.area_wait is not None:
-        log(f"new area's map anchor found after {now - S.area_wait:.2f}s")
+        log(f"new area's map anchor found after {now - S.area_wait:.2f}s ({now - S.area_clock:.2f}s after the tunnel)")
         S.area_wait = None
     if frame_ready(movie) and capture(movie, in_place=True):
         if S.anchor.get("MapFrame") != old_frame:
@@ -1407,7 +1416,8 @@ def tick(pc: Any) -> None:
         if S.objective_key is None:
             S.objective_key = key
         elif key != S.objective_key:
-            log("tracked mission or visible area changed; rebuilding map objects in place")
+            if S.area_wait is None:      # retries while a new area streams in log once (run 44)
+                log("tracked mission or visible area changed; rebuilding map objects in place")
             rebuild_in_place(pc, movie)
     if S.phase != "running":         # a rebuild moved to a new zone frame that isn't on stage yet
         return

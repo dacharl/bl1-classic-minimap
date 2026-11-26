@@ -20,8 +20,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-PROFILER_VERSION = "0.1.26"
-SUPPORTED_CORE_VERSIONS = ("0.10.0", "0.10.1", "0.10.2", "0.12.0", "0.13.0", "0.13.1", "0.14.0", "0.14.1", "0.14.2", "0.14.3", "0.14.4", "0.14.5", "0.14.6", "0.14.7", "0.14.8", "0.15.0", "0.15.1", "0.15.2", "0.15.3", "0.15.4", "0.15.5", "0.15.6", "0.15.7", "0.16.0", "0.16.1", "0.16.2", "0.16.3",)   # wrapper targets are these cores' function names (decision 14)
+PROFILER_VERSION = "0.1.27"
+SUPPORTED_CORE_VERSIONS = ("0.10.0", "0.10.1", "0.10.2", "0.12.0", "0.13.0", "0.13.1", "0.14.0", "0.14.1", "0.14.2", "0.14.3", "0.14.4", "0.14.5", "0.14.6", "0.14.7", "0.14.8", "0.15.0", "0.15.1", "0.15.2", "0.15.3", "0.15.4", "0.15.5", "0.15.6", "0.15.7", "0.16.0", "0.16.1", "0.16.2", "0.16.3", "0.16.4",)   # wrapper targets are these cores' function names (decision 14)
 CORE_MODULE = "classic_minimap"
 CAPTURE_SECONDS = (30, 60, 120, 300)    # decision 13
 
