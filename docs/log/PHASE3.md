@@ -2685,3 +2685,24 @@ the retries, so a tunnel that ended before the anchor arrived would have logged 
 or "HUD off (was: loading movie)" at that tick. No walked trip logged either, and both fast travels logged "HUD off" in
 the same tick as the anchor: on every trip the anchor was found within one tick of the loading movie stopping. So a
 shorter `AREA_RETRY` would not show the map any sooner.
+
+## 3bx. The install tests checked whether the real game was running (2026-11-26, offline only)
+
+**What happened:** during the §3bp verification, two `test_workflow` tests failed with "install failed:
+Borderlands.exe is running; close the game before installing". The game was open on the PC at the time.
+
+**Cause:** `test_install_backs_up_replaced_version_verifies_copies_and_keeps_profiler_opt_in` and
+`test_install_dry_run_and_tampered_bundle_never_change_game_files` ran `install.py` as a child process. Its
+`require_closed` asked the real `tasklist` (or `ps`), so the result depended on what was running on the machine. CI
+never has the game open, so only local runs failed. The third install test already injected the process listing
+in-process.
+
+**Fix (tests only, no mod version change):** a `WorkflowChecks.install(*args, running='')` helper runs
+`install.main` in the test process with `subprocess.run` patched to return `running` as the process listing, and
+returns the exit code, stdout and stderr. All three install tests use it, including the running-game refusal and the
+rollback case. `install.py` is unchanged and still checks the real process list when you install.
+
+**Tests (red first):** with a stand-in `Borderlands.exe` running (a copy of `ping.exe` in the scratchpad), both
+child-process tests failed with the error above; after the change all 12 `test_workflow` tests pass with it running.
+The stand-in was then killed by PID. 140 unit tests pass with coverage, and the coverage gate, ruff and repository
+checks pass. The real-movie suites don't cover this and weren't rerun.

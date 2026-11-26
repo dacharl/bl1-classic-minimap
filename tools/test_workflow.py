@@ -51,6 +51,19 @@ class WorkflowChecks(unittest.TestCase):
         return subprocess.run([sys.executable, '-B', '-I', str(ROOT / 'tools' / name), *map(str, args)],
                               cwd=cwd or self.root, capture_output=True, text=True, encoding='utf-8')
 
+    def install(self, *args, running=''):
+        """install.py's CLI, run in this process with the OS process query injected (`running` is the
+        listing it returns), so the result never depends on whether the real game is open (PHASE3 3bx)."""
+        import install
+        out, err, code = io.StringIO(), io.StringIO(), 0
+        with patch('subprocess.run', return_value=subprocess.CompletedProcess([], 0, running, '')):
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                try:
+                    install.main(list(map(str, args)))
+                except SystemExit as stop:
+                    code = stop.code or 0
+        return subprocess.CompletedProcess(args, code, out.getvalue(), err.getvalue())
+
     def repo(self):
         repo = self.root / 'repo'
         for folder in ('tools', 'sdk_mods', 'docs'):
@@ -260,7 +273,7 @@ class WorkflowChecks(unittest.TestCase):
         game, interface, mods = self.fake_game()
         stock = (interface / 'GfxHUD.upk').read_bytes()
         backups = self.root / 'backups'
-        result = self.cli('install.py', output, '--game', game, '--backups', backups)
+        result = self.install(output, '--game', game, '--backups', backups)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual((interface / 'GfxHUD.upk').read_bytes(), stock)
         self.assertEqual((interface / 'GfxHUD_Minimap.upk').read_bytes(), b'old-package')
@@ -272,7 +285,7 @@ class WorkflowChecks(unittest.TestCase):
         self.assertEqual(sorted(p.name for p in folders[0].iterdir()), ['classic_minimap.sdkmod', 'install.json'])
         self.assertIn('| `sdk_mods/classic_minimap.sdkmod` |', result.stdout)
         self.assertIn('SHA-256', result.stdout)
-        result = self.cli('install.py', output, '--game', game, '--backups', backups, '--profiler')
+        result = self.install(output, '--game', game, '--backups', backups, '--profiler')
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual((mods / 'classic_minimap_profiler.sdkmod').read_bytes(),
                          (output / 'classic_minimap_profiler.sdkmod').read_bytes())
@@ -283,15 +296,15 @@ class WorkflowChecks(unittest.TestCase):
         backups = self.root / 'backups'
         args = [output, '--game', game, '--backups', backups]
         old_core = (mods / 'classic_minimap.sdkmod').read_bytes()
-        result = self.cli('install.py', *args, '--dry-run')
+        result = self.install(*args, '--dry-run')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertFalse(backups.exists())
-        result = self.cli('install.py', *args, '--profiler')
+        result = self.install(*args, '--profiler')
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('does not include the profiler', result.stderr)
         core = output / 'classic_minimap.sdkmod'
         core.write_bytes(core.read_bytes() + b'?')
-        result = self.cli('install.py', *args)
+        result = self.install(*args)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('SHA-256 mismatch', result.stderr)
         self.assertFalse(backups.exists())
@@ -299,24 +312,22 @@ class WorkflowChecks(unittest.TestCase):
         self.assertEqual((mods / 'classic_minimap_profiler.sdkmod').read_bytes(), b'keep-profiler')
         (output / 'release.json').write_text(json.dumps({'schema_version': 1, 'files': {
             'classic_minimap.sdkmod': 'x', 'GfxHUD_Minimap.upk': 'y'}}), encoding='utf-8')
-        result = self.cli('install.py', *args)
+        result = self.install(*args)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('missing or unexpected files', result.stderr)
 
     def test_install_refuses_running_game_and_rolls_back_on_copy_failure(self):
         # Inject only OS process enumeration and file replacement failures at the CLI boundary.
-        import install
         output = self.bundle()
         game, interface, mods = self.fake_game()
         stock = (interface / 'GfxHUD.upk').read_bytes()
         backups = self.root / 'backups'
-        args = list(map(str, [output, '--game', game, '--backups', backups, '--profiler']))
+        args = [output, '--game', game, '--backups', backups, '--profiler']
         old_core = (mods / 'classic_minimap.sdkmod').read_bytes()
         running = '"Borderlands.exe","1234","Console","1","123 K"\n' if sys.platform == 'win32' else 'Borderlands.exe\n'
-        with patch('subprocess.run', return_value=subprocess.CompletedProcess([], 0, running, '')):
-            with contextlib.redirect_stderr(io.StringIO()) as err, self.assertRaises(SystemExit):
-                install.main(args)
-            self.assertIn('is running', err.getvalue())
+        result = self.install(*args, running=running)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('is running', result.stderr)
         self.assertFalse(backups.exists())
         replace = os.replace
 
@@ -325,10 +336,10 @@ class WorkflowChecks(unittest.TestCase):
                 raise OSError('simulated disk error')
             return replace(source, target)
 
-        with patch('subprocess.run', return_value=subprocess.CompletedProcess([], 0, '', '')):
-            with patch('os.replace', side_effect=fail_core):
-                with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
-                    install.main(args)
+        with patch('os.replace', side_effect=fail_core):
+            result = self.install(*args)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('simulated disk error', result.stderr)
         self.assertEqual((interface / 'GfxHUD_Minimap.upk').read_bytes(), b'old-package')
         self.assertEqual((mods / 'classic_minimap.sdkmod').read_bytes(), old_core)
         self.assertEqual((mods / 'classic_minimap_profiler.sdkmod').read_bytes(), b'keep-profiler')

@@ -86,4 +86,6 @@ The research tools have lint/syntax checks only. Strict SDK type checks and muta
 `test_workflow.WorkflowChecks` is part of the default unit run. It exercises the maintenance CLIs
 against temporary source trees, independently authored movie/package inputs, logs and fake game
 folders. It also injects process-query and file-replacement outcomes at the OS boundary to check
-running-game refusal and rollback. It never installs into the user's game. See [TOOLS.md](TOOLS.md).
+running-game refusal and rollback. The install scenarios run `install.main` in-process with the process
+query injected, so they pass whether or not the game is open (PHASE3 §3bx). It never installs into the user's
+game. See [TOOLS.md](TOOLS.md).
