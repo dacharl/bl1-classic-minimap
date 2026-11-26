@@ -2774,3 +2774,13 @@ and actionlint runs only in the hosted lint job (not available locally).
 - Locally (8 workers, coverage) the report shows `test_land` at 41.3 s, its slowest tests at 3.2–3.9 s each, and
   `test_workflow` at 42.5 s, led by `test_release_checks_the_in_mod_build_against_a_game_folder` at 8.8 s. Single
   and uncovered, the `test_land` cases take about 2.5 s. The hosted numbers decide the next step.
+
+**`17bd776` broke the workflow file:** GitHub rejected `ci.yml` ("You have an error in your yaml syntax on line
+92"), so no job ran. Shortening the venv check to one line turned it into a plain YAML scalar, and the `: ` inside
+`'not the CI venv: '` reads as a mapping key. actionlint wasn't installed locally, so the edit was pushed unlinted.
+- actionlint 1.7.12 is now installed at `C:\Users\Charles\Tools\actionlint-1.7.12\actionlint.exe`, from the
+  official release zip (SHA-256 `6e7241b5…d22f6e9`, matching the release's checksum list). It reproduced the error:
+  `ci.yml:92:93: could not parse as YAML: mapping values are not allowed in this context`, and `release.yml` failed
+  through its `workflow_call` of `ci.yml`.
+- Fix: the step is a `run: |` block again. actionlint passes on all workflows. ShellCheck isn't installed locally,
+  so the shell inside `run:` steps is still checked only by the hosted lint job.

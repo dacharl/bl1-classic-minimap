@@ -78,7 +78,7 @@ python -I -m venv .venv
 .venv/Scripts/python.exe -I tools/quality_checks.py mutation
 ```
 
-`dist/ci/` contains local reports and the mutation session database. The workflow uploads only the named quality report files. Use actionlint 1.7.12 to check `.github/workflows/*.yml`; the hosted job uses its official Docker image with ShellCheck.
+`dist/ci/` contains local reports and the mutation session database. The workflow uploads only the named quality report files. Use actionlint 1.7.12 to check `.github/workflows/*.yml` before committing any workflow edit (`actionlint -no-color .github/workflows/*.yml`; on this PC it is `C:\Users\Charles\Tools\actionlint-1.7.12\actionlint.exe`). GitHub rejects an invalid workflow file outright, so no job runs to report it (PHASE3 §3by). The hosted job uses actionlint's official Docker image with ShellCheck; a local run without ShellCheck skips the shell checks.
 
 `tools/ci_fixture.py` independently authors empty sprites and five native-contract stubs, then passes them through the real movie builder. Both existing movie/mod suites run against that result without skipped assertions. This catches source logic and bytecode generation regressions. It does not verify original/copied game functions, artwork, UPK relocation, runtime Scaleform compatibility or in-game behavior. Run both original suites against your locally built game movie before installing/releasing, as described in PROGRESS.
 

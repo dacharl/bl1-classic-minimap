@@ -89,7 +89,8 @@ jobs:
           echo "$bin" >> "$GITHUB_PATH"
       # pip check runs when the venv is built; a restored venv is the same bytes (3 s on Windows, PHASE3 3by).
       - name: Check that python is the CI tools environment
-        run: python -I -c "import sys; assert sys.prefix != sys.base_prefix, 'not the CI venv: ' + sys.prefix"
+        run: |
+          python -I -c "import sys; assert sys.prefix != sys.base_prefix, 'not the CI venv: ' + sys.prefix"
       - name: Run unit tests with automatic workers and combined branch coverage
         run: python -B -I tools/run_tests.py --coverage --durations 5
       - run: python -I -m coverage report
