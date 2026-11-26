@@ -41,7 +41,7 @@ class SourceChecks(unittest.TestCase):
         self.check_movie(test_minimap_mod.main, original=True)
 
     def test_original_art_is_glyphs_and_our_own_shapes(self):
-        """Decisions 5, 12-15: the turn-in "X", new-mission "!" and north "N" are glyphs in a copy of the HUD's
+        """Decisions 5, 12-15: the turn-in "?", new-mission "!" and north "N" are glyphs in a copy of the HUD's
         empty WillowBody font record, each over four black outline copies; the box, window and threat diamond
         are our own shapes at Enhanced's sizes. Classic's objective diamond is untouched."""
         import struct
@@ -59,7 +59,7 @@ class SourceChecks(unittest.TestCase):
             texts[tid] = (tail[-2].decode()[-1], body[-len(tail[-2]) - 3 - 4 - 9:-len(tail[-2]) - 2 - 9])
             p = 2 + (5 + 4 * (body[2] >> 3) + 7) // 8
             self.assertEqual(struct.unpack_from('<H', body, p + 2)[0], 1318)
-        self.assertEqual([texts[t][0] for t in sorted(texts)], ['X', 'X', '!', '!', 'N', 'N'])
+        self.assertEqual([texts[t][0] for t in sorted(texts)], ['?', '?', '!', '!', 'N', 'N'])
         for sid, outline in ((1301, 1312), (1303, 1314), (1305, 1316)):
             code, body = movie.defs[sid]
             placed = [struct.unpack_from('<HH', b, 1) for c, b in read_tags(body, 4, len(body)) if c == 26]
@@ -71,7 +71,7 @@ class SourceChecks(unittest.TestCase):
             walk_shape(code, body)              # parses to the end record
         self.assertNotIn(1050, {1307, 1308, 1310})
         self.assertIn(1050, movie.defs)
-        # Run 21 (PHASE3 3ak): the turn-in "X" is green like Enhanced's turn-in mark (the "!" is gold), and the box
+        # Run 21 (PHASE3 3ak): the turn-in "?" is green like Enhanced's turn-in mark (the "!" is gold), and the box
         # is a tight frame around the window, not E shape 81's bounds (which include a transparent margin)
         import swfbuild
         self.assertIn(bytes.fromhex('66ff00ff'), movie.defs[1313][1])

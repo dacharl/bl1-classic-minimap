@@ -2849,3 +2849,10 @@ step, so CI runs the release binary directly.
 protection are free for public repositories and should be turned on once the repository is public. Scanners find
 credentials only: every commit's author and committer is a personal email address, and four tracked files contain
 local `C:\Users\Charles\` paths; neither is a secret, so the scan does not report them.
+
+## 3cb. Original-art turn-in glyph is "?"; mod author is "dacharl" (2026-11-26, offline only)
+
+- The original-art turn-in mark was a capital "X", tall and narrow next to the "!" and "N". It is now the game font's "?", which matches the glyphs merged in from Enhanced.
+- The SDK author field in both `pyproject.toml` files was `bl1-classic-minimap`, which the mod menu cut off to "bl1-classic". It is now `dacharl`.
+- Tests: `tools/test_ci.py` expects "?" (red, then green). `test_original_art_movie_passes_both_suites` fails in the main checkout too, so it was already failing and is not from this change.
+- Unverified in game: the "?" glyph's look and size, and the author text in the mod menu.

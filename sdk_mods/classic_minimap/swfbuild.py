@@ -63,7 +63,7 @@ ENEMY_ART = 1311                  # one-frame wrapper for the threat marker (as 
 # Original art (PLAN_V13 decisions 5, 12-15), used when the Enhanced HUD movie isn't available. The glyph sprites
 # take the ids of Enhanced's turnin / newmission / north shapes: art id -> (glyph, colour, outline text id); the
 # coloured text is the next id. GLYPH_FONT copies the HUD's empty WillowBody record (the game's font library).
-GLYPHS = {1301: ('X', 0x66FF00, 1312), 1303: ('!', 0xFFCC00, 1314), 1305: ('N', 0xFFFFFF, 1316)}  # E 108/110 colours
+GLYPHS = {1301: ('?', 0x66FF00, 1312), 1303: ('!', 0xFFCC00, 1314), 1305: ('N', 0xFFFFFF, 1316)}  # E 108/110 colours
 GLYPH_FONT = 1318
 ORIGINAL_IDS = {1312, 1313, 1314, 1315, 1316, 1317, GLYPH_FONT}
 GLYPH_SIZE = 28.0                 # font height (px): capitals about 20 px, like Enhanced's 19-21 px marks

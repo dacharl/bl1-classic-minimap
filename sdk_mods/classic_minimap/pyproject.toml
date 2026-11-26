@@ -2,7 +2,7 @@
 name = "Classic Minimap"
 version = "0.16.5"
 description = "An Enhanced-style minimap for classic Borderlands GOTY. Needs GfxHUD_Minimap.upk."
-authors = [{ name = "bl1-classic-minimap" }]
+authors = [{ name = "dacharl" }]
 
 [tool.sdkmod]
 supported_games = ["BL1"]
