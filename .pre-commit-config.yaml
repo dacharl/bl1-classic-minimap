@@ -1,7 +1,9 @@
-# Commit hooks: the CI lint job's checks, run before each commit (PHASE3 3bz, docs/CI.md).
-# Set up once per clone: pip install -r requirements-dev.txt, then pre-commit install.
+# Commit hooks: the CI lint job's checks, run before each commit (PHASE3 3bz, docs/CI.md). The pre-push hook runs
+# the unit tests with the CI coverage floors, which CI blocks on.
+# Set up once per clone: pip install -r requirements-dev.txt, then pre-commit install (it installs both hooks).
 # ruff and actionlint must match CI's versions; quality_checks.py repository enforces that.
 minimum_pre_commit_version: '4.0.0'
+default_install_hook_types: [pre-commit, pre-push]
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
@@ -50,3 +52,13 @@ repos:
         entry: python -I tools/quality_checks.py repository
         pass_filenames: false
         always_run: true
+      # The CI test job's coverage gate (run_tests --coverage, then quality_checks coverage). Takes a minute or two.
+      - id: coverage-floors
+        name: unit tests and coverage floors
+        language: python
+        # Must match requirements-ci.txt; quality_checks.py repository enforces that.
+        additional_dependencies: [coverage==7.17.0]
+        entry: python -I tools/check_coverage.py
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]

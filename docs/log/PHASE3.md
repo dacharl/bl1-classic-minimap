@@ -2864,3 +2864,11 @@ local `C:\Users\Charles\` paths; neither is a secret, so the scan does not repor
 - `docs/release_notes/1.0.0.md` is written for the pending first stable release.
 - Tests: four new `test_workflow` scenarios (notes precedence and failure, previous tag and grouping, a CLI run in a temporary git repository, and the workflow's order and publish command), each red before the code. `tools/release_notes.py` coverage floors are 85% line and 80% branch.
 - Unverified: a hosted run. The first one is the pre-release; `actions/download-artifact@v7` is assumed to pair with the `upload-artifact@v7` that `ci.yml` already uses.
+
+## 3cd. A coverage floor failed CI; a pre-push hook now runs the coverage gate (2026-11-26)
+
+- **What happened:** the first hosted CI run after going public failed `quality_checks.py coverage`: `tools/release_notes.py` had 77.78% branch coverage against its floor of 80%. The floor was set from a run of only the new tests, and the full gate was never run before the push.
+- **Cause:** the git-failure branch and the `__main__` error handling had no in-process test (the CLI test ran in a subprocess, which the coverage config does not follow).
+- **Fix:** errors are a `ReleaseNotesError` and `run()` turns them into a one-line message and exit code, both tested in process. `tools/release_notes.py` is now 97.3% line and 93.8% branch, and its floors are 95% and 90%.
+- **Pre-push hook:** `.pre-commit-config.yaml` has a `coverage-floors` hook at the pre-push stage that runs the new `tools/check_coverage.py` (the CI test job's steps). Its `coverage` pin must equal `requirements-ci.txt`, which `quality_checks.py repository` now checks. `pre-commit install` installs both hooks.
+- **Tests:** one new scenario (the error paths in process) and two extended (the notes-failure test and the hook's coverage pin), each red first. The full gate passes locally.

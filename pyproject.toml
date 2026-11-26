@@ -68,8 +68,8 @@ line = 92
 branch = 85
 
 [tool.quality.coverage."tools/release_notes.py"]
-line = 85
-branch = 80
+line = 95
+branch = 90
 
 [tool.quality.mutation]
 "sdk_mods/classic_minimap/__init__.py" = 70

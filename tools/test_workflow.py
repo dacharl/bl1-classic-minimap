@@ -357,13 +357,33 @@ class WorkflowChecks(unittest.TestCase):
                          '# From the file\n\nFirst release.\n', 'the file wins over the input')
         self.assertEqual(release_notes.resolve_notes('1.0.1', notes, ' Fixed the zoom. \n'), 'Fixed the zoom.\n')
         for missing in ('', '  \n', None):
-            with self.assertRaises(SystemExit) as stop:
+            with self.assertRaises(release_notes.ReleaseNotesError) as stop:
                 release_notes.resolve_notes('1.0.1', notes, missing)
             self.assertIn('docs/release_notes/1.0.1.md', str(stop.exception))
             self.assertIn("'notes' input", str(stop.exception))
         (notes / '1.0.2.md').write_text(' \n', encoding='utf-8')
-        with self.assertRaises(SystemExit):
+        with self.assertRaises(release_notes.ReleaseNotesError):
             release_notes.resolve_notes('1.0.2', notes, None)
+
+    def test_release_notes_report_errors_and_exit_codes_in_process(self):
+        import release_notes
+        elsewhere = self.root / 'not-a-repository'
+        elsewhere.mkdir()
+        with contextlib.chdir(elsewhere):
+            with self.assertRaises(release_notes.ReleaseNotesError) as stop:
+                release_notes.git('log', '--format=%h')
+            self.assertIn('git log --format=%h failed', str(stop.exception))
+            for argv, code, where in ((['--version', '1.0.1', '--out-dir', 'dist'], 1, 'err'),
+                                      (['--version', '1.0.1', '--notes', 'Typed.', '--out-dir', 'dist'], 1, 'err')):
+                out, err = io.StringIO(), io.StringIO()
+                with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                    self.assertEqual(release_notes.run(argv), code)
+                self.assertTrue(err.getvalue().strip(), 'the error goes to stderr, not a traceback')
+                self.assertEqual(out.getvalue(), '')
+        out = io.StringIO()
+        with contextlib.chdir(self.root), contextlib.redirect_stdout(out):
+            self.assertEqual(release_notes.run(['--version', '1.0.1', '--notes', 'Typed.', '--out-dir', 'dist']), 1)
+        self.assertFalse((self.root / 'dist' / 'release-notes.md').exists(), 'nothing is written on failure')
 
     def test_release_changes_list_commits_since_the_previous_tag_by_type(self):
         import release_notes

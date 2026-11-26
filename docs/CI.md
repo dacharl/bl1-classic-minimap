@@ -31,7 +31,7 @@ The hosted jobs need no game installation or credentials. Reports are retained f
 | `sdk_mods/classic_minimap/swfdeps.py` | 60% | 45% | 70% (not yet measured) |
 | `tools/build_sdkmod.py` | 94% | 83% | 80% |
 | `tools/land_branch.py` | 92% | 85% | Not gated |
-| `tools/release_notes.py` | 85% | 80% | Not gated |
+| `tools/release_notes.py` | 95% | 90% | Not gated |
 | `sdk_mods/classic_minimap_profiler/__init__.py` | 95% | 95% | 85% |
 | `sdk_mods/classic_minimap_profiler/profiler.py` | 95% | 88% | 78% |
 
@@ -75,7 +75,7 @@ Cosmic Ray still records such mutants as timeouts (undetected). The Windows path
 | `check-json`, `check-toml` | JSON (minus the deliberately invalid `invalid-*` report fixtures), TOML | syntax only; CI's tests read them |
 | `check-added-large-files --maxkb=300`, `check-merge-conflict`, `check-case-conflict`, `git diff --cached --check` | staged files | guards for game files and commit hygiene (AGENTS) |
 
-`quality_checks.py repository` fails if the hooks' ruff or actionlint differ from `requirements-ci.txt` and `ci.yml`, or their gitleaks from `GITLEAKS_VERSION` in `secrets.yml` (update its `GITLEAKS_SHA256` with it). The gitleaks hook builds from source with Go; pre-commit downloads a Go toolchain on its first run when none is installed. For a manual full-history scan, gitleaks 8.30.1 is in `C:\Users\Charles\Tools\gitleaks-8.30.1\` on this PC: `gitleaks git . --redact -v --log-opts=--all`. Install with `pip install -r requirements-dev.txt` and `pre_commit install --allow-missing-config`: the hook lives in the shared `.git/hooks`, and the option lets commits on older branches without the config go through. The first run downloads each hook's environment. prek, a Rust reimplementation, reads the same config if pre-commit ever becomes too slow.
+The pre-push hook (`coverage-floors`) runs `tools/check_coverage.py`: `run_tests.py --coverage`, `coverage report`, `coverage json` and `quality_checks.py coverage`, the CI test job's steps, so a coverage floor fails before the push instead of in CI (PHASE3 §3cd). `quality_checks.py repository` fails if the hooks' ruff, actionlint or coverage differ from `requirements-ci.txt` and `ci.yml`, or their gitleaks from `GITLEAKS_VERSION` in `secrets.yml` (update its `GITLEAKS_SHA256` with it). The gitleaks hook builds from source with Go; pre-commit downloads a Go toolchain on its first run when none is installed. For a manual full-history scan, gitleaks 8.30.1 is in `C:\Users\Charles\Tools\gitleaks-8.30.1\` on this PC: `gitleaks git . --redact -v --log-opts=--all`. Install with `pip install -r requirements-dev.txt` and `pre_commit install --allow-missing-config`: the hook lives in the shared `.git/hooks`, and the option lets commits on older branches without the config go through. The first run downloads each hook's environment. prek, a Rust reimplementation, reads the same config if pre-commit ever becomes too slow.
 
 From the repository root, create a virtual environment and install the pinned tools:
 

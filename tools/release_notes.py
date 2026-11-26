@@ -30,6 +30,10 @@ SUBJECT = re.compile(r'(\w+)(?:\([^)]*\))?(!)?: (.+)')
 SEMVER_TAG = re.compile(r'v(\d+)\.(\d+)\.(\d+)')
 
 
+class ReleaseNotesError(Exception):
+    """A problem the release run should report as one line and a failing exit code."""
+
+
 def resolve_notes(version, notes_dir, notes_input):
     """The version's notes file if it has text, else the typed input, else stop with how to supply them."""
     path = Path(notes_dir) / f'{version}.md'
@@ -37,7 +41,7 @@ def resolve_notes(version, notes_dir, notes_input):
         return path.read_text(encoding='utf-8').strip() + '\n'
     if notes_input and notes_input.strip():
         return notes_input.strip() + '\n'
-    raise SystemExit(f'No release notes for {version}. Add {NOTES_DIR}/{version}.md to main, '
+    raise ReleaseNotesError(f'No release notes for {version}. Add {NOTES_DIR}/{version}.md to main, '
                      f"or run the workflow with the 'notes' input filled in.")
 
 
@@ -77,7 +81,7 @@ def changes_text(version, previous, log):
 def git(*args):
     result = subprocess.run(['git', *args], capture_output=True, text=True, encoding='utf-8')
     if result.returncode:
-        raise SystemExit(f'git {" ".join(args)} failed: {result.stderr.strip()}')
+        raise ReleaseNotesError(f'git {" ".join(args)} failed: {result.stderr.strip()}')
     return result.stdout.splitlines()
 
 
@@ -101,11 +105,15 @@ def main(argv=None):
     print(f'release notes for {args.version}: {len(log)} commits{since}')
 
 
-if __name__ == '__main__':
+def run(argv=None):
+    """main() as an exit code: errors print one line to stderr instead of a traceback."""
     try:
-        main()
-    except SystemExit as stop:
-        if isinstance(stop.code, str):
-            print(stop.code, file=sys.stderr)
-            sys.exit(1)
-        raise
+        main(argv)
+    except ReleaseNotesError as error:
+        print(error, file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(run())
