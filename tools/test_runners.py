@@ -203,6 +203,18 @@ class RunnerChecks(unittest.TestCase):
         self.assertEqual(jobs[:3], slow)
         self.assertEqual(len(jobs), len(set(jobs)))
 
+    def test_durations_report_each_process_and_its_slowest_tests(self):
+        """Hosted Windows test times varied from 41 to 53 s with only finish order in the log (PHASE3 3by)."""
+        result = subprocess.run(
+            [sys.executable, '-B', '-I', str(Path(__file__).with_name('run_tests.py')),
+             '--workers', '1', '--durations', '5', 'test_runners.TimedExample'],
+            capture_output=True, text=True, timeout=30,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertRegex(result.stdout, r'test_runners\.TimedExample\.test_sleep: PASS \(\d+\.\d s\)')
+        if sys.version_info >= (3, 12):   # unittest's durations arrived in 3.12
+            self.assertRegex(result.stdout, r'\n  \d+\.\d{3}s  test_sleep\n')
+
     def test_explicit_test_ids_keep_one_process_per_case(self):
         result = subprocess.run(
             [sys.executable, '-B', '-I', str(Path(__file__).with_name('run_tests.py')),
@@ -238,6 +250,13 @@ class RunnerChecks(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertIn('2 workers', result.stdout)
+
+
+class TimedExample(unittest.TestCase):
+    """Explicitly selected child case with a measurable duration; excluded from the default runner suite."""
+
+    def test_sleep(self):
+        time.sleep(0.05)
 
 
 class ParallelExample(unittest.TestCase):

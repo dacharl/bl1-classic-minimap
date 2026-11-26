@@ -2745,3 +2745,32 @@ coverage) the old order took 58.4 s and 62.9 s, the new 56.3 s and 57.7 s.
 
 **Unverified:** the hosted savings. The cache only helps from the second run on a given key (the first saves it),
 and actionlint runs only in the hosted lint job (not available locally).
+
+**Hosted results on `9471572`** (actionlint passed):
+
+| Windows job | Before (`dcfcd1d`) | Cache miss (saves it) | Cache hit |
+|---|---:|---:|---:|
+| Whole job | 89.7 s | 85.0 s | 78.5 s |
+| Install / restore | 17.0 s | 20.3 s | 2.7 s |
+| Venv check and `pip check` | – | 0.8 s | 3.0 s |
+| Tests | 48.9 s | 41.1 s | 53.0 s |
+| Cache save | – | 4.0 s | – |
+
+- The cache saves about 11 s per run, all of it from the install. The job is still over 60 s, so it still bills
+  4 minutes.
+- The slowest-first order made no measurable difference: the test step went 49 s → 41 s → 53 s, on runners in
+  different regions. In the cache-hit run `test_land` finished about 37 s after the start (about 16 s before), and
+  `test_workflow` ran far past its usual 8 s while it overlapped `test_land`. Both start many processes and write
+  many files, so on 2 vCPUs they may slow each other down. The log only showed finish order, so this is inference.
+
+**Follow-up (same day):**
+- `pip check` now runs only when the venv is built. A restored venv is the same bytes, and the check cost 3 s.
+  The check that `python` is the venv stays on every run.
+- `run_tests.py --durations N` prints each process's wall time on its PASS line, and under it the N slowest tests
+  from unittest's own report (Python 3.12+; older versions get the process times only). CI runs with
+  `--durations 5`.
+- Test (red first): `test_durations_report_each_process_and_its_slowest_tests` runs a 50 ms `TimedExample` and
+  expects both lines. It failed with "unrecognized arguments: --durations".
+- Locally (8 workers, coverage) the report shows `test_land` at 41.3 s, its slowest tests at 3.2–3.9 s each, and
+  `test_workflow` at 42.5 s, led by `test_release_checks_the_in_mod_build_against_a_game_folder` at 8.8 s. Single
+  and uncovered, the `test_land` cases take about 2.5 s. The hosted numbers decide the next step.

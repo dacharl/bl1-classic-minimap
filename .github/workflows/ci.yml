@@ -81,17 +81,17 @@ jobs:
           python -I -m venv "$RUNNER_TEMP/ci-venv"
           if [ "$RUNNER_OS" = Windows ]; then bin="$RUNNER_TEMP/ci-venv/Scripts"; else bin="$RUNNER_TEMP/ci-venv/bin"; fi
           "$bin/python" -I -m pip install -r requirements-ci.txt
+          "$bin/python" -I -m pip check
       - name: Use the CI tools environment
         shell: bash
         run: |
           if [ "$RUNNER_OS" = Windows ]; then bin="$RUNNER_TEMP/ci-venv/Scripts"; else bin="$RUNNER_TEMP/ci-venv/bin"; fi
           echo "$bin" >> "$GITHUB_PATH"
-      - name: Check the CI tools environment
-        run: |
-          python -I -c "import sys; assert sys.prefix != sys.base_prefix, 'not the CI venv: ' + sys.prefix"
-          python -I -m pip check
+      # pip check runs when the venv is built; a restored venv is the same bytes (3 s on Windows, PHASE3 3by).
+      - name: Check that python is the CI tools environment
+        run: python -I -c "import sys; assert sys.prefix != sys.base_prefix, 'not the CI venv: ' + sys.prefix"
       - name: Run unit tests with automatic workers and combined branch coverage
-        run: python -B -I tools/run_tests.py --coverage
+        run: python -B -I tools/run_tests.py --coverage --durations 5
       - run: python -I -m coverage report
       - run: python -I -m coverage json
       - run: python -I -m coverage xml

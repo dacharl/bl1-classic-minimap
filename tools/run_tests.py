@@ -6,8 +6,10 @@ Mutation workers use test_ci.py directly so they do not start nested pools.
 """
 import argparse
 import concurrent.futures
+import re
 import subprocess
 import sys
+import time
 import unittest
 from pathlib import Path
 
@@ -49,11 +51,28 @@ def text(output):
     return output.decode(errors='replace') if isinstance(output, bytes) else output or ''
 
 
-def run_case(name, coverage, timeout=None):
+def slowest(stderr):
+    """The test lines of unittest's "Slowest test durations" report, as '  1.234s  test_name'."""
+    lines, inside = [], False
+    for line in stderr.splitlines():
+        if line.startswith('Slowest test durations'):
+            inside = True
+            continue
+        match = re.match(r'(\d+\.\d+s)\s+(\S+)', line) if inside else None
+        if match:
+            lines.append(f'  {match[1]}  {match[2]}')
+        elif inside and line.startswith('Ran '):
+            break
+    return lines
+
+
+def run_case(name, coverage, timeout=None, durations=None):
     command = [sys.executable, '-B', '-I']
     if coverage:
         command += ['-m', 'coverage', 'run', '--parallel-mode']
     command += [str(Path(__file__).resolve()), '--case', name]
+    if durations is not None:
+        command += ['--durations', str(durations)]
     try:
         return subprocess.run(command, cwd=ROOT, capture_output=True, text=True, timeout=timeout)
     except subprocess.TimeoutExpired as expired:   # killed; on POSIX run() no longer waits for its pipes
@@ -61,16 +80,25 @@ def run_case(name, coverage, timeout=None):
                                            text(expired.stderr) + f'\n{name}: timed out after {timeout:g} s\n')
 
 
+def timed(function, *args):
+    start = time.monotonic()
+    result = function(*args)
+    return result, time.monotonic() - start
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--workers', default='auto', help='auto (available CPUs) or a positive integer')
     parser.add_argument('--coverage', action='store_true')
     parser.add_argument('--timeout', type=float, default=DEFAULT_TIMEOUT, help='seconds per test process')
+    parser.add_argument('--durations', type=int, metavar='N',
+                        help="print each process's time and its N slowest tests (0: all; Python 3.12+)")
     parser.add_argument('--case', help=argparse.SUPPRESS)
     parser.add_argument('tests', nargs='*', help='optional unittest test IDs')
     args = parser.parse_args()
     if args.case:
-        result = unittest.TextTestRunner().run(unittest.defaultTestLoader.loadTestsFromName(args.case))
+        options = {'durations': args.durations} if args.durations is not None and sys.version_info >= (3, 12) else {}
+        result = unittest.TextTestRunner(**options).run(unittest.defaultTestLoader.loadTestsFromName(args.case))
         return 0 if result.wasSuccessful() else 1
     names = case_ids(args.tests) if args.tests else process_jobs(DEFAULT_TESTS)
     try:
@@ -84,10 +112,16 @@ def main():
     print(f'Running {cases} unit tests in {len(names)} processes using {workers} workers ({args.workers})', flush=True)
     failed = False
     with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
-        futures = {pool.submit(run_case, name, args.coverage, args.timeout): name for name in names}
+        futures = {pool.submit(timed, run_case, name, args.coverage, args.timeout, args.durations): name
+                   for name in names}
         for future in concurrent.futures.as_completed(futures):
-            result = future.result()
-            print(f'{futures[future]}: {"FAIL" if result.returncode else "PASS"}', flush=True)
+            result, seconds = future.result()
+            status = "FAIL" if result.returncode else "PASS"
+            print(f'{futures[future]}: {status}' + (f' ({seconds:.1f} s)' if args.durations is not None else ''),
+                  flush=True)
+            tests = slowest(result.stderr) if args.durations is not None and not result.returncode else []
+            if tests:
+                print('\n'.join(tests), flush=True)
             if result.returncode:
                 failed = True
                 print(result.stdout + result.stderr, flush=True)
