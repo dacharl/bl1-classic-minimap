@@ -2935,3 +2935,20 @@ Timeouts (counted as undetected): mod 43, `swfbuild` 61, `profiler` 43, others u
 - Fix the three tool errors before relying on the gate; they fail it regardless of scores.
 
 **Validation:** 150 unit cases pass, with every coverage floor; Ruff and the repository checks pass. Not run: the real-movie suites (no source change to the mod or builder) and any hosted or POSIX run of the changed `test_mutants.py`. Nothing installed; installed hashes unchanged.
+
+**Follow-up, the same day: the three low files and the tool errors**
+- **Tests added** (`tools/test_builder_formats.py`, 36 cases, in the default unit run and the mutation command): authored from the file formats, not from the code. For `as2asm`: the opcode table against the specification's values, every bodyless opcode, each push kind with exact bytes (including the int32 limits, where 2**31 and -2**31-1 become doubles), constant-pool references, branch offsets forward and back, `DefineFunction`/`DefineFunction2` and the small records. For `upk`: a package builder with Latin-1 and UTF-16 names, imports, numbered names, an outer chain through imports, the property walker over Int/Bool/Struct properties, and the `RawData` size check. For `swfdeps`: indexing of nested definitions, exports and imports, every reference kind (place-object 2/3 and the old form, shape bitmaps, edit-text font, buttons 1 and 2 with and without colour transforms), closure with cycles and undefined ids, and the whole command-line report.
+- **One real, small bug found:** the report printed `b'name'` for an external image whose file name sits in the second field, because only the first alternative was decoded. Fixed (`swfdeps.py`, diagnostic output only).
+- **Three tool errors removed:** `except (…, struct.error)` in `swfmerge.py` (two) and `upk.py` (one) now name `StructError = struct.error`; no behaviour change. The re-run shows zero errors.
+- **Re-measured** (targeted runs with `run_mutations.py --modules`; the full run above is kept in `dist/ci-full-run/`):
+
+| File | Before | After | Floor |
+|---|---:|---:|---:|
+| `as2asm.py` | 56.81% (517/910) | 91.32% (831/910) | 70 |
+| `swfdeps.py` | 25.82% (166/643) | 79.63% (512/643) | 70 |
+| `upk.py` | 60.66% (333/549) | 90.71% (498/549, 0 errors) | 70 |
+| `swfmerge.py` | 82.96% (2 errors) | 83.13% (1,498/1,802, 0 errors) | 70 |
+
+  Line coverage rose to 93.4% (`as2asm`), 99.1% (`upk`) and 98.1% (`swfdeps`), well above their gates. 186 unit cases pass.
+- **State:** every measured file is now above its floor and no run has errors. The mod, `hudmovie`, `swfbuild`, packager and profiler figures are from the full run, before this suite existed, and were not re-measured; the new tests can only add kills. A final full run is still needed to pass `tools/quality_checks.py mutation` on one complete session. `swfdeps` still has 126 survivors (mostly the `main` printout and the `_scan` offsets); `swfbuild` and the mod hold the rest of the gap (items 4 and 5 above).
+- **Observation, not changed:** `swfdeps.refs` reads a PlaceObject3's character id at a fixed offset 4 (`4 + (0 if … else 0)`), so a placement with a class name (flag 0x08) would read the wrong field. The stock movies don't use it; a test for that case would need the format's class-name field, so it was left.
