@@ -11,7 +11,7 @@ A minimap for **Borderlands Game of the Year (classic)**, modelled on the one in
 
 The ECHO panel (including the Angel videos), the mission title and the objective checklist move left to make room while the minimap is shown, as they do in Enhanced. The minimap hides itself during the travel tunnel, in menus, in cutscenes and when you're down.
 
-> **Status:** v0.16.5 is a private test build: one-file install, with the HUD movie built from your own game files. It has been played on the PC (with and without Enhanced's art, and with Extended UI) and, up to v0.14.7, on the Steam Deck. The first public release will be 1.0.0.
+> **Status:** v0.16.5 is a public test build: one-file install, with the HUD movie built from your own game files. It has been played on the PC (with and without Enhanced's art, and with Extended UI) and, up to v0.14.7, on the Steam Deck. The first stable release will be 1.0.0.
 
 ## Requirements
 
