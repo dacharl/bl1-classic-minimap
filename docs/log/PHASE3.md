@@ -2654,4 +2654,8 @@ and repository checks pass. `release.py --game --enhanced --profiler`: the in-mo
 Bundle in the worktree's `dist/releases/0.16.5/`: `classic_minimap.sdkmod` `8a884a41…ca91`,
 `classic_minimap_profiler.sdkmod` `506933f1…063a`.
 
-**Unverified (in game):** not installed yet. A fast travel should log which gate holds the map after the tunnel.
+**Installed on the PC (2026-11-26 14:08 UTC, game closed):** both files through `install.py --profiler`, SHA-256
+verified. v0.16.4 `9a301fb5…7b89` and profiler 0.1.27 `853dc238…3cdf` are backed up in the main checkout's
+`dist\v0.16.4-20261126T140815.105610Z\`.
+
+**Unverified (in game):** a fast travel should log which gate holds the map after the tunnel.
