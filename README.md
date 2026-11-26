@@ -143,6 +143,10 @@ It checks that `__version__` and `pyproject.toml` agree, builds and verifies `cl
 
 The release is the whole install: players build the HUD movie from their own game files. Run the game-dependent checks locally first: `tools/release.py` builds both art variants, runs both real-movie suites on each, and with `--game` checks the mod's in-game build against a game folder. The hosted workflow checks source syntax and archive integrity without game assets.
 
+## License
+
+[MIT](LICENSE). The mod contains no game files.
+
 ## Continuous integration
 
 Pushes and merges to `main`, pull requests targeting `main`, and merge-queue events run the two blocking checks: lint (including workflow/repository checks) and source-only movie/mod/archive/profiler unit tests with per-file line and branch coverage floors. Mutation testing is on demand only (**Actions → Mutation testing → Run workflow**, or locally), because a full run takes over an hour. See [docs/CI.md](docs/CI.md) for thresholds, scope, reports and local commands. Real game-movie and in-game verification remain local release checks.

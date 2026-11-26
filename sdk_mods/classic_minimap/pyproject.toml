@@ -7,3 +7,4 @@ authors = [{ name = "dacharl" }]
 [tool.sdkmod]
 supported_games = ["BL1"]
 coop_support = "ClientSide"
+license = { name = "MIT", url = "https://opensource.org/license/mit" }
