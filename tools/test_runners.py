@@ -181,7 +181,7 @@ class RunnerChecks(unittest.TestCase):
         self.assertIn('test_ci.py::SourceChecks.test_mod_without_game_assets', cases)
         self.assertIn('test_ci.py::SourceChecks.test_original_art_movie_passes_both_suites', cases)
         self.assertTrue(all(case.startswith('test_ci.py::') for case in cases))
-        self.assertTrue({'test_hudmovie.py', 'test_swfmerge.py', 'test_profiler.py'} <= set(test_mutants.OTHER_SUITES))
+        self.assertTrue({'test_builder_formats.py', 'test_hudmovie.py', 'test_swfmerge.py', 'test_profiler.py'} <= set(test_mutants.OTHER_SUITES))
 
     def test_mutation_module_filter_keeps_configured_order_and_rejects_unknowns(self):
         from run_mutations import selected_modules

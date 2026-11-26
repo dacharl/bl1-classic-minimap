@@ -113,7 +113,8 @@ def main():
         print('  %-18s %4d  %s' % (k, len(v), v if len(v) <= 12 else v[:12] + ['...']))
     for c in kinds.get('GFxExternalImage', []):
         b = m.defs[c][1]
-        print('    external image %d -> %s' % (c, b[10:10 + b[9]].decode('latin-1') or b[9 + 1 + b[9] + 1:].split(b'\0')[0]))
+        name = b[10:10 + b[9]] or b[9 + 1 + b[9] + 1:].split(b'\0')[0]
+        print('    external image %d -> %s' % (c, name.decode('latin-1')))
     for c in kinds.get('Imported', []):
         print('    imported %d -> %s' % (c, m.imports[c]))
     for c in sorted(set(kinds.get('Font3', []) + kinds.get('Font2', []) + kinds.get('GFxCompactedFont', []))):

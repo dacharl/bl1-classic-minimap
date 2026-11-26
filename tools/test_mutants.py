@@ -20,7 +20,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 PER_CASE_SUITE = 'test_ci.py'   # its cases run the real mod's main(), which works only once per process
-OTHER_SUITES = ('test_swfmerge.py', 'test_hudmovie.py', 'test_profiler.py')   # fast ones first: a kill ends the run
+OTHER_SUITES = ('test_builder_formats.py', 'test_swfmerge.py', 'test_hudmovie.py', 'test_profiler.py')   # fast ones first: a kill ends the run
 SUITE_BUDGET = 25.0            # seconds for all suites together; cosmic-ray.toml timeout is 20
 
 
