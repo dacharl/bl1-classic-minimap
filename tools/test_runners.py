@@ -223,11 +223,55 @@ class RunnerChecks(unittest.TestCase):
         original = run_mutations.mutate_and_test
         run_mutations.mutate_and_test = fake
         try:
-            self.assertEqual(run_mutations.run_item(item, 'cmd', 1), (item, 'result'))
+            returned, result, seconds = run_mutations.run_item(item, 'cmd', 1)
         finally:
             run_mutations.mutate_and_test = original
             os.environ.pop('MINIMAP_MUTATED_FILE', None)
+        self.assertEqual((returned, result), (item, 'result'))
+        self.assertGreaterEqual(seconds, 0.0, 'the worker also reports how long the mutant took')
         self.assertEqual(seen['file'], 'sdk_mods/m/x.py')
+
+    def test_mutation_progress_line_shows_the_recent_rate_beside_the_average(self):
+        from run_mutations import progress_suffix
+
+        # 600 in 6 minutes overall, but the last 200 took 40 s: 300 a minute now
+        self.assertEqual(progress_suffix(600, 1200, 360, recent=(200, 40)),
+                         ' | 100.0/min (last 200: 300.0/min), ETA 12m 00s')
+        self.assertEqual(progress_suffix(600, 0, 360, recent=(200, 40)), ' | 100.0/min (last 200: 300.0/min), done')
+        self.assertEqual(progress_suffix(600, 1200, 360, recent=(200, 0)), ' | 100.0/min, ETA 12m 00s',
+                         'no recent rate from a zero interval')
+
+    def test_mutation_time_log_and_report_point_at_slow_spots(self):
+        import json
+        import tempfile
+        from pathlib import PurePosixPath
+        from types import SimpleNamespace
+
+        import mutation_times
+        from run_mutations import time_record
+
+        item = SimpleNamespace(job_id='j1', mutations=[SimpleNamespace(
+            module_path=PurePosixPath('sdk_mods/m/x.py'), operator_name='core/NumberReplacer', occurrence=7)])
+        result = SimpleNamespace(worker_outcome=SimpleNamespace(value='normal'),
+                                 test_outcome=SimpleNamespace(value='survived'))
+        self.assertEqual(time_record(item, result, 4.25),
+                         {'job': 'j1', 'file': 'sdk_mods/m/x.py', 'operator': 'core/NumberReplacer',
+                          'occurrence': 7, 'seconds': 4.25, 'outcome': 'survived'})
+
+        rows = [dict(job='a', file='x.py', operator='op1', occurrence=1, seconds=1.0, outcome='killed'),
+                dict(job='b', file='x.py', operator='op2', occurrence=2, seconds=9.0, outcome='survived'),
+                dict(job='c', file='y.py', operator='op1', occurrence=3, seconds=2.0, outcome='killed')]
+        summary = mutation_times.summarize(rows, slowest=2)
+        self.assertEqual(summary['files'], [
+            {'name': 'x.py', 'count': 2, 'seconds': 10.0, 'mean': 5.0, 'max': 9.0, 'survived': 1},
+            {'name': 'y.py', 'count': 1, 'seconds': 2.0, 'mean': 2.0, 'max': 2.0, 'survived': 0}])
+        self.assertEqual([r['job'] for r in summary['slowest']], ['b', 'c'])
+        self.assertEqual(summary['operators'][0], {'name': 'op2', 'count': 1, 'seconds': 9.0, 'mean': 9.0})
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp, 'times.jsonl')
+            log.write_text('\n'.join(json.dumps(r) for r in rows) + '\n\n')
+            self.assertEqual(mutation_times.load(log), rows)
+            self.assertIn('x.py', mutation_times.render(summary))
 
     def test_probe_mode_runs_every_suite_and_logs_the_failing_ones(self):
         import json

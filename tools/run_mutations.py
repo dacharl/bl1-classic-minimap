@@ -61,8 +61,17 @@ def prepare_worker(root, registry=None):
 def run_item(item, command, timeout):
     # test_mutants.py picks its suites from this; each worker process handles one mutant at a time.
     os.environ['MINIMAP_MUTATED_FILE'] = item.mutations[0].module_path.as_posix()
+    began = time.monotonic()
     result = mutate_and_test(item.mutations, command, timeout)
-    return item, result
+    return item, result, time.monotonic() - began
+
+
+def time_record(item, result, seconds):
+    """One line of dist/ci/mutation-times.jsonl: which mutant, how long it took, how it ended."""
+    mutation = item.mutations[0]
+    return dict(job=item.job_id, file=mutation.module_path.as_posix(), operator=mutation.operator_name,
+                occurrence=mutation.occurrence, seconds=round(seconds, 3),
+                outcome=getattr(getattr(result, 'test_outcome', None), 'value', None))
 
 
 def parse_args(argv=None):
@@ -168,17 +177,22 @@ def report(db, paths, output):
     return counts
 
 
-def progress_suffix(completed, remaining, elapsed):
+def progress_suffix(completed, remaining, elapsed, recent=None):
     """' | 100.0/min, ETA 12m 00s' from the results finished this session, the ones still to run and the seconds
-    since it started; '' until there is a rate. The ETA is the remaining count at the average rate so far."""
+    since it started; '' until there is a rate. The ETA is the remaining count at the average rate so far.
+    `recent` is (results, seconds) since the last checkpoint: its rate is shown beside the average, so a slow
+    stretch is visible as it happens."""
     if completed <= 0 or elapsed <= 0:
         return ''
     per_minute = completed * 60 / elapsed
+    now = ''
+    if recent and recent[1] > 0:
+        now = f' (last {recent[0]}: {recent[0] * 60 / recent[1]:.1f}/min)'
     if remaining <= 0:
-        return f' | {per_minute:.1f}/min, done'
+        return f' | {per_minute:.1f}/min{now}, done'
     seconds = round(remaining * elapsed / completed)
     eta = f'{seconds // 3600}h {seconds % 3600 // 60:02d}m' if seconds >= 3600 else f'{seconds // 60}m {seconds % 60:02d}s'
-    return f' | {per_minute:.1f}/min, ETA {eta}'
+    return f' | {per_minute:.1f}/min{now}, ETA {eta}'
 
 
 def terminate_pool(pool):
@@ -232,10 +246,12 @@ def execute(items, db, paths, output, root, command, config, args):
             max_workers=args.workers, initializer=prepare_worker, initargs=(str(root), registry))
         unfinished = set()
         finished = False
+        # one line per finished mutant (see tools/mutation_times.py); a resumed session adds to it
+        times = (output / 'mutation-times.jsonl').open('a' if args.resume else 'w', encoding='utf-8')
         try:
             unfinished = {pool.submit(run_item, item, command, config.timeout) for item in items}
-            started = last_result = time.monotonic()
-            completed = 0
+            started = last_result = last_mark = time.monotonic()
+            completed = marked = 0
             while unfinished:
                 done, unfinished = concurrent.futures.wait(unfinished, timeout=min(1.0, args.stall_timeout),
                                                           return_when=concurrent.futures.FIRST_COMPLETED)
@@ -243,13 +259,17 @@ def execute(items, db, paths, output, root, command, config, args):
                     print(f'No progress for {args.stall_timeout:g} s; preserving pending work for --resume', flush=True)
                     return
                 for future in done:
-                    item, result = future.result()
+                    item, result, seconds = future.result()
                     db.set_result(item.job_id, result)
+                    times.write(json.dumps(time_record(item, result, seconds)) + '\n')
                     completed += 1
                     last_result = time.monotonic()
                     if completed % args.progress_every == 0 or not unfinished:
+                        times.flush()
                         counts = report(db, paths, output)
-                        rate = progress_suffix(completed, len(unfinished), time.monotonic() - started)
+                        rate = progress_suffix(completed, len(unfinished), last_result - started,
+                                               (completed - marked, last_result - last_mark))
+                        marked, last_mark = completed, last_result
                         print(f'{db.num_results}/{db.num_work_items}: {dict(counts)}{rate}', flush=True)
             finished = True
         finally:
@@ -259,6 +279,7 @@ def execute(items, db, paths, output, root, command, config, args):
                     future.cancel()
                 terminate_pool(pool)
             pool.shutdown(wait=True, cancel_futures=True)
+            times.close()
             for record in Path(registry).glob('*.json'):
                 target = Path(json.loads(record.read_text(encoding='utf-8'))['workspace']).resolve()
                 if target.parent != Path(tempfile.gettempdir()).resolve() or not target.name.startswith('minimap-mutations-'):

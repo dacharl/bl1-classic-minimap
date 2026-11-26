@@ -46,6 +46,10 @@ class SessionChecks(unittest.TestCase):
         self.assertEqual(after['total'], counts['total'])
         self.assertEqual(after['pending'], 0)
         self.assertEqual(after['killed'] + after['survived'] + after['timeout'] + after['error'], after['total'])
+        # one duration line per finished mutant: the first session's, then the resumed session's added to it
+        times = [json.loads(line) for line in (self.output / 'mutation-times.jsonl').read_text().splitlines()]
+        self.assertEqual(len(times), after['total'])
+        self.assertTrue(all(t['file'] == 'sdk_mods/subject.py' and t['seconds'] >= 0 for t in times))
         with closing(sqlite3.connect(self.output / 'mutations.sqlite')) as db:
             self.assertEqual(db.execute('select job_id, output from work_results where job_id = ?', (prior[0][0],)).fetchall(), prior)
 

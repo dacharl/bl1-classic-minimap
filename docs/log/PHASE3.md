@@ -2990,4 +2990,23 @@ Timeouts (counted as undetected): mod 43, `swfbuild` 61, `profiler` 43, others u
 - **Re-measured `swfmerge.py`:** 1,484 of 1,762 killed (84.22%, was 83.13%), 2 timeouts, 0 errors, floor 70.
 - **Not measured:** a full run. From the `swfmerge` ratio and the probe it should take roughly an hour on 8 workers (an estimate), so a final full run is still due, now cheaper. The new `swfbuild` helpers add mutants of their own, but the table-driven tests kill the ones in them; the larger remainder is geometry in `new_functions` and `logo_paths`, which needs the real-movie value tests from §3cf item 5.
 
+**Full run after both changes (Windows, Python 3.13, 8 workers, 13,062 mutants): 65 min (17:14 to 18:19), against about 3 h for 13,923 before.** `tools/quality_checks.py mutation` passes for every file, with 0 errors:
+
+| File | Mutants | Killed | Score | Floor | Timeouts |
+|---|---:|---:|---:|---:|---:|
+| `__init__.py` (mod) | 3,690 | 2,802 | 75.93% | 70 | 0 |
+| `swfbuild.py` | 4,066 | 3,160 | 77.72% | 70 | 8 |
+| `swfmerge.py` | 1,762 | 1,484 | 84.22% | 70 | 2 |
+| `as2asm.py` | 910 | 831 | 91.32% | 70 | 4 |
+| `upk.py` | 549 | 498 | 90.71% | 70 | 11 |
+| `swfdeps.py` | 623 | 502 | 80.58% | 70 | 5 |
+| `hudmovie.py` | 455 | 398 | 87.47% | 70 | 0 |
+| `tools/build_sdkmod.py` | 39 | 33 | 84.62% | 80 | 0 |
+| profiler `__init__.py` | 34 | 31 | 91.18% | 85 | 0 |
+| profiler `profiler.py` | 934 | 762 | 81.58% | 78 | 34 |
+
+The mod, `hudmovie`, `as2asm`, `upk` and the profiler files score exactly as before (same kill counts), which supports the lists keeping their kills. Speed was 166 results a minute at the first checkpoint and 203 near the end.
+
+**Slow-spot visibility.** The run could not say where its time went (the database keeps outcomes only), so `run_item` now returns each mutant's seconds, `run_mutations.py` appends one line per mutant to `dist/ci/mutation-times.jsonl` and prints the rate over the last checkpoint beside the average, and `tools/mutation_times.py` reports worker time per file and operator and the slowest mutants. Tests in `test_runners` and `test_mutation_session`.
+
 **State:** committed on branch `claude/mutation-speedup-92dee9`: the tooling change, the refactor, then these docs. Nothing pushed, landed or installed; the game's files and the installed hashes are unchanged.
