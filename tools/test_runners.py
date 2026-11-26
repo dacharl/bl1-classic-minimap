@@ -90,7 +90,7 @@ class RunnerChecks(unittest.TestCase):
             suite.write_text('import subprocess, sys\n'
                              f'subprocess.run([sys.executable, {str(child)!r}])\n')
             started = time.monotonic()
-            self.assertNotEqual(test_mutants.main(suites=[str(suite)], budget=3), 0)
+            self.assertNotEqual(test_mutants.main(suites=[str(suite)], budget=2), 0)
             self.assertLess(time.monotonic() - started, 15)
             pid = int(pid_file.read_text())
             # A surviving grandchild holds this process's output pipes, which stalled the whole runner on Linux
@@ -151,7 +151,7 @@ class RunnerChecks(unittest.TestCase):
             ok.write_text('import sys\nprint("ran", sys.argv[0].endswith("ok.py"))\n')
             bad.write_text('raise SystemExit(7)\n')
             started = time.monotonic()
-            result = subprocess.run([sys.executable, '-B', '-I', str(runner), str(time.time() + 2), str(hang)],
+            result = subprocess.run([sys.executable, '-B', '-I', str(runner), str(time.time() + 1), str(hang)],
                                     capture_output=True, text=True, timeout=30)
             self.assertNotEqual(result.returncode, 0)
             self.assertLess(time.monotonic() - started, 15)
@@ -189,19 +189,33 @@ class RunnerChecks(unittest.TestCase):
         self.assertEqual(jobs, ['test_runners.ParallelExample.test_first', 'test_runners.ParallelExample.test_second',
                                 'test_runners.FailingExample'])
         jobs = process_jobs(DEFAULT_TESTS)
-        self.assertIn('test_land.LandChecks', jobs)
+        self.assertNotIn('test_land.LandChecks', jobs)   # sharded instead
+        self.assertIn('test_quality.GateChecks', jobs)
         self.assertNotIn('test_ci.SourceChecks', jobs)
         self.assertIn('test_ci.SourceChecks.test_original_art_movie_passes_both_suites', jobs)
 
     def test_default_run_starts_the_slowest_suites_first(self):
         """On the 2-vCPU Windows runner test_land (16 s), test_runners (17 s) and test_workflow (8 s) started
         after the seven short test_ci processes and ran last, one after another (PHASE3 3by)."""
-        from run_tests import DEFAULT_TESTS, process_jobs
+        from run_tests import DEFAULT_TESTS, process_jobs, shard_of
 
         jobs = process_jobs(DEFAULT_TESTS)
-        slow = ['test_runners.RunnerChecks', 'test_land.LandChecks', 'test_workflow.WorkflowChecks']
-        self.assertEqual(jobs[:3], slow)
+        slow = [job for job in jobs if shard_of(job)]
+        self.assertEqual(jobs[:len(slow)], slow)
+        self.assertEqual({shard_of(job)[0] for job in slow},
+                         {'test_runners.RunnerChecks', 'test_land.LandChecks', 'test_workflow.WorkflowChecks'})
         self.assertEqual(len(jobs), len(set(jobs)))
+
+    def test_sharded_suites_run_every_case_exactly_once(self):
+        """The three long suites are one process each no longer: they are split into shards so that no single
+        process sets the length of the run (PHASE3 3cf), and a shard must not drop or repeat a case."""
+        from run_tests import case_ids, job_cases, process_jobs
+
+        suite = 'test_runners.ParallelExample'
+        jobs = process_jobs([suite], shards={suite: 2})
+        self.assertEqual(jobs, [f'{suite}#1/2', f'{suite}#2/2'])
+        self.assertEqual(sorted(case for job in jobs for case in job_cases(job)), sorted(case_ids([suite])))
+        self.assertEqual(job_cases('test_land.LandChecks.test_x'), ['test_land.LandChecks.test_x'])
 
     def test_durations_report_each_process_and_its_slowest_tests(self):
         """Hosted Windows test times varied from 41 to 53 s with only finish order in the log (PHASE3 3by)."""
@@ -231,11 +245,11 @@ class RunnerChecks(unittest.TestCase):
         started = time.monotonic()
         result = subprocess.run(
             [sys.executable, '-B', '-I', str(Path(__file__).with_name('run_tests.py')),
-             '--workers', '1', '--timeout', '3', 'test_runners.HangingExample'],
+             '--workers', '1', '--timeout', '1', 'test_runners.HangingExample'],
             capture_output=True, text=True, timeout=60,
         )
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-        self.assertIn('timed out after 3 s', result.stdout)
+        self.assertIn('timed out after 1 s', result.stdout)
         self.assertLess(time.monotonic() - started, 30)
         # Far above the slowest suite (about 30 s locally), far below the 10-minute job limit.
         self.assertTrue(120 <= DEFAULT_TIMEOUT <= 300, DEFAULT_TIMEOUT)

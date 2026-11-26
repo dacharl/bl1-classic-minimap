@@ -23,6 +23,9 @@ DEFAULT_TESTS = ['test_runners.RunnerChecks', 'test_land.LandChecks', 'test_work
                  'test_ci.SourceChecks', 'test_hudmovie', 'test_profiler', 'test_swfmerge', 'test_quality.GateChecks']
 # These cases run the real mod's main(), which works only once per process.
 PER_CASE = ['test_ci.SourceChecks']
+# These suites are each one long run of independent cases, so they are split into shards ("suite#2/3" is every third
+# case from the second) that run beside each other instead of setting the whole run's length (PHASE3 3cf).
+SHARDS = {'test_runners.RunnerChecks': 2, 'test_land.LandChecks': 2, 'test_workflow.WorkflowChecks': 2}
 # Seconds per process: far above the slowest suite (about 30 s locally), far below CI's 10-minute job limit, so a
 # hang fails with its output instead of the job being cancelled with none (PHASE3 3bp).
 DEFAULT_TIMEOUT = 240
@@ -40,10 +43,30 @@ def case_ids(names):
     return list(test_ids(unittest.defaultTestLoader.loadTestsFromNames(names)))
 
 
-def process_jobs(suites, per_case=PER_CASE):
+def shard_of(job):
+    """('suite', index, count) for a shard job such as 'suite#2/3'; None for any other job."""
+    match = re.fullmatch(r'(.+)#(\d+)/(\d+)', job)
+    return (match[1], int(match[2]), int(match[3])) if match else None
+
+
+def job_cases(job):
+    """The unittest IDs a job runs."""
+    shard = shard_of(job)
+    if not shard:
+        return [job]
+    suite, index, count = shard
+    return case_ids([suite])[index - 1::count]
+
+
+def process_jobs(suites, per_case=PER_CASE, shards=SHARDS):
     jobs = []
     for suite in suites:
-        jobs += case_ids([suite]) if suite in per_case else [suite]
+        if suite in per_case:
+            jobs += case_ids([suite])
+        elif suite in shards:
+            jobs += [f'{suite}#{index}/{shards[suite]}' for index in range(1, shards[suite] + 1)]
+        else:
+            jobs.append(suite)
     return jobs
 
 
@@ -98,7 +121,8 @@ def main():
     args = parser.parse_args()
     if args.case:
         options = {'durations': args.durations} if args.durations is not None and sys.version_info >= (3, 12) else {}
-        result = unittest.TextTestRunner(**options).run(unittest.defaultTestLoader.loadTestsFromName(args.case))
+        suite = unittest.defaultTestLoader.loadTestsFromNames(job_cases(args.case))
+        result = unittest.TextTestRunner(**options).run(suite)
         return 0 if result.wasSuccessful() else 1
     names = case_ids(args.tests) if args.tests else process_jobs(DEFAULT_TESTS)
     try:
@@ -108,7 +132,7 @@ def main():
     if args.coverage:
         (ROOT / 'dist/ci').mkdir(parents=True, exist_ok=True)
         subprocess.run([sys.executable, '-I', '-m', 'coverage', 'erase'], cwd=ROOT, check=True)
-    cases = unittest.defaultTestLoader.loadTestsFromNames(names).countTestCases()
+    cases = unittest.defaultTestLoader.loadTestsFromNames([case for name in names for case in job_cases(name)]).countTestCases()
     print(f'Running {cases} unit tests in {len(names)} processes using {workers} workers ({args.workers})', flush=True)
     failed = False
     with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
