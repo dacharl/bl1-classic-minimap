@@ -12,6 +12,16 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 
+def kill_pid(pid):
+    if sys.platform == 'win32':
+        subprocess.run(['taskkill', '/F', '/T', '/PID', str(pid)], capture_output=True)
+    else:
+        try:
+            os.kill(pid, 9)
+        except OSError:
+            pass
+
+
 def process_alive(pid):
     if sys.platform == 'win32':
         out = subprocess.run(['tasklist', '/FI', f'PID eq {pid}', '/NH'], capture_output=True, text=True).stdout
@@ -83,8 +93,20 @@ class RunnerChecks(unittest.TestCase):
             self.assertNotEqual(test_mutants.main(suites=[str(suite)], budget=3), 0)
             self.assertLess(time.monotonic() - started, 15)
             pid = int(pid_file.read_text())
+            # A surviving grandchild holds this process's output pipes, which stalled the whole runner on Linux
+            # until CI cancelled it (PHASE3 3bp): kill it here so a regression fails instead of hanging.
+            self.addCleanup(kill_pid, pid)
             time.sleep(0.5)
             self.assertFalse(process_alive(pid), f'grandchild {pid} survived')
+
+    def test_posix_tree_kill_covers_every_descendant(self):
+        """POSIX kill_tree must reach grandchildren (proc.kill() alone orphaned them, PHASE3 3bp): the process
+        tree under a PID, from (pid, ppid) pairs as `ps -A -o pid=,ppid=` lists them."""
+        import test_mutants
+
+        table = [(1, 0), (10, 1), (11, 10), (12, 11), (13, 10), (20, 1), (21, 20), (14, 13)]
+        self.assertEqual(test_mutants.process_tree(10, table), {10, 11, 12, 13, 14})
+        self.assertEqual(test_mutants.process_tree(99, table), {99}, 'an unlisted root is still the tree')
 
     def test_suites_die_with_a_killed_mutation_command(self):
         """Cosmic Ray kills its test command the way _kill_process_group does (process group on POSIX, only
@@ -180,6 +202,22 @@ class RunnerChecks(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn('1 processes', result.stdout)
 
+    def test_a_hanging_case_fails_at_the_timeout_instead_of_stalling_the_run(self):
+        """A hung child used to stall the run until CI cancelled the job, with no output (PHASE3 3bp)."""
+        from run_tests import DEFAULT_TIMEOUT
+
+        started = time.monotonic()
+        result = subprocess.run(
+            [sys.executable, '-B', '-I', str(Path(__file__).with_name('run_tests.py')),
+             '--workers', '1', '--timeout', '3', 'test_runners.HangingExample'],
+            capture_output=True, text=True, timeout=60,
+        )
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn('timed out after 3 s', result.stdout)
+        self.assertLess(time.monotonic() - started, 30)
+        # Far above the slowest suite (about 30 s locally), far below the 10-minute job limit.
+        self.assertTrue(120 <= DEFAULT_TIMEOUT <= 300, DEFAULT_TIMEOUT)
+
     def test_runs_test_cases_in_parallel_processes(self):
         with tempfile.TemporaryDirectory() as directory:
             result = subprocess.run(
@@ -214,6 +252,12 @@ class ParallelExample(unittest.TestCase):
 class FailingExample(unittest.TestCase):
     def test_failure(self):
         self.fail('intentional child failure')
+
+
+class HangingExample(unittest.TestCase):
+    def test_hang(self):
+        while True:
+            time.sleep(0.1)
 
 
 def worker_directory():

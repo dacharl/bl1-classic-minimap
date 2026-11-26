@@ -20,6 +20,9 @@ DEFAULT_TESTS = ['test_ci.SourceChecks', 'test_quality.GateChecks', 'test_runner
                  'test_land.LandChecks', 'test_workflow.WorkflowChecks', 'test_swfmerge', 'test_hudmovie']
 # These cases run the real mod's main(), which works only once per process.
 PER_CASE = ['test_ci.SourceChecks']
+# Seconds per process: far above the slowest suite (about 30 s locally), far below CI's 10-minute job limit, so a
+# hang fails with its output instead of the job being cancelled with none (PHASE3 3bp).
+DEFAULT_TIMEOUT = 240
 
 
 def test_ids(suite):
@@ -41,18 +44,27 @@ def process_jobs(suites, per_case=PER_CASE):
     return jobs
 
 
-def run_case(name, coverage):
+def text(output):
+    return output.decode(errors='replace') if isinstance(output, bytes) else output or ''
+
+
+def run_case(name, coverage, timeout=None):
     command = [sys.executable, '-B', '-I']
     if coverage:
         command += ['-m', 'coverage', 'run', '--parallel-mode']
     command += [str(Path(__file__).resolve()), '--case', name]
-    return subprocess.run(command, cwd=ROOT, capture_output=True, text=True)
+    try:
+        return subprocess.run(command, cwd=ROOT, capture_output=True, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired as expired:   # killed; on POSIX run() no longer waits for its pipes
+        return subprocess.CompletedProcess(command, 1, text(expired.stdout),
+                                           text(expired.stderr) + f'\n{name}: timed out after {timeout:g} s\n')
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--workers', default='auto', help='auto (available CPUs) or a positive integer')
     parser.add_argument('--coverage', action='store_true')
+    parser.add_argument('--timeout', type=float, default=DEFAULT_TIMEOUT, help='seconds per test process')
     parser.add_argument('--case', help=argparse.SUPPRESS)
     parser.add_argument('tests', nargs='*', help='optional unittest test IDs')
     args = parser.parse_args()
@@ -71,7 +83,7 @@ def main():
     print(f'Running {cases} unit tests in {len(names)} processes using {workers} workers ({args.workers})', flush=True)
     failed = False
     with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
-        futures = {pool.submit(run_case, name, args.coverage): name for name in names}
+        futures = {pool.submit(run_case, name, args.coverage, args.timeout): name for name in names}
         for future in concurrent.futures.as_completed(futures):
             result = future.result()
             print(f'{futures[future]}: {"FAIL" if result.returncode else "PASS"}', flush=True)

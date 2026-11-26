@@ -2430,3 +2430,52 @@ verified. v0.16.0 `90599fdb…dc21` and profiler 0.1.23 `6c1fe8cb…cce8` are ba
 **Unverified:** the in-game times. The new log line will show where the unexplained second goes. Still open from the
 plan: reading the foreign movie from its package instead of `RawData` (about 0.65 s), and caching the merged movie
 on disk.
+
+## 3bp. CI's Ubuntu unit-test step hung in `test_runners` (2026-11-25, offline only)
+
+**What happened:** the Ubuntu/Python 3.13 job's step `run_tests.py --coverage` (2 workers, 14 processes) was cancelled
+at the 10-minute job timeout. 13 processes printed PASS; `test_runners.RunnerChecks` never reported. The first hosted
+run's Ubuntu log (§3bm) also ended before `test_runners`, so it has never finished on Linux.
+
+**Cause:**
+- `test_mutation_command_kills_a_hanging_suite_and_its_children` gives `test_mutants.main` a suite whose grandchild
+  loops forever, with a 3 s budget. At the budget, `test_mutants.kill_tree` kills the tree with `taskkill /T` on
+  Windows, but only with `proc.kill()` on POSIX: the direct child dies and the looping grandchild is orphaned.
+- The orphan inherits the stdout/stderr pipes of the `run_tests.py --case test_runners.RunnerChecks` process.
+  `run_case`'s `subprocess.run(capture_output=True)` waits for EOF on them, which never comes. So even after the test
+  process ends, the runner waits until CI cancels the job, with no output, while the orphan spins one of the two
+  cores.
+- The same gap would hit a real POSIX mutation run whose mutant hangs in a grandchild.
+- Windows kills the whole tree, so the suite passed locally.
+
+**Fix (no mod version change):**
+- `test_mutants.kill_tree` on POSIX snapshots the process tree from `ps -A -o pid=,ppid=` (new
+  `process_tree(root, table)`) and SIGKILLs every PID in it. Snapshotting first means killed parents can't hide
+  their children.
+- `run_tests.py` gives each test process a timeout, `--timeout`, default `DEFAULT_TIMEOUT` = 240 s. The slowest
+  suite takes about 35 s locally. A hung process then fails with its output and "timed out after N s" instead of
+  the job being cancelled silently. On POSIX, `subprocess.run` only waits for the killed child after a timeout, not
+  for its pipes, so an orphan can't stall it.
+- The grandchild test now kills any grandchild it leaves behind (`addCleanup`), so a regression fails instead of
+  hanging the run.
+
+**Tests (red first):**
+- `test_posix_tree_kill_covers_every_descendant`: the tree walk, platform-independent. It failed with no
+  `process_tree`.
+- `test_a_hanging_case_fails_at_the_timeout_instead_of_stalling_the_run`: a `HangingExample` with `--timeout 3`
+  must fail with the message within 30 s. It failed with no `DEFAULT_TIMEOUT`.
+
+138 unit tests pass. The coverage gate, ruff and repository checks pass. Both real-movie suites pass on both art
+variants.
+
+**Timings** (`run_tests.py`'s default jobs, 2 workers, coverage, Windows i7-6700K):
+
+| | Total | `test_land` | `test_workflow` | `test_runners` |
+|---|---:|---:|---:|---:|
+| Before | 54.3 s (Ubuntu CI: hung, cancelled at 10 min) | 35.5 s | 33.0 s | 16.5 s |
+| After | 55.0 s | 32.8 s | 31.9 s | 18.4 s |
+
+`test_runners` gains about 2 s from the new 3 s timeout case.
+
+**Unverified:** the POSIX kill path, until the next hosted Ubuntu run. No Linux is available locally (no WSL
+distribution or Docker).

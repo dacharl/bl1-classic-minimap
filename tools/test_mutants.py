@@ -9,7 +9,7 @@ die with it, or the worker waits forever. Two full runs stalled that way (PHASE3
   * POSIX: suites stay in this command's process group, which Cosmic Ray's killpg covers.
   * Windows: suites run on the base interpreter (not the venv python.exe launcher, which starts its own
     child) inside a job object that kills them when this process ends, however it ends.
-  * Both: this command also kills a suite at SUITE_BUDGET (past Cosmic Ray's 20 s timeout, so a real hang
+  * Both: this command also kills a suite and all its descendants at SUITE_BUDGET (past Cosmic Ray's 20 s timeout, so a real hang
     is still recorded as a timeout), and watchdog_run.py ends a suite stuck in Python code. A loop inside one
     C call holds the GIL, so only the first two layers can stop that.
 """
@@ -61,11 +61,35 @@ def kill_on_close_job():
     return kernel32, job
 
 
+def process_tree(root, table):
+    """PIDs of root and all its descendants, from (pid, ppid) pairs."""
+    children = {}
+    for pid, ppid in table:
+        children.setdefault(ppid, []).append(pid)
+    tree, todo = set(), [root]
+    while todo:
+        pid = todo.pop()
+        if pid not in tree:
+            tree.add(pid)
+            todo += children.get(pid, [])
+    return tree
+
+
 def kill_tree(proc):
+    """Kill a suite and everything it started. On POSIX, proc.kill() alone orphaned a looping grandchild, which
+    held the caller's output pipes open: the unit-test runner then stalled until CI cancelled it (PHASE3 3bp)."""
     if sys.platform == 'win32':
         subprocess.run(['taskkill', '/F', '/T', '/PID', str(proc.pid)], capture_output=True)
     else:
-        proc.kill()
+        import os
+        import signal
+        listing = subprocess.run(['ps', '-A', '-o', 'pid=,ppid='], capture_output=True, text=True).stdout
+        table = [tuple(int(v) for v in line.split()) for line in listing.splitlines() if len(line.split()) == 2]
+        for pid in process_tree(proc.pid, table):     # snapshot first, so killed parents can't hide children
+            try:
+                os.kill(pid, signal.SIGKILL)
+            except OSError:
+                pass
     proc.wait()
 
 
