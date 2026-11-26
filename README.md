@@ -137,9 +137,9 @@ The mod ships its builder (`sdk_mods/classic_minimap/swfbuild.py` and friends); 
 
 ## Creating a GitHub release
 
-The [Release SDK mod workflow](.github/workflows/release.yml) runs on demand. Once it is on the GitHub repository's default branch (`main`), open **Actions → Release SDK mod → Run workflow**, select the branch or tag to package, and tick **prerelease** for a pre-release.
+The [Release SDK mod workflow](.github/workflows/release.yml) runs on demand. Once it is on the GitHub repository's default branch (`main`), open **Actions → Release SDK mod → Run workflow** on `main` and tick **prerelease** for a pre-release.
 
-It checks that `__version__` and `pyproject.toml` agree, builds and verifies `classic_minimap.sdkmod`, then publishes a release tagged `v<version>` at the selected commit with that file attached. Bump both version fields before the next release: an existing tag causes the workflow to fail rather than replace a release. It uses the repository's built-in token; no personal access token is needed.
+Before running CI it checks that `__version__` and `pyproject.toml` agree, that the tag `v<version>` doesn't exist yet, and that the release has notes: write them in `docs/release_notes/<version>.md` (commit it first), or paste them into the run's **notes** input if that file is missing. Without either, the run fails at once. After CI passes it builds and verifies `classic_minimap.sdkmod`, creates the tag `v<version>` at the tested commit and publishes the release with the notes, the install text, `classic_minimap.sdkmod` and `classic_minimap-changes.md` (the commits since the previous release, grouped by type). Bump both version fields before the next release: an existing tag causes the workflow to fail rather than replace a release. It uses the repository's built-in token; no personal access token is needed.
 
 The release is the whole install: players build the HUD movie from their own game files. Run the game-dependent checks locally first: `tools/release.py` builds both art variants, runs both real-movie suites on each, and with `--game` checks the mod's in-game build against a game folder. The hosted workflow checks source syntax and archive integrity without game assets.
 

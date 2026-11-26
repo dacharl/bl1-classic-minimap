@@ -2856,3 +2856,11 @@ local `C:\Users\Charles\` paths; neither is a secret, so the scan does not repor
 - The SDK author field in both `pyproject.toml` files was `bl1-classic-minimap`, which the mod menu cut off to "bl1-classic". It is now `dacharl`.
 - Tests: `tools/test_ci.py` expects "?" (red, then green). `test_original_art_movie_passes_both_suites` fails in the main checkout too, so it was already failing and is not from this change.
 - Unverified in game: the "?" glyph's look and size, and the author text in the mod menu.
+
+## 3cc. Release notes and the tag come from the release workflow (2026-11-26, offline only)
+
+- The workflow used to attach one fixed install text to every release. It now builds the body from `docs/release_notes/<version>.md`, or from a new `notes` input when that file is missing, followed by the install text. With neither it fails in the first job, before CI starts. The same job now also checks the version fields and that the `v<version>` tag is free.
+- `tools/release_notes.py` also writes `classic_minimap-changes.md`, the commits since the previous `vMAJOR.MINOR.PATCH` tag grouped by Conventional Commit type (all of history for 1.0.0). The release job downloads both files, packages and verifies the mod, creates the tag at the tested commit with `gh release create --target`, and attaches the mod and the supplement.
+- `docs/release_notes/1.0.0.md` is written for the pending first stable release.
+- Tests: four new `test_workflow` scenarios (notes precedence and failure, previous tag and grouping, a CLI run in a temporary git repository, and the workflow's order and publish command), each red before the code. `tools/release_notes.py` coverage floors are 85% line and 80% branch.
+- Unverified: a hosted run. The first one is the pre-release; `actions/download-artifact@v7` is assumed to pair with the `upload-artifact@v7` that `ci.yml` already uses.

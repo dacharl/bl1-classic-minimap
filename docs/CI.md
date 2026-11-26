@@ -14,7 +14,7 @@
 
 **On demand:** mutation testing runs only when started by hand: **Actions → Mutation testing → Run workflow** (`.github/workflows/mutation.yml`), or locally with `tools/run_mutations.py`. A full run takes over an hour, so it is not part of continuous CI and does not block merges. Run it before raising floors, after changing the shipped mods or the packager in ways the unit tests may not catch, and before a release when practical.
 
-**Releases:** `.github/workflows/release.yml` is started by hand from main. It refuses any other branch or tag, runs the whole of `ci.yml` through `workflow_call`, and publishes only if that passes. `quality_checks.py repository` fails if that order is removed. It does not run the mutation tests or the real-movie suites, so run those locally first (AGENTS, PROGRESS).
+**Releases:** `.github/workflows/release.yml` is started by hand from main. It refuses any other branch or tag, runs the whole of `ci.yml` through `workflow_call`, and publishes only if that passes. `quality_checks.py repository` fails if that order is removed. Before CI starts, its first job also checks the version fields, that the `v<version>` tag doesn't exist yet, and that the release has notes (`tools/release_notes.py`: `docs/release_notes/<version>.md`, else the run's `notes` input, else the run fails). The release job then packages and verifies the mod, creates the tag at the tested commit and attaches `classic_minimap.sdkmod` and `classic_minimap-changes.md` (the commits since the previous release tag, grouped by Conventional Commit type) to the GitHub release. It does not run the mutation tests or the real-movie suites, so run those locally first (AGENTS, PROGRESS).
 
 The hosted jobs need no game installation or credentials. Reports are retained for 14 days.
 
@@ -31,6 +31,7 @@ The hosted jobs need no game installation or credentials. Reports are retained f
 | `sdk_mods/classic_minimap/swfdeps.py` | 60% | 45% | 70% (not yet measured) |
 | `tools/build_sdkmod.py` | 94% | 83% | 80% |
 | `tools/land_branch.py` | 92% | 85% | Not gated |
+| `tools/release_notes.py` | 85% | 80% | Not gated |
 | `sdk_mods/classic_minimap_profiler/__init__.py` | 95% | 95% | 85% |
 | `sdk_mods/classic_minimap_profiler/profiler.py` | 95% | 88% | 78% |
 

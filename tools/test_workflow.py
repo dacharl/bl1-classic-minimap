@@ -348,6 +348,86 @@ class WorkflowChecks(unittest.TestCase):
         self.assertEqual(record['status'], 'rolled_back')
         self.assertFalse(list(game.rglob('.minimap-*')))
 
+    def test_release_notes_come_from_the_versioned_file_then_the_input_and_otherwise_fail(self):
+        import release_notes
+        notes = self.root / 'release_notes'
+        notes.mkdir()
+        (notes / '1.0.0.md').write_text('\n# From the file\n\nFirst release.\n\n', encoding='utf-8')
+        self.assertEqual(release_notes.resolve_notes('1.0.0', notes, 'typed in the UI'),
+                         '# From the file\n\nFirst release.\n', 'the file wins over the input')
+        self.assertEqual(release_notes.resolve_notes('1.0.1', notes, ' Fixed the zoom. \n'), 'Fixed the zoom.\n')
+        for missing in ('', '  \n', None):
+            with self.assertRaises(SystemExit) as stop:
+                release_notes.resolve_notes('1.0.1', notes, missing)
+            self.assertIn('docs/release_notes/1.0.1.md', str(stop.exception))
+            self.assertIn("'notes' input", str(stop.exception))
+        (notes / '1.0.2.md').write_text(' \n', encoding='utf-8')
+        with self.assertRaises(SystemExit):
+            release_notes.resolve_notes('1.0.2', notes, None)
+
+    def test_release_changes_list_commits_since_the_previous_tag_by_type(self):
+        import release_notes
+        tags = ['v0.9.0', 'v1.0.0', 'v0.10.2', 'v0.10.10', 'nightly', 'v2.0.0', 'v1.0']
+        self.assertEqual(release_notes.previous_tag(tags, '1.0.0'), 'v0.10.10')
+        self.assertEqual(release_notes.previous_tag(tags, '0.9.0'), None)
+        self.assertEqual(release_notes.previous_tag([], '1.0.0'), None)
+        log = ['aaa1111\tfeat(mod): add the minimap', 'bbb2222\tfix: stop a crash', 'ccc3333\tfeat!: new options',
+               'ddd4444\tdocs: explain it', 'eee5555\tUpdate things', 'fff6666\tperf(mod): speed up the merge']
+        text = release_notes.changes_text('1.0.0', 'v0.10.10', log)
+        self.assertTrue(text.startswith('# Changes in v1.0.0\n\nSince v0.10.10: 6 commits.\n'), text)
+        order = [text.index(h) for h in ('## Features', '## Fixes', '## Performance', '## Documentation', '## Other')]
+        self.assertEqual(order, sorted(order))
+        self.assertIn('- add the minimap (`aaa1111`)', text)
+        self.assertIn('- **breaking:** new options (`ccc3333`)', text)
+        self.assertIn('- Update things (`eee5555`)', text)
+        self.assertNotIn('## Tests', text)
+        self.assertIn('Since the first commit: 1 commit.', release_notes.changes_text('1.0.0', None, log[:1]))
+
+    def test_release_notes_cli_writes_the_body_and_the_supplement_in_a_git_checkout(self):
+        env = dict(os.environ, GIT_AUTHOR_NAME='T', GIT_AUTHOR_EMAIL='t@example.invalid',
+                   GIT_COMMITTER_NAME='T', GIT_COMMITTER_EMAIL='t@example.invalid')
+
+        def git(*args):
+            subprocess.run(['git', *args], cwd=self.root, env=env, check=True, capture_output=True)
+        git('init', '-q')
+        for subject in ('feat: before the tag', 'fix: also before'):
+            git('commit', '-q', '--allow-empty', '-m', subject)
+        git('tag', 'v0.9.0')
+        git('commit', '-q', '--allow-empty', '-m', 'fix(mod): after the tag')
+        (self.root / 'docs' / 'release_notes').mkdir(parents=True)
+        (self.root / 'docs' / 'release_notes' / '1.0.0.md').write_text('The first release.\n', encoding='utf-8')
+        out = self.root / 'dist'
+        import release_notes
+        with contextlib.chdir(self.root), contextlib.redirect_stdout(io.StringIO()) as printed:
+            release_notes.main(['--version', '1.0.0', '--out-dir', str(out)])
+        self.assertIn('1 commits since v0.9.0', printed.getvalue())
+        body = (out / 'release-notes.md').read_text(encoding='utf-8')
+        self.assertTrue(body.startswith('The first release.\n'), body)
+        self.assertIn('classic_minimap.sdkmod', body)
+        self.assertIn('classic_minimap-changes.md', body)
+        changes = (out / 'classic_minimap-changes.md').read_text(encoding='utf-8')
+        self.assertIn('after the tag', changes)
+        self.assertNotIn('before the tag', changes)
+        missing = self.cli('release_notes.py', '--version', '1.0.1', '--out-dir', out, cwd=self.root)
+        self.assertEqual(missing.returncode, 1)
+        self.assertIn('docs/release_notes/1.0.1.md', missing.stderr)
+        typed = self.cli('release_notes.py', '--version', '1.0.1', '--notes', 'Typed notes.', '--out-dir', out,
+                         cwd=self.root)
+        self.assertEqual(typed.returncode, 0, typed.stderr)
+        self.assertTrue((out / 'release-notes.md').read_text(encoding='utf-8').startswith('Typed notes.\n'))
+
+    def test_release_workflow_checks_notes_before_ci_and_publishes_the_tag_notes_and_artifacts(self):
+        text = (ROOT / '.github' / 'workflows' / 'release.yml').read_text(encoding='utf-8')
+        jobs = text.split('\njobs:\n', 1)[1]
+        first_job = jobs.split('\n  checks:\n', 1)[0]
+        self.assertIn('\n      notes:\n', text.split('\npermissions:', 1)[0], 'a notes input')
+        self.assertIn('release_notes.py', first_job, 'notes are resolved before CI starts')
+        self.assertIn('Require a new release tag', first_job, 'an existing tag fails before CI starts')
+        publish = text[text.index('gh release create'):]
+        for needle in ('--target "$GITHUB_SHA"', '--notes-file', 'dist/classic_minimap.sdkmod',
+                       'dist/classic_minimap-changes.md'):
+            self.assertIn(needle, publish)
+
 
 if __name__ == '__main__':
     unittest.main()
