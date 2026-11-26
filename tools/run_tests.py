@@ -25,7 +25,7 @@ DEFAULT_TESTS = ['test_runners.RunnerChecks', 'test_land.LandChecks', 'test_work
 PER_CASE = ['test_ci.SourceChecks']
 # These suites are each one long run of independent cases, so they are split into shards ("suite#2/3" is every third
 # case from the second) that run beside each other instead of setting the whole run's length (PHASE3 3cf).
-SHARDS = {'test_runners.RunnerChecks': 2, 'test_land.LandChecks': 2, 'test_workflow.WorkflowChecks': 2}
+SHARDS = {'test_runners.RunnerChecks': 3, 'test_land.LandChecks': 3, 'test_workflow.WorkflowChecks': 3}
 # Seconds per process: far above the slowest suite (about 30 s locally), far below CI's 10-minute job limit, so a
 # hang fails with its output instead of the job being cancelled with none (PHASE3 3bp).
 DEFAULT_TIMEOUT = 240
