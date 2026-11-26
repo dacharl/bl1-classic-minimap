@@ -11,6 +11,8 @@ against it and refuses on any mismatch; it never guesses.
 import json
 import struct
 
+StructError = struct.error      # a plain name: Cosmic Ray's ExceptionReplacer fails on `except (…, struct.error)` (PHASE3 3cc)
+
 METADATA = 77
 MAGIC = b"bl1mm-block\0"
 SHAPES = {2: 1, 22: 2, 32: 3, 83: 4}          # DefineShape tag -> version
@@ -216,7 +218,7 @@ def split(d):
             p += ln
             if code == 0:
                 break
-    except (IndexError, struct.error) as ex:
+    except (IndexError, StructError) as ex:
         raise MergeRefused("unreadable movie (%s)" % ex) from ex
     return d[:head_len], out, d[p:]
 
@@ -361,7 +363,7 @@ def merge(foreign, ours, version):
     try:
         insert_at = first_show(root)
         check_foreign(root, insert_at, info)
-    except (IndexError, struct.error, ValueError) as ex:
+    except (IndexError, StructError, ValueError) as ex:
         raise MergeRefused("unreadable movie (%s: %s)" % (type(ex).__name__, ex)) from ex
     root = shift_gradients(root, info["gradients_before"], info["gradients"])
     out = bytearray(head + b"".join(r for _, _, r in root[:insert_at]) + block

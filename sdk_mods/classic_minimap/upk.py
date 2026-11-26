@@ -7,6 +7,8 @@ import re
 import struct
 import sys
 
+StructError = struct.error      # a plain name: Cosmic Ray's ExceptionReplacer fails on `except (…, struct.error)` (PHASE3 3cc)
+
 
 class PackageError(ValueError):
     pass
@@ -125,7 +127,7 @@ def movie(data, path='FlashMovie.HUD'):
         out = extract(Pkg(data=data), path)
     except PackageError:
         raise
-    except (struct.error, IndexError, KeyError, UnicodeDecodeError) as ex:
+    except (StructError, IndexError, KeyError, UnicodeDecodeError) as ex:
         raise PackageError('unreadable package (%s)' % type(ex).__name__) from None
     if out[:3] not in (b'GFX', b'FWS'):
         raise PackageError('%s is not an uncompressed GFx movie' % path)
