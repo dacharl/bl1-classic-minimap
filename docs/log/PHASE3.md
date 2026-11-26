@@ -2952,3 +2952,42 @@ Timeouts (counted as undetected): mod 43, `swfbuild` 61, `profiler` 43, others u
   Line coverage rose to 93.4% (`as2asm`), 99.1% (`upk`) and 98.1% (`swfdeps`), well above their gates. 186 unit cases pass.
 - **State:** every measured file is now above its floor and no run has errors. The mod, `hudmovie`, `swfbuild`, packager and profiler figures are from the full run, before this suite existed, and were not re-measured; the new tests can only add kills. A final full run is still needed to pass `tools/quality_checks.py mutation` on one complete session. `swfdeps` still has 126 survivors (mostly the `main` printout and the `_scan` offsets); `swfbuild` and the mod hold the rest of the gap (items 4 and 5 above).
 - **Observation, not changed:** `swfdeps.refs` reads a PlaceObject3's character id at a fixed offset 4 (`4 + (0 if … else 0)`), so a placement with a class name (flag 0x08) would read the wrong field. The stock movies don't use it; a test for that case would need the format's class-name field, so it was left.
+
+## 3cg. A shorter mutation run: per-file suite lists and fewer builder mutants (2026-11-26, offline only)
+
+**Why:** the full run took about 3 h (§3cf), so it could be run only rarely. Scope, denominators and floors had to stay as they were.
+
+**1. Per-file suite lists (`tools/test_mutants.py`, `tools/run_mutations.py`).** A process costs about 0.7 s on this PC and the suites themselves take milliseconds, so a surviving mutant, which ran all 11 processes (four suites and seven `test_ci` cases), cost about 8 s. `run_item` now sets `MINIMAP_MUTATED_FILE` (each worker handles one mutant at a time, and Cosmic Ray's subprocess inherits the environment); `test_mutants.py` looks the file up in `SUITES_BY_FILE`, the suite that kills most first. A file with no entry, or an unset variable, runs everything. `MINIMAP_SUITE_PROBE=<file>` is the measurement mode: every suite runs on every mutant and the failing ones are appended to the file. The hang-safety layers (job object, `taskkill /T`, `watchdog_run.py`, the 25 s budget against the 20 s timeout) are untouched.
+- **Measured** with the probe on a sample of each file (1 in 1 to 1 in 15, 2,370 mutants), killing suites per file:
+
+| File | Sampled | Suites that killed anything (kills) | Lists now |
+|---|---:|---|---|
+| mod `__init__.py` | 308 | `test_profiler` 217, `test_ci` mod_without_game_assets 217, `test_ci` original_art_movie 217 | the mod case, `test_profiler` |
+| `build_sdkmod.py` | 39 | `test_profiler` 30, the archive-layout case 27 | both |
+| `swfmerge.py` | 298 | `test_swfmerge` 245, `test_builder_formats` 109, gradient case, others as subsets | `test_swfmerge`, `test_builder_formats`, the gradient case |
+| `hudmovie.py` | 228 | `test_hudmovie` 203 (all of them) | `test_hudmovie` |
+| `swfbuild.py` | 325 | `test_ci` original_art_movie 237, glyph case, `test_hudmovie`, `test_swfmerge`, `test_builder_formats`, `test_profiler` | those six |
+| `as2asm.py` | 302 | `test_builder_formats` 240, `test_profiler` +35 | both |
+| `swfdeps.py` | 322 | `test_builder_formats` 245, `test_hudmovie` 66 | both, plus `test_profiler` |
+| `upk.py` | 270 | `test_builder_formats` 245, `test_hudmovie` +2 | both |
+| profiler (2 files) | 265 | `test_profiler` only | `test_profiler` |
+
+- **Same kills?** `swfmerge.py` run in full on the unchanged source with every suite (1,802 mutants) and with the lists. no mutant went from survived to killed, and six went from killed to survived (the other 1,796 keep their outcome class; 13 of the 15 old timeouts became ordinary kills or survivors). with every suite enabled they survive too (probed one by one), so the lists did not lose them; the old run was under more CPU load (my other jobs), which is the likely cause. Timeouts fell from 15 to 2 (a shorter list leaves less to hit the 20 s limit). Not repeated for the other files: their lists follow the probe, so run a file's full list once (`SUITES_BY_FILE` empty) when a suite or file changes.
+- **Wall time, `--modules sdk_mods/classic_minimap/swfmerge.py`, 8 workers:** 12 min 21 s with every suite; 3 min 56 s with the lists (3.1 times faster, same source); 3 min 46 s after the refactor below.
+- `run_mutations.py` checkpoints now print results per minute and an ETA (`progress_suffix`, tested).
+
+**2. Fewer mutants (`swfmerge.py`, `swfbuild.py`, `swfdeps.py`).** The repeated work moved into helpers, each with a worked-example test written from the SWF format in `test_builder_formats.py`: `swfmerge.u16`, `u32`, `words` and `header` (short and long tag headers); in `swfbuild`, named tag codes and PlaceObject2 flag bits, `twips`, `place`, `sprite`, `one_frame_sprite`, and `BitWriter.style_change`, `line_to`, `closed_path` and `end` (the shape records `polygon_shape` and `paths_shape` wrote twice). `swfbuild.top_level`, `raw_id` and `landmark_frames` read tag headers through `header`. `as2asm` and `upk` were left alone: their reads are of different, non-repeating fields.
+
+| File | Mutants before | after |
+|---|---:|---:|
+| `swfbuild.py` | 4,867 | 4,066 |
+| `swfmerge.py` | 1,802 | 1,762 |
+| `swfdeps.py` | 643 | 623 |
+| the other seven files | 6,611 | 6,611 |
+| **total** | **13,923** | **13,062** |
+
+- **No behaviour change:** the movie built from `dist/phase2` is byte-identical to the pre-change build for both art variants (original `5c1c0304...`, Enhanced `061eebb7...`); `test_minimap_as` and `test_minimap_mod` pass on both; every coverage floor holds; Ruff passes.
+- **Re-measured `swfmerge.py`:** 1,484 of 1,762 killed (84.22%, was 83.13%), 2 timeouts, 0 errors, floor 70.
+- **Not measured:** a full run. From the `swfmerge` ratio and the probe it should take roughly an hour on 8 workers (an estimate), so a final full run is still due, now cheaper. The new `swfbuild` helpers add mutants of their own, but the table-driven tests kill the ones in them; the larger remainder is geometry in `new_functions` and `logo_paths`, which needs the real-movie value tests from §3cf item 5.
+
+**State:** committed on branch `claude/mutation-speedup-92dee9`: the tooling change, the refactor, then these docs. Nothing pushed, landed or installed; the game's files and the installed hashes are unchanged.
