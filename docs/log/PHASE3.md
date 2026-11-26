@@ -2607,5 +2607,9 @@ unit tests, the coverage floors (core 90.86% line / 87.50% branch), ruff and rep
 --game --enhanced --profiler`: the in-mod build matches (`266e1138…689a`). Bundle in the worktree's
 `dist/releases/0.16.4/`: `classic_minimap.sdkmod` `9a301fb5…7b89`, `classic_minimap_profiler.sdkmod` `853dc238…3cdf`.
 
-**Unverified (in game):** not installed yet. Trips into Arid should show the Arid map at once, with the found line
+**Installed on the PC (2026-11-26 13:51 UTC, game closed):** both files through `install.py --profiler`, SHA-256
+verified. v0.16.3 `53dad688…3afb` and profiler 0.1.26 `0dfec4a7…cbfb` are backed up in the main checkout's
+`dist\v0.16.3-20261126T135100.383494Z\`.
+
+**Unverified (in game):** trips into Arid should show the Arid map at once, with the found line
 giving about 0.3 s after the tunnel.
