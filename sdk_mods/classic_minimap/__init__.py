@@ -55,7 +55,7 @@ from . import hudmovie
 from .swfmerge import MergeRefused
 from .swfmerge import merge as merge_movie
 
-__version__ = "0.16.2"
+__version__ = "0.16.3"
 
 
 STAGE_W = 1280.0                       # classic HUD stage is 1280x720
@@ -81,6 +81,7 @@ THREAT_INTERVAL = 0.25
 OBJECTIVE_CHECK_INTERVAL = 0.5         # mission/area change check (Objective Distance caches on the same key)
 WAYPOINT_GRID = 100.0                  # objective-position rounding (Unreal units, ~2 m) for the rebuild key
 READY_TIMEOUT = 5.0                    # seconds to wait for the zone frame before re-initialising
+AREA_RETRY = 0.2                       # rebuild retry while a new area's anchor streams in (run 43)
 RETRY_INTERVAL = 1.0                   # MinimapCreate retry spacing while the HUD movie comes up
 MAX_ATTEMPTS = 60
 # Enhanced's no-objective zoom: ApplyScale(100), QuickAccessInit's optional fit, then AnalogScale(+8).
@@ -207,6 +208,7 @@ class State:
         self.last_hidden_reason = "start"
         self.rebuild_pending = False       # rebuild the markers on the next tick...
         self.rebuild_refit = False         # ...and refit the zoom (F8, option changes; not the status menu)
+        self.area_wait: Any = None         # when an in-place rebuild first found no anchor (map hidden; run 43)
         self.save_shown = False            # PLAN_V15: our save indicator is showing...
         self.save_spot: Any = None         # ...where (stage px)...
         self.save_alpha: Any = None        # ...its last alpha...
@@ -764,18 +766,30 @@ def rebuild_in_place(pc: Any, movie: Any) -> None:
     """Enhanced's RebuildMinimapObjects: re-collect and swap the markers within this tick, map visible.
 
     Same zone frame (the usual case: mission or objective change): capture right away. A different anchor
-    whose frame isn't on stage yet waits in framewait with the old markers showing. No anchor (rare
-    mid-level): keep the current map.
+    whose frame isn't on stage yet waits in framewait with the old markers showing. No anchor (travel on
+    the same HUD: the level list changes inside the tunnel before the new area's anchor streams in, run 43):
+    the map hides ("new area loading") and the rebuild retries every AREA_RETRY until the anchor appears;
+    after READY_TIMEOUT it gives up and shows the current map again (an area without a map).
     """
     old_frame = S.anchor.get("MapFrame")
+    now = time.time()
     if not collect(pc, movie):
         S.phase = "running"
+        if S.area_wait is None:
+            S.area_wait = now
+        if now - S.area_wait <= READY_TIMEOUT:
+            S.next_objective_check = now + AREA_RETRY   # the key still differs: the next check retries
+            return
+        S.area_wait = None
         try:
-            S.objective_key = objective_key(pc)    # don't retry every check
+            S.objective_key = objective_key(pc)    # give up: don't retry every check
         except Exception:
             pass
         warn_once("rebuild-noanchor", "map anchor missing during a rebuild; keeping the current markers")
         return
+    if S.area_wait is not None:
+        log(f"new area's map anchor found after {now - S.area_wait:.2f}s")
+        S.area_wait = None
     if frame_ready(movie) and capture(movie, in_place=True):
         if S.anchor.get("MapFrame") != old_frame:
             log(f"map frame changed to {S.anchor.get('MapFrame')}")
@@ -1293,7 +1307,9 @@ def hidden_reason(pc: Any, movie: Any, now: float) -> str:
     - loading movie: the travel "blue tunnel" (WillowPlayerController.IsLoadingMoviePlaying());
     - HUD off / cinematic / status menu / dead: what WillowPlayerController.ShowStatusMenu checks
       (myHUD.bShowHUD, bCinematicMode) plus the open menu and a dead pawn;
-    - p1 hidden: the stock HUD clip is hidden.
+    - p1 hidden: the stock HUD clip is hidden;
+    - new area loading: the visible levels changed but the new area's anchor hasn't streamed in yet, so
+      the map on stage is the old area's (run 43; rebuild_in_place retries, at most READY_TIMEOUT).
     There is no settle wait after a level change (removed in v0.16.2, run 42: it hid the map 3-3.6 s per
     trip): the loading-movie check covers the tunnel, and areas streaming in rebuild the markers in place.
     """
@@ -1307,6 +1323,7 @@ def hidden_reason(pc: Any, movie: Any, now: float) -> str:
         # classic pawns have no Health property (run 8): use the native Pawn.IsAliveAndWell()
         ("no live pawn", lambda: pawn is None or not pawn.IsAliveAndWell()),
         ("HUD clip hidden", lambda: not movie.GetVariableBool("p1._visible")),
+        ("new area loading", lambda: S.area_wait is not None),
     )
     for reason, test in checks:
         try:

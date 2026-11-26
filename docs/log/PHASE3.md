@@ -2554,3 +2554,30 @@ verified. v0.16.1 `e0312eec…a01e` and profiler 0.1.24 `38807f92…7693` are ba
 
 **Unverified (in game):** the map should show about 3 s sooner after every trip. To watch: a wrong zoom right after
 arriving (the run-15 case), and markers popping in as areas stream.
+
+## 3bs. Run 43: v0.16.2 on the PC; the old area's map shows for 0.3 s, fixed in v0.16.3 (2026-11-26)
+
+**Run 43 (v0.16.2, PC, Extended UI):** the merge took 1.38 s (read 0.76, merge 0.28, write 0.34). The settle wait is
+gone: on both trips (dry → Arid at 32:25, Arid → dry at 32:44) "minimap shown" came the moment the loading movie
+ended. The 2.7 s hide at spawn was the game's own "HUD off". But both trips kept the same HUD (no "map attached"), and
+each showed the old area's map and markers until the next objective check rebuilt it: 0.34 s (shown 32:32.81, Arid
+drawn 32:33.14) and 0.26 s (48.68, dry drawn 48.95).
+
+**Cause:** the visible-level set changed inside the tunnel, before the new area's anchor had streamed in. The in-place
+rebuild found no anchor, logged "keeping the current markers" and recorded the new key, so nothing retried until the
+level set changed again after the tunnel. The settle wait used to hide this.
+
+**Change → core v0.16.3, profiler 0.1.26:** an in-place rebuild that finds no anchor now hides the map (reason "new
+area loading", after the other gates) and retries every 0.2 s (`AREA_RETRY`) without recording the key. When the
+anchor appears it logs "new area's map anchor found after T.TTs" and draws the new area. After `READY_TIMEOUT` (5 s)
+it gives up and shows the current map, as before, for an area without a map.
+
+**Tests (red first):** the mod suite travels on the same HUD with the anchor missing during the tunnel; once the tunnel
+ends the map must stay hidden (it failed: shown), then show once the anchor streams in; an area that never gets an
+anchor shows the current map again after `READY_TIMEOUT`. Both suites on both art variants, the unit tests, the
+coverage floors (core 90.97% line / 87.36% branch), ruff and repository checks pass. `release.py --game --enhanced
+--profiler`: the in-mod build matches (`3c9e5037…3f55`). Bundle in the worktree's `dist/releases/0.16.3/`:
+`classic_minimap.sdkmod` `53dad688…3afb`, `classic_minimap_profiler.sdkmod` `0dfec4a7…cbfb`.
+
+**Unverified (in game):** not installed yet. After a trip on the same HUD the log should show "new area's map anchor
+found after …" and the map should appear with the new area's art, at most about 0.2 s after the tunnel.

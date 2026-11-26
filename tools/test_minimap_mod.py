@@ -725,6 +725,37 @@ def main(gfx_path, on_import=None):
     assert len(helpers) == n_streamed + 2, 'each area change rebuilds the markers'
     assert False not in movie.visible_sets, 'streaming must not hide the map'
     assert m.get('_visible') is True and mod.S.phase == 'running'
+    # run 43: travel on the same HUD. The level list changes inside the tunnel, before the new area's anchor has
+    # streamed in; when the tunnel ends the old area's map must not show (it did for 0.26-0.34 s) until the
+    # rebuild finds the anchor.
+    pc.loading_movie = True
+    WORLD.anchor_loaded = False
+    world.StreamingLevels.append(types.SimpleNamespace(bIsVisible=True, LoadedLevel='Level arid_next.TheWorld'))
+    step(0.6); step()
+    assert m.get('_visible') is False
+    pc.loading_movie = False
+    step(); step(0.3); step()
+    assert m.get('_visible') is False, 'the old area map must not show while the new anchor is missing'
+    n_wait = len(helpers)
+    WORLD.anchor_loaded = True
+    step(0.6); step()
+    assert len(helpers) > n_wait, 'the rebuild is retried once the anchor streams in'
+    assert m.get('_visible') is True and mod.S.phase == 'running'
+    world.StreamingLevels.pop()
+    step(0.6); step()
+    # an area that never gets an anchor: after READY_TIMEOUT the current map shows again
+    WORLD.anchor_loaded = False
+    world.StreamingLevels.append(types.SimpleNamespace(bIsVisible=True, LoadedLevel='Level arid_nomap.TheWorld'))
+    step(0.6); step()
+    assert m.get('_visible') is False
+    for _ in range(int(mod.READY_TIMEOUT / 0.5) + 2):
+        step(0.5)
+    step()
+    assert m.get('_visible') is True and mod.S.phase == 'running', 'no anchor for good: keep the current map'
+    WORLD.anchor_loaded = True
+    world.StreamingLevels.pop()
+    step(0.6); step()
+    assert m.get('_visible') is True
     # a failing check never hides the map for good or resets it
     pc.IsLoadingMoviePlaying = None                    # calling it raises TypeError
     step()
