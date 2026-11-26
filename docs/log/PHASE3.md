@@ -2546,7 +2546,11 @@ no longer wait out the settle time. The run-15 refit scenario passes unchanged. 
 unit tests, the coverage floors (core 90.43% line / 86.59% branch), ruff and repository checks pass.
 `release.py --game --enhanced --profiler`: the in-mod build matches (`b8aef443…400b`). Bundle in the worktree's
 `dist/releases/0.16.2/`: `classic_minimap.sdkmod` `7adf78b4…e98d`, `classic_minimap_profiler.sdkmod`
-`d71f7a21…82b9`. Not installed.
+`d71f7a21…82b9`.
+
+**Installed on the PC (2026-11-26 01:36 UTC, game closed):** both files through `install.py --profiler`, SHA-256
+verified. v0.16.1 `e0312eec…a01e` and profiler 0.1.24 `38807f92…7693` are backed up in the main checkout's
+`dist\v0.16.1-20261126T013600.292857Z\`.
 
 **Unverified (in game):** the map should show about 3 s sooner after every trip. To watch: a wrong zoom right after
 arriving (the run-15 case), and markers popping in as areas stream.
