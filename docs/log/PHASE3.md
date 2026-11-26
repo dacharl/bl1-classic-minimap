@@ -2392,3 +2392,37 @@ local tools run on 3.13.
 
 **Unverified:** Python 3.14 is not installed here, so the Windows/3.14 job (and the pinned ruff, coverage and Cosmic
 Ray on it) is first tested by the hosted run.
+
+## 3bo. v0.16.1: a faster Extended UI merge, and its timing split by phase (2026-11-25, offline only)
+
+**Why:** with Extended UI the merge was the one visible hitch: 3.0–3.4 s on the PC and 3.3–4.4 s on the Deck, once
+per session (§3ai, §3ap, §3aw). The user chose to start with the timing breakdown and the bit reader.
+
+**Evidence (offline, against the installed `Mods/Custom UI/GfxHUD_MOD.upk`, 666,106-byte movie, and the player-built
+movie cache):** the merge took 1.07 s in CPython 3.13 on the PC. cProfile put almost all of it in the shape walker's
+bit reader: 977,411 calls to `Bits.u`, one per bit, to count the gradient fills in Extended UI's 408 shapes. Reading
+the same movie from its package on disk took 0.06 s, against about 0.7 s for `bytes(RawData)` in game (run 18). The
+in-game total is about 1 s more than run 18's parts add up to, and the log gave only the total.
+
+**Change → core v0.16.1, profiler 0.1.24 (its supported list):**
+- The log line splits the merge: `merged in T.TTs (read R.RRs, merge M.MMs, write W.WWs; N bytes)`. The write
+  includes constructing the `GFxMovieInfo`.
+- `swfmerge.Bits.u` reads a whole field with one `int.from_bytes` and still raises `IndexError` past the end, so a
+  truncated shape is still refused. `walk_shape` reads each record's 6-bit header in one call and skips the
+  coordinate fields it never needed (`Bits.skip`).
+
+**Result:** the merge into Extended UI's movie went from 1.07 s to 0.19 s (best of 3), about 5.7 times faster. The
+merged bytes are identical for both art variants, every shape in six real movies (Extended UI, stock classic HUD,
+Enhanced HUD, status menu and both of our movies) walks to the same bitmaps and gradients, and both rebuilt movies are
+byte for byte the same as before.
+
+**Tests:** the mod suite's merge scenario now requires the phase times in the log line (it failed first). Two new
+`test_swfmerge` cases pin the reader: fields of many widths from any bit offset, and the error past the end (they pass
+on both readers; this part is a refactor). Both suites on both art variants, 138 unit tests, the coverage floors
+(swfmerge 98.93% line / 95.69% branch), ruff and repository checks pass. `release.py --game --enhanced --profiler`:
+the in-mod build matches (`6dc743b6…4708`). Bundle in the worktree's `dist/releases/0.16.1/`:
+`classic_minimap.sdkmod` `e0312eec…a01e`, `classic_minimap_profiler.sdkmod` `38807f92…7693`. Not installed.
+
+**Unverified:** the in-game times. The new log line will show where the unexplained second goes. Still open from the
+plan: reading the foreign movie from its package instead of `RawData` (about 0.65 s), and caching the merged movie
+on disk.

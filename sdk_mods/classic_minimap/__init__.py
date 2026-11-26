@@ -55,7 +55,7 @@ from . import hudmovie
 from .swfmerge import MergeRefused
 from .swfmerge import merge as merge_movie
 
-__version__ = "0.16.0"
+__version__ = "0.16.1"
 
 
 STAGE_W = 1280.0                       # classic HUD stage is 1280x720
@@ -617,7 +617,10 @@ def merge_into(tmpl: Any, foreign: Any) -> bool:
     else:
         started = time.time()
         try:
-            data = merge_movie(bytes(foreign.RawData), ours, __version__)
+            raw = bytes(foreign.RawData)
+            read_at = time.time()
+            data = merge_movie(raw, ours, __version__)
+            merged_at = time.time()
             info = unrealsdk.construct_object("GFxMovieInfo", getattr(foreign, "Outer", None), "MinimapMergedHUD",
                                               int(ObjectFlags.KEEP_ALIVE), foreign)
             info.RawData = list(data)
@@ -630,7 +633,9 @@ def merge_into(tmpl: Any, foreign: Any) -> bool:
             set_status(f"Refused: couldn't build the merged HUD movie ({type(ex).__name__}: {ex}). "
                        "The minimap stays idle.")
             return False
-        log(f"merged in {time.time() - started:.2f}s ({len(data)} bytes)")
+        done = time.time()
+        log(f"merged in {done - started:.2f}s (read {read_at - started:.2f}s, merge {merged_at - read_at:.2f}s, "
+            f"write {done - merged_at:.2f}s; {len(data)} bytes)")
         release(Redirect.merged)
         Redirect.merged, Redirect.merged_from = info, foreign
     Redirect.template, Redirect.original, Redirect.merged_active = tmpl, foreign, True

@@ -171,6 +171,24 @@ class ShapeWalkerTests(unittest.TestCase):
         self.assertEqual((br.s(3), br.s(1), br.s(0)), (-3, -1, 0))
         self.assertEqual(br.align(), 1)
 
+    def test_fields_read_across_byte_boundaries(self):
+        """Fields of any width, from any bit offset, in order (the reader takes whole fields, PHASE3 3bo)."""
+        widths = [0, 1, 3, 5, 7, 8, 9, 13, 16, 17, 31, 2, 33, 4]
+        values = [(0x5A5A5A5A5 * (i + 3)) & ((1 << n) - 1) for i, n in enumerate(widths)]
+        w = BitWriter()
+        for value, n in zip(values, widths):
+            w.u(value, n)
+        br = swfmerge.Bits(b'\xee' + w.data(), 1)
+        self.assertEqual([br.u(n) for n in widths], values)
+        self.assertEqual(br.p, 8 + sum(widths))
+
+    def test_reading_past_the_end_is_an_error(self):
+        """A truncated shape must fail (IndexError), so merge() refuses it instead of reading zeros."""
+        br = swfmerge.Bits(b'\xff\xff', 1)
+        self.assertEqual(br.u(4), 15)
+        with self.assertRaises(IndexError):
+            br.u(5)
+
 
 class ManifestTests(unittest.TestCase):
     def test_describes_the_block(self):

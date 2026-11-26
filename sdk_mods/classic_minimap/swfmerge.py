@@ -28,11 +28,18 @@ class Bits:
         self.b, self.p = b, pos * 8
 
     def u(self, n):
-        v = 0
-        for _ in range(n):
-            v = (v << 1) | ((self.b[self.p >> 3] >> (7 - (self.p & 7))) & 1)
-            self.p += 1
-        return v
+        # Whole fields at once: a bit-at-a-time loop took about 1 s of a merge into Extended UI's HUD (PHASE3 3bo).
+        p = self.p
+        end = p + n
+        last = (end + 7) >> 3
+        if last > len(self.b):
+            raise IndexError("bit field past the end of the shape")
+        self.p = end
+        return (int.from_bytes(self.b[p >> 3:last], "big") >> ((last << 3) - end)) & ((1 << n) - 1)
+
+    def skip(self, n):
+        """Move past n bits unread; a read beyond the end still raises."""
+        self.p += n
 
     def s(self, n):
         v = self.u(n)
@@ -144,35 +151,27 @@ def walk_shape(code, b):
     br = Bits(b, p)
     nf, nl = br.u(4), br.u(4)
     while True:
-        if br.u(1):  # edge
-            straight = br.u(1)
-            n = br.u(4) + 2
-            if straight:
-                if br.u(1):
-                    br.u(n)
-                    br.u(n)
-                else:
-                    br.u(1)
-                    br.u(n)
+        head = br.u(6)  # edge: 1, straight, 4-bit size; style change: 0, 5 flags
+        if head & 0x20:
+            n = (head & 0x0F) + 2
+            if not head & 0x10:
+                br.skip(4 * n)                  # curve: control and anchor deltas
+            elif br.u(1):
+                br.skip(2 * n)                  # general line: dx, dy
             else:
-                br.u(n)
-                br.u(n)
-                br.u(n)
-                br.u(n)
+                br.skip(1 + n)                  # vertical flag, one delta
             continue
-        flags = br.u(5)
+        flags = head
         if flags == 0:
             break
         if flags & 1:
-            n = br.u(5)
-            br.u(n)
-            br.u(n)
+            br.skip(2 * br.u(5))
         if flags & 2:
-            br.u(nf)
+            br.skip(nf)
         if flags & 4:
-            br.u(nf)
+            br.skip(nf)
         if flags & 8:
-            br.u(nl)
+            br.skip(nl)
         if flags & 16:
             q = br.align()
             q = read_fills(b, q, ver, bitmaps, gradients)

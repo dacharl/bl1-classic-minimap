@@ -13,6 +13,7 @@ import io
 import json
 import math
 import os
+import re
 import struct
 import sys
 import types
@@ -1446,7 +1447,12 @@ def main(gfx_path, on_import=None):
         assert status in buf.getvalue(), 'the status reaches the SDK log'
         assert console_lines == ['[Classic Minimap] ' + status], console_lines
         assert status in mod.mod.description and mod.BASE_DESCRIPTION in mod.mod.description
-        assert 'merged in' in buf.getvalue()                   # timing is logged (decision 6)
+        # Timing is logged (decision 6), split into its phases: in game the total was about 1 s more than
+        # the parts measured in run 18, so the log has to say where it goes (PHASE3 3bo).
+        timing = re.search(r'merged in (\d+\.\d\d)s \(read (\d+\.\d\d)s, merge (\d+\.\d\d)s, '
+                           r'write (\d+\.\d\d)s; (\d+) bytes\)', buf.getvalue())
+        assert timing, buf.getvalue()
+        assert int(timing[5]) == len(expected)
 
         # 2. already merged: the hook returns at once, nothing is constructed
         hook_menu(None, None, None, None)
