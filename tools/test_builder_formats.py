@@ -458,5 +458,110 @@ class SwfdepsChecks(unittest.TestCase):
         self.assertEqual(swfdeps.NAMES[1003], 'GFxGradientImage')
 
 
+class SwfRecordChecks(unittest.TestCase):
+    """The tag-header, PlaceObject2, DefineSprite and shape-record writers that swfbuild builds everything from
+    (one definition each, so one mutant there stands for dozens of call sites). Expected bytes are worked out
+    by hand from the SWF file format specification: a tag header is (code << 6 | length) as a little-endian 16-bit
+    word, with length 0x3F and a 32-bit length after it for the long form."""
+
+    def test_little_endian_fields(self):
+        import swfmerge
+        self.assertEqual(swfmerge.words(1, 0x0102), b'\x01\x00\x02\x01')
+        self.assertEqual(swfmerge.words(), b'')
+        self.assertEqual(swfmerge.u16(b'\xff\x01\x02', 1), 0x0201)
+        self.assertEqual(swfmerge.u16(b'\x34\x12'), 0x1234)
+        self.assertEqual(swfmerge.u32(b'\xff\x01\x02\x03\x04', 1), 0x04030201)
+        self.assertEqual(swfmerge.u32(b'\x01\x00\x00\x80'), 0x80000001)
+
+    def test_tag_headers_short_and_long(self):
+        import swfmerge
+        cases = [
+            # (tag code, body, expected bytes): PlaceObject2 = 26 -> 26 << 6 = 0x680
+            (26, b'ab', b'\x82\x06ab'),
+            (26, b'', b'\x80\x06'),
+            (26, bytes(62), b'\xbe\x06' + bytes(62)),                      # longest short form
+            (26, bytes(63), b'\xbf\x06\x3f\x00\x00\x00' + bytes(63)),      # 63 bytes needs the long form
+            (6, b'', b'\xbf\x01\x00\x00\x00\x00'),                         # DefineBitsJPEG is always long
+            (39, b'x', b'\xc1\x09x'),
+        ]
+        for code, body, expected in cases:
+            with self.subTest(code=code, length=len(body)):
+                self.assertEqual(swfmerge.tag(code, body), expected)
+                self.assertEqual(swfmerge.header(expected, 0), (code, len(body), len(expected) - len(body)))
+        self.assertEqual(swfmerge.header(b'..\xbf\x06\x64\x00\x00\x00', 2), (26, 100, 8))
+        self.assertEqual(swfmerge.header(b'.\x82\x06', 1), (26, 2, 3))
+
+    def test_place_object_fields_and_flags(self):
+        import swfbuild
+        cases = [
+            # PlaceObject2 flags: 0x02 character, 0x04 matrix, 0x20 name, 0x40 clip depth; fields in file order
+            (dict(depth=3, character=0x0102), b'\x85\x06\x02\x03\x00\x02\x01'),
+            (dict(depth=1, character=2, matrix=b'\xaa'), b'\x86\x06\x06\x01\x00\x02\x00\xaa'),
+            (dict(depth=1, character=2, name='n'), b'\x87\x06\x22\x01\x00\x02\x00n\x00'),
+            (dict(depth=1, character=2, clip_depth=7), b'\x87\x06\x42\x01\x00\x02\x00\x07\x00'),
+            (dict(depth=1, character=2, matrix=b'\xaa', name='n', clip_depth=7),
+             b'\x8a\x06\x66\x01\x00\x02\x00\xaan\x00\x07\x00'),
+            (dict(depth=1, character=2, clip_depth=0), b'\x87\x06\x42\x01\x00\x02\x00\x00\x00'),
+        ]
+        for args, expected in cases:
+            with self.subTest(**args):
+                self.assertEqual(swfbuild.place(**args), expected)
+
+    def test_sprites_end_with_end_tag_and_one_frame_ones_show_the_frame(self):
+        import swfbuild
+        self.assertEqual(swfbuild.sprite(9, 2, b'X'), b'\xc7\x09\x09\x00\x02\x00X\x00\x00')
+        self.assertEqual(swfbuild.sprite(9, 3), b'\xc6\x09\x09\x00\x03\x00\x00\x00')
+        self.assertEqual(swfbuild.one_frame_sprite(9), b'\xc8\x09\x09\x00\x01\x00\x40\x00\x00\x00')
+        self.assertEqual(swfbuild.one_frame_sprite(9, b'X'), b'\xc9\x09\x09\x00\x01\x00X\x40\x00\x00\x00')
+        self.assertEqual((swfbuild.SHOW_FRAME, swfbuild.END), (b'\x40\x00', b'\x00\x00'))
+
+    def test_twips_round_to_the_nearest_twentieth(self):
+        import swfbuild
+        for pixels, expected in ((0, 0), (1.5, 30), (-2.5, -50), (0.026, 1), (0.024, 0), (-0.026, -1), (207.95, 4159)):
+            with self.subTest(pixels=pixels):
+                self.assertEqual(swfbuild.twips(pixels), expected)
+
+    def test_raw_definition_id_reads_the_short_and_the_long_header(self):
+        import swfbuild
+        self.assertEqual(swfbuild.raw_id(swfbuild.tag(39, b'\x34\x12\x01\x00')), 0x1234)
+        self.assertEqual(swfbuild.raw_id(swfbuild.tag(6, b'\x78\x56')), 0x5678)
+
+    def test_shape_records_pack_bits_msb_first(self):
+        import swfbuild
+
+        def bits(write):
+            w = swfbuild.BitWriter()
+            write(w)
+            return w.data()
+
+        # StraightEdgeRecord: 1 1 NumBits-2 (4 bits) 1 (general line) dx dy; 3 and -2 need 3 bits each:
+        # 11 0001 1 011 110 -> 1100 0110 1111 0 + padding
+        self.assertEqual(bits(lambda w: w.line_to(3, -2)), b'\xc6\xf0')
+        # a horizontal line of 10 twips needs 5 bits (sign included): 11 0011 1 01010 00000
+        self.assertEqual(bits(lambda w: w.line_to(10, 0)), b'\xce\xa0\x00')
+        # a tiny line still uses 2 bits per delta: 11 0000 1 01 11 -> 1100 0010 111
+        self.assertEqual(bits(lambda w: w.line_to(1, -1)), b'\xc2\xe0')
+        # StyleChangeRecord: 0 (not an edge) 0 (no new styles), flags line/fill1/fill0 = 0 1 0, moveTo 1,
+        # NumMoveBits 00101, x=10 01010, y=-5 11011, then FillStyle1 = 1: 0001 0100 1010 1010 1101 11
+        self.assertEqual(bits(lambda w: w.style_change((10, -5), fill1=1)), b'\x14\xaa\xdc')
+        # fill0 = 1 and fill1 = 0 are both written (an index of 0 is still a selection), fill0 first:
+        # 0 0 | 0 1 1 | 1 | 00001 0 0 | 1 0
+        self.assertEqual(bits(lambda w: w.style_change((0, 0), fill0=1, fill1=0)), b'\x1c\x24')
+        # with a line style as well, after the fills: 0 0 | 1 1 0 | 1 | 00001 0 0 | 1 1 -> line index last
+        self.assertEqual(bits(lambda w: w.style_change((0, 0), fill1=1, line=1)), b'\x34\x26')
+        self.assertEqual(bits(lambda w: w.end()), b'\x00')
+
+    def test_closed_path_returns_to_the_first_point(self):
+        import swfbuild
+        seen = []
+
+        class Recording(swfbuild.BitWriter):
+            def line_to(self, dx, dy):
+                seen.append((dx, dy))
+
+        Recording().closed_path([(0, 0), (10, 0), (10, 4), (0, 4)])
+        self.assertEqual(seen, [(10, 0), (0, 4), (-10, 0), (0, -4)])
+
+
 if __name__ == '__main__':
     unittest.main()

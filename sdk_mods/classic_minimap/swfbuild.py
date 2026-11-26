@@ -42,6 +42,15 @@ except ImportError:     # a plain module: tools/ wrappers and the offline suites
     import swfmerge
     from swfdeps import DEFINES, SHAPES as SHAPE_CODES, Movie, read_tags, shape_bitmaps, skip_rect
 Fn, function, tag = as2asm.Fn, as2asm.function, swfmerge.tag
+u16, u32, header, words = swfmerge.u16, swfmerge.u32, swfmerge.header, swfmerge.words
+
+# SWF tag codes used here, and the PlaceObject2 flag bits (SWF file format specification)
+DO_ACTION, SHOW_FRAME_CODE, END_CODE = 12, 1, 0
+PLACE_OBJECT2, REMOVE_OBJECT2, FRAME_LABEL = 26, 28, 43
+DEFINE_SHAPE3, DEFINE_EDIT_TEXT, DEFINE_SPRITE, DEFINE_FONT3, EXPORT_ASSETS = 32, 37, 39, 75, 56
+HAS_CHARACTER, HAS_MATRIX, HAS_NAME, HAS_CLIP_DEPTH = 0x02, 0x04, 0x20, 0x40
+TWIPS = 20                        # twips per pixel
+SHOW_FRAME, END = tag(SHOW_FRAME_CODE, b''), tag(END_CODE, b'')
 
 SOURCE_ROOTS = (1132,)            # maps (zone art, landmark/player icon clips, dlcmap frame) in status_menu.gfx
 MAPS_SPRITE = 1132
@@ -118,19 +127,40 @@ def top_level(d):
     out = []
     while p < len(d):
         start = p
-        hdr = struct.unpack_from('<H', d, p)[0]; p += 2
-        code, ln = hdr >> 6, hdr & 0x3F
-        if ln == 0x3F:
-            ln = struct.unpack_from('<I', d, p)[0]; p += 4
+        code, ln, p = header(d, p)
         out.append((code, d[p:p + ln], d[start:p + ln])); p += ln
-        if code == 0:
+        if code == END_CODE:
             break
     return out
 
 
 def root_actions(d):
     """Decoded IR of every root-level DoAction in a movie."""
-    return [as2asm.decode(b) for c, b, _ in top_level(d) if c == 12]
+    return [as2asm.decode(b) for c, b, _ in top_level(d) if c == DO_ACTION]
+
+
+def twips(pixels):
+    return int(round(pixels * TWIPS))
+
+
+def place(depth, character, matrix=None, name=None, clip_depth=None):
+    """PlaceObject2 of `character` at `depth`; the optional matrix (bytes), instance name and clip depth follow
+    in the file's field order, each with its flag bit."""
+    flags = (HAS_CHARACTER | (HAS_MATRIX if matrix else 0) | (HAS_NAME if name else 0)
+             | (HAS_CLIP_DEPTH if clip_depth is not None else 0))
+    body = bytes([flags]) + words(depth, character) + (matrix or b'')
+    body += name.encode() + b'\0' if name else b''
+    body += words(clip_depth) if clip_depth is not None else b''
+    return tag(PLACE_OBJECT2, body)
+
+
+def sprite(sid, frames, *tags):
+    """DefineSprite: id, frame count, the control tags, End."""
+    return tag(DEFINE_SPRITE, words(sid, frames) + b''.join(tags) + END)
+
+
+def one_frame_sprite(sid, *tags):
+    return sprite(sid, 1, *tags, SHOW_FRAME)
 
 
 def copied_functions(status_menu):
@@ -702,18 +732,15 @@ def map_sprite():
     the window as a clip layer masking the zone art, classic's maps on top of the box. The window sprite is
     anchored at its top-left corner, so map.mask._x/_y/_width/_height give the window rectangle the
     centring and edge code use; the window itself is centred on the clip origin, as in Enhanced."""
-    box = tag(26, bytes([0x02]) + struct.pack('<HH', BOX_DEPTH, ENH_SHAPES[81]))
-    # PlaceObject2 field order: depth, character, matrix, name, clip depth
-    mask = tag(26, bytes([0x40 | 0x20 | 0x04 | 0x02]) + struct.pack('<HH', MASK_DEPTH, WINDOW_ART)
-               + translate_matrix(WINDOW_LEFT, WINDOW_TOP) + b'mask\0' + struct.pack('<H', MAPS_DEPTH))
-    maps = tag(26, bytes([0x20 | 0x02]) + struct.pack('<HH', MAPS_DEPTH, MAPS_SPRITE) + b'maps\0')
-    sprite = struct.pack('<HH', MAP_ID, 1) + box + mask + maps + tag(1, b'') + tag(0, b'')
-    return tag(39, sprite)
+    return one_frame_sprite(MAP_ID,
+                            place(BOX_DEPTH, ENH_SHAPES[81]),
+                            place(MASK_DEPTH, WINDOW_ART, translate_matrix(WINDOW_LEFT, WINDOW_TOP), 'mask', MAPS_DEPTH),
+                            place(MAPS_DEPTH, MAPS_SPRITE, name='maps'))
 
 
 def translate_matrix(tx, ty):
     """SWF MATRIX with only a translation (pixels)."""
-    a, b = int(round(tx * 20)), int(round(ty * 20))
+    a, b = twips(tx), twips(ty)
     n = max(a.bit_length(), b.bit_length(), (-a).bit_length(), (-b).bit_length()) + 1
     bits = '0' + '0' + format(n, '05b') + format(sb(a, n), '0%db' % n) + format(sb(b, n), '0%db' % n)
     bits += '0' * (-len(bits) % 8)
@@ -726,20 +753,17 @@ def sb(v, nbits):
 
 def place_fallback():
     """PlaceObject2: MAP_ID as FALLBACK_NAME at FALLBACK_DEPTH, translated off-screen."""
-    body = (bytes([0x26]) + struct.pack('<HH', FALLBACK_DEPTH, MAP_ID)
-            + translate_matrix(FALLBACK_OFFSCREEN, FALLBACK_OFFSCREEN) + FALLBACK_NAME.encode() + b'\0')
-    return tag(26, body)
+    return place(FALLBACK_DEPTH, MAP_ID, translate_matrix(FALLBACK_OFFSCREEN, FALLBACK_OFFSCREEN), FALLBACK_NAME)
 
 
 def raw_id(raw):
     """Character id of a raw definition tag (header short or long form)."""
-    return struct.unpack_from('<H', raw, 6 if struct.unpack_from('<H', raw, 0)[0] & 0x3F == 0x3F else 2)[0]
+    return u16(raw, header(raw, 0)[2])
 
 
 def wrapper_sprite(sid, child):
     """One-frame sprite placing `child` at depth 1, identity matrix (like E_HUD 109, 111, 180)."""
-    return tag(39, struct.pack('<HH', sid, 1) + tag(26, bytes([0x02]) + struct.pack('<HH', 1, child))
-               + tag(1, b'') + tag(0, b''))
+    return one_frame_sprite(sid, place(1, child))
 
 
 def enhanced_art(enhanced):
@@ -748,9 +772,9 @@ def enhanced_art(enhanced):
 
     def scan(tags):
         for code, body in tags:
-            if code in SHAPE_CODES and len(body) >= 2 and struct.unpack_from('<H', body, 0)[0] in ENH_SHAPES:
-                found.setdefault(struct.unpack_from('<H', body, 0)[0], (code, body))
-            if code == 39:
+            if code in SHAPE_CODES and len(body) >= 2 and u16(body, 0) in ENH_SHAPES:
+                found.setdefault(u16(body, 0), (code, body))
+            if code == DEFINE_SPRITE:
                 scan(read_tags(body, 4, len(body)))
     scan(read_tags(enhanced, skip_rect(enhanced, 8) + 4, len(enhanced)))
     missing = sorted(set(ENH_SHAPES) - set(found))
@@ -761,7 +785,7 @@ def enhanced_art(enhanced):
         code, body = found[old]
         if shape_bitmaps(code, body):
             raise SystemExit('Enhanced shape %d fills with bitmaps; refusing to copy' % old)
-        out.append(tag(code, struct.pack('<H', new) + body[2:]))
+        out.append(tag(code, words(new) + body[2:]))
     return out + art_wrappers()
 
 
@@ -770,10 +794,7 @@ def art_wrappers():
     out = [wrapper_sprite(TURNIN_ART, ENH_SHAPES[108]), wrapper_sprite(NEWMISSION_ART, ENH_SHAPES[110]),
            wrapper_sprite(NORTH_ART, ENH_SHAPES[179]), wrapper_sprite(ENEMY_ART, ENH_SHAPES[127])]
     # the window shape is centred; its wrapper shifts it so the sprite's origin is the window's top-left
-    out.append(tag(39, struct.pack('<HH', WINDOW_ART, 1)
-                   + tag(26, bytes([0x06]) + struct.pack('<HH', 1, ENH_SHAPES[82])
-                         + translate_matrix(-WINDOW_LEFT, -WINDOW_TOP))
-                   + tag(1, b'') + tag(0, b'')))
+    out.append(one_frame_sprite(WINDOW_ART, place(1, ENH_SHAPES[82], translate_matrix(-WINDOW_LEFT, -WINDOW_TOP))))
     return out
 
 
@@ -793,6 +814,35 @@ class BitWriter:
         bits = self.bits + [0] * (-len(self.bits) % 8)
         return bytes(int(''.join(map(str, bits[i:i + 8])), 2) for i in range(0, len(bits), 8))
 
+    def style_change(self, move, fill0=None, fill1=None, line=None):
+        """StyleChangeRecord (no new styles) that moves to `move` (twips) and selects the given style indices
+        (None leaves a style alone). Style indices are 1 bit wide here: NumFillBits and NumLineBits are at most 1."""
+        self.u(0, 1)                                    # not an edge record
+        self.u(0, 1)                                    # StateNewStyles
+        for index in (line, fill1, fill0):              # StateLineStyle, StateFillStyle1, StateFillStyle0
+            self.u(int(index is not None), 1)
+        self.u(1, 1)                                    # StateMoveTo
+        n = signed_bits(*move)
+        self.u(n, 5); self.s(move[0], n); self.s(move[1], n)
+        for index in (fill0, fill1, line):              # in the order the specification stores them
+            if index is not None:
+                self.u(index, 1)
+
+    def line_to(self, dx, dy):
+        """StraightEdgeRecord, general line, with the fewest bits (at least 2) that hold both deltas."""
+        n = max(2, signed_bits(dx, dy))
+        self.u(1, 1); self.u(1, 1); self.u(n - 2, 4)    # edge record, straight, NumBits - 2
+        self.u(1, 1); self.s(dx, n); self.s(dy, n)      # general line
+
+    def closed_path(self, points):
+        """Straight edges through the points (twips) and back to the first."""
+        for (ax, ay), (bx, by) in zip(points, points[1:] + points[:1]):
+            self.line_to(bx - ax, by - ay)
+
+    def end(self):
+        """EndShapeRecord."""
+        self.u(0, 6)
+
 
 def signed_bits(*values):
     return max([1] + [int(v).bit_length() + 1 for v in values] + [int(-v).bit_length() + 1 for v in values])
@@ -800,7 +850,7 @@ def signed_bits(*values):
 
 def rect_bytes(x0, x1, y0, y1):
     """SWF RECT from pixel bounds."""
-    v = [int(round(c * 20)) for c in (x0, x1, y0, y1)]
+    v = [twips(c) for c in (x0, x1, y0, y1)]
     n = signed_bits(*v)
     w = BitWriter()
     w.u(n, 5)
@@ -819,27 +869,17 @@ def polygon_shape(sid, points, fill, line=None):
     fill and line colours are RGBA bytes; line is (width in px, RGBA)."""
     xs, ys = [p[0] for p in points], [p[1] for p in points]
     pad = line[0] / 2 if line else 0
-    body = struct.pack('<H', sid) + rect_bytes(min(xs) - pad, max(xs) + pad, min(ys) - pad, max(ys) + pad)
+    body = words(sid) + rect_bytes(min(xs) - pad, max(xs) + pad, min(ys) - pad, max(ys) + pad)
     body += bytes([1, 0x00]) + fill
-    body += bytes([1]) + struct.pack('<H', int(round(line[0] * 20))) + line[1] if line else bytes([0])
+    body += bytes([1]) + words(twips(line[0])) + line[1] if line else bytes([0])
     w = BitWriter()
     w.u(1, 4)                                       # NumFillBits
     w.u(1 if line else 0, 4)                        # NumLineBits
-    twips = [(int(round(x * 20)), int(round(y * 20))) for x, y in points]
-    w.u(0, 1)                                       # StyleChangeRecord: line?, fill1, moveTo
-    w.u(0, 1); w.u(1 if line else 0, 1); w.u(1, 1); w.u(0, 1); w.u(1, 1)
-    n = signed_bits(*twips[0])
-    w.u(n, 5); w.s(twips[0][0], n); w.s(twips[0][1], n)
-    w.u(1, 1)                                       # FillStyle1 = 1
-    if line:
-        w.u(1, 1)                                   # LineStyle = 1
-    for (ax, ay), (bx, by) in zip(twips, twips[1:] + twips[:1]):
-        dx, dy = bx - ax, by - ay
-        n = max(2, signed_bits(dx, dy))
-        w.u(1, 1); w.u(1, 1); w.u(n - 2, 4)         # StraightEdgeRecord, NumBits
-        w.u(1, 1); w.s(dx, n); w.s(dy, n)           # general line
-    w.u(0, 6)                                       # EndShapeRecord
-    return tag(32, body + w.data())
+    pts = [(twips(x), twips(y)) for x, y in points]
+    w.style_change(pts[0], fill1=1, line=1 if line else None)
+    w.closed_path(pts)
+    w.end()
+    return tag(DEFINE_SHAPE3, body + w.data())
 
 
 def font_record(hud, name='WillowBody'):
@@ -853,20 +893,20 @@ def font_record(hud, name='WillowBody'):
 def glyph_text(tid, glyph, colour):
     """DefineEditText: one centred, read-only glyph in GLYPH_FONT. The box centres the glyph's capital height."""
     half, top = GLYPH_BOX / 2, -0.45 * GLYPH_SIZE
-    return tag(37, struct.pack('<H', tid) + rect_bytes(-half, half, top, top + 1.25 * GLYPH_SIZE)
+    return tag(DEFINE_EDIT_TEXT, words(tid) + rect_bytes(-half, half, top, top + 1.25 * GLYPH_SIZE)
                + bytes([0x80 | 0x08 | 0x04 | 0x01, 0x20 | 0x10])    # HasText ReadOnly HasTextColor HasFont; HasLayout NoSelect
-               + struct.pack('<HH', GLYPH_FONT, int(round(GLYPH_SIZE * 20))) + rgba(colour)
-               + bytes([2]) + struct.pack('<HHHh', 0, 0, 0, 0)       # centred, no margins, indent or leading
+               + words(GLYPH_FONT, twips(GLYPH_SIZE)) + rgba(colour)
+               + bytes([2]) + words(0, 0, 0, 0)                      # centred, no margins, indent or leading
                + b'\0' + glyph.encode('latin-1') + b'\0')
 
 
 def glyph_sprite(sid, tid):
     """The glyph over four black copies offset by GLYPH_OUTLINE px: an outline without AS2 filters (decision 14)."""
-    places = [tag(26, bytes([0x06]) + struct.pack('<HH', depth, tid) + translate_matrix(dx, dy))
+    places = [place(depth, tid, translate_matrix(dx, dy))
               for depth, (dx, dy) in enumerate(((-GLYPH_OUTLINE, 0), (GLYPH_OUTLINE, 0), (0, -GLYPH_OUTLINE),
                                                 (0, GLYPH_OUTLINE)), 1)]
-    places.append(tag(26, bytes([0x02]) + struct.pack('<HH', 5, tid + 1)))
-    return tag(39, struct.pack('<HH', sid, 1) + b''.join(places) + tag(1, b'') + tag(0, b''))
+    places.append(place(5, tid + 1))
+    return one_frame_sprite(sid, *places)
 
 
 def original_art(hud):
@@ -874,7 +914,7 @@ def original_art(hud):
     isn't available: game font glyphs for the turn-in, new-mission and north marks; our own box, window and
     threat diamond, at the sizes of Enhanced's shapes so every layout constant holds."""
     font = font_record(hud)
-    out = [tag(75, struct.pack('<H', GLYPH_FONT) + font[2:])]
+    out = [tag(DEFINE_FONT3, words(GLYPH_FONT) + font[2:])]
     for sid, (glyph, colour, tid) in sorted(GLYPHS.items()):
         out += [glyph_text(tid, glyph, 0x000000), glyph_text(tid + 1, glyph, colour), glyph_sprite(sid, tid)]
     x0, x1, y0, y1 = WINDOW_LEFT, WINDOW_LEFT + WINDOW_W, WINDOW_TOP, WINDOW_TOP + WINDOW_H
@@ -891,20 +931,15 @@ def original_art(hud):
 def paths_shape(sid, paths, fill, r):
     """DefineShape3 of closed straight-edged paths (px points) in one solid fill, bounded by radius r. Each path is
     (points, fill0, fill1): the side its edges fill, so one shape can have holes and nothing is drawn twice."""
-    body = struct.pack('<H', sid) + rect_bytes(-r, r, -r, r) + bytes([1, 0x00]) + fill + bytes([0])
+    body = words(sid) + rect_bytes(-r, r, -r, r) + bytes([1, 0x00]) + fill + bytes([0])
     w = BitWriter()
     w.u(1, 4); w.u(0, 4)                                            # NumFillBits, NumLineBits
     for points, fill0, fill1 in paths:
-        pts = [(int(round(x * 20)), int(round(y * 20))) for x, y in points]
-        w.u(0, 1); w.u(0, 1); w.u(0, 1); w.u(1, 1); w.u(1, 1); w.u(1, 1)   # new fill1, fill0, moveTo
-        n = signed_bits(*pts[0]); w.u(n, 5); w.s(pts[0][0], n); w.s(pts[0][1], n)
-        w.u(fill0, 1); w.u(fill1, 1)
-        for (ax, ay), (bx, by) in zip(pts, pts[1:] + pts[:1]):
-            dx, dy = bx - ax, by - ay
-            n = max(2, signed_bits(dx, dy))
-            w.u(1, 1); w.u(1, 1); w.u(n - 2, 4); w.u(1, 1); w.s(dx, n); w.s(dy, n)
-    w.u(0, 6)
-    return tag(32, body + w.data())
+        pts = [(twips(x), twips(y)) for x, y in points]
+        w.style_change(pts[0], fill0=fill0, fill1=fill1)
+        w.closed_path(pts)
+    w.end()
+    return tag(DEFINE_SHAPE3, body + w.data())
 
 
 def logo_paths():
@@ -975,25 +1010,20 @@ def logo_paths():
 def save_art():
     """PLAN_V15: the save indicator, exported as SAVE_EXPORT: the game's Vault logo (a ring and the Λ arch) redrawn
     white in a SAVE_ART_SIZE box, measured from the native icon (run 37). The mod sets its alpha (the pulse)."""
-    sprite = struct.pack('<HH', SAVE_ART, 1) + tag(26, bytes([0x02]) + struct.pack('<HH', 1, SAVE_LOGO))
     return [paths_shape(SAVE_LOGO, logo_paths(), rgba(0xFFFFFF), SAVE_RING_RADII[0]),
-            tag(39, sprite + tag(1, b'') + tag(0, b''))]
+            one_frame_sprite(SAVE_ART, place(1, SAVE_LOGO))]
 
 
 def landmark_frames(raw):
     """The landmark sprite plus Enhanced's frames 12/13 (turnin, newmission) as frames 11/12. Frame 10
     (questionmark) placed at depth 2 and removed depth 1, so 11 removes 2 and 12 removes 1."""
-    ln = struct.unpack_from('<H', raw, 0)[0] & 0x3F
-    p = 2
-    if ln == 0x3F:
-        ln = struct.unpack_from('<I', raw, 2)[0]; p = 6
+    _, ln, p = header(raw, 0)
     body = raw[p:p + ln]
-    sid, frames = struct.unpack_from('<HH', body, 0)
-    tags = [(c, b) for c, b in read_tags(body, 4, len(body)) if c != 0]
-    extra = [(43, b'turnin\0'), (28, struct.pack('<H', 2)), (26, bytes([0x02]) + struct.pack('<HH', 1, TURNIN_ART)),
-             (1, b''), (43, b'newmission\0'), (28, struct.pack('<H', 1)),
-             (26, bytes([0x02]) + struct.pack('<HH', 1, NEWMISSION_ART)), (1, b'')]
-    return tag(39, struct.pack('<HH', sid, frames + 2) + b''.join(tag(c, b) for c, b in tags + extra) + tag(0, b''))
+    sid, frames = u16(body, 0), u16(body, 2)
+    tags = [tag(c, b) for c, b in read_tags(body, 4, len(body)) if c != END_CODE]
+    extra = [tag(FRAME_LABEL, b'turnin\0'), tag(REMOVE_OBJECT2, words(2)), place(1, TURNIN_ART), SHOW_FRAME,
+             tag(FRAME_LABEL, b'newmission\0'), tag(REMOVE_OBJECT2, words(1)), place(1, NEWMISSION_ART), SHOW_FRAME]
+    return sprite(sid, frames + 2, *tags, *extra)
 
 
 def core_version():
@@ -1035,7 +1065,7 @@ def build(hud, status_menu, enhanced=None, version=None):
 
     # Definitions in their original order (each one only references earlier ones).
     defs = [raw for code, body, raw in top_level(status_menu)
-            if code in DEFINES and len(body) >= 2 and struct.unpack_from('<H', body, 0)[0] in ids]
+            if code in DEFINES and len(body) >= 2 and u16(body, 0) in ids]
     assert len(defs) == len(ids), (len(defs), len(ids))
     new_ids = set(ENH_SHAPES.values()) | {TURNIN_ART, NEWMISSION_ART, NORTH_ART, WINDOW_ART, ENEMY_ART} | SAVE_IDS
     if enhanced is None:
@@ -1051,11 +1081,11 @@ def build(hud, status_menu, enhanced=None, version=None):
     funcs = copied_functions(status_menu)
     add_player_capture(funcs['AddLandmark'])
     actions = [funcs[n] for n in COPIED_FUNCTIONS] + new_functions()
-    do_action = tag(12, as2asm.encode(actions, end=True))
+    do_action = tag(DO_ACTION, as2asm.encode(actions, end=True))
     exports = ((MAP_ID, EXPORT_NAME), (NORTH_ART, 'bl1mm_north'), (OBJECTIVE_ART, 'bl1mm_objective'),
                (ENEMY_ART, 'bl1mm_enemy'), (SAVE_ART, SAVE_EXPORT))
-    export = tag(56, struct.pack('<H', len(exports)) + b''.join(struct.pack('<H', cid) + name.encode() + b'\0'
-                                                                for cid, name in exports))
+    export = tag(EXPORT_ASSETS, words(len(exports)) + b''.join(words(cid) + name.encode() + b'\0'
+                                                               for cid, name in exports))
     added = b''.join(defs) + map_sprite() + export + place_fallback() + do_action
 
     root = top_level(hud)

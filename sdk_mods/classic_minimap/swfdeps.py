@@ -2,14 +2,14 @@
 shape fills with, every font a text field uses, and what kind of definition each one is.
 Usage: python -I tools/swfdeps.py movie.gfx <character id> [<character id> ...]
 """
-import struct
+
 import sys
 
 try:        # inside the mod package (the in-game build, PLAN_V13)
-    from .swfmerge import (DEFINES, SHAPES, Bits, read_fills, read_lines, read_tags,  # noqa: F401
+    from .swfmerge import (DEFINES, SHAPES, Bits, read_fills, read_lines, read_tags, u16,  # noqa: F401
                            shape_gradient_count, skip_matrix, skip_rect, walk_shape)
 except ImportError:     # a plain module (tools/ wrappers, offline suites)
-    from swfmerge import (DEFINES, SHAPES, Bits, read_fills, read_lines, read_tags,  # noqa: F401
+    from swfmerge import (DEFINES, SHAPES, Bits, read_fills, read_lines, read_tags, u16,  # noqa: F401
                           shape_gradient_count, skip_matrix, skip_rect, walk_shape)
 
 NAMES = {2: 'Shape', 22: 'Shape2', 32: 'Shape3', 83: 'Shape4', 39: 'Sprite', 6: 'BitsJPEG', 20: 'BitsLossless',
@@ -36,19 +36,19 @@ class Movie:
     def _scan(self, tags):
         for code, b in tags:
             if code in DEFINES and len(b) >= 2:
-                self.defs.setdefault(struct.unpack_from('<H', b, 0)[0], (code, b))
+                self.defs.setdefault(u16(b, 0), (code, b))
             if code == 39:
                 self._scan(read_tags(b, 4, len(b)))
             if code == 56:
-                n = struct.unpack_from('<H', b, 0)[0]; q = 2
+                n = u16(b, 0); q = 2
                 for _ in range(n):
-                    cid = struct.unpack_from('<H', b, q)[0]; q += 2
+                    cid = u16(b, q); q += 2
                     j = b.index(b'\0', q); self.exports[cid] = b[q:j].decode('latin-1'); q = j + 1
             if code == 57:
                 j = b.index(b'\0'); url = b[:j].decode('latin-1'); q = j + 1
-                n = struct.unpack_from('<H', b, q)[0]; q += 2
+                n = u16(b, q); q += 2
                 for _ in range(n):
-                    cid = struct.unpack_from('<H', b, q)[0]; q += 2
+                    cid = u16(b, q); q += 2
                     j = b.index(b'\0', q); self.imports[cid] = (url, b[q:j].decode('latin-1')); q = j + 1
 
     def refs(self, cid):
@@ -57,20 +57,20 @@ class Movie:
         if code == 39:
             for c, tb in read_tags(b, 4, len(b)):
                 if c in (26, 70) and tb[0] & 0x02:
-                    out.add(struct.unpack_from('<H', tb, 3 if c == 26 else 4 + (0 if not tb[1] & 0x08 else 0))[0])
+                    out.add(u16(tb, 3 if c == 26 else 4 + (0 if not tb[1] & 0x08 else 0)))
                 elif c == 4:
-                    out.add(struct.unpack_from('<H', tb, 0)[0])
+                    out.add(u16(tb, 0))
         elif code in SHAPES:
             out |= shape_bitmaps(code, b)
         elif code == 37:
             p = skip_rect(b, 2)
-            flags = struct.unpack_from('<H', b, p)[0]
+            flags = u16(b, p)
             if flags & 0x0001:  # HasFont
-                out.add(struct.unpack_from('<H', b, p + 2)[0])
+                out.add(u16(b, p + 2))
         elif code in (7, 34):
             p = 2 + (1 if code == 34 else 0) + (2 if code == 34 else 0)
             while b[p]:
-                out.add(struct.unpack_from('<H', b, p + 1)[0])
+                out.add(u16(b, p + 1))
                 q = p + 5
                 br = Bits(b, q); skip_matrix(br); q = br.p >> 3
                 if code == 34:

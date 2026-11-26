@@ -13,12 +13,39 @@ import struct
 
 StructError = struct.error      # a plain name: Cosmic Ray's ExceptionReplacer fails on `except (…, struct.error)` (PHASE3 3cf)
 
+LONG_FORM = 0x3F        # a tag header's 6-bit length field: "a 32-bit length follows"
 METADATA = 77
 MAGIC = b"bl1mm-block\0"
 SHAPES = {2: 1, 22: 2, 32: 3, 83: 4}          # DefineShape tag -> version
 DEFINES = {2, 22, 32, 83, 39, 6, 20, 21, 35, 36, 90, 10, 48, 75, 11, 33, 37, 7, 34, 46, 84, 14, 18,
            1001, 1003, 1005, 1008, 1009}
 GRADIENT_IMAGE = 1003                          # GFx DefineExternalGradient: id = gradient fill number
+
+
+def u16(d, p=0):
+    """Unsigned little-endian 16-bit field at offset p."""
+    return struct.unpack_from("<H", d, p)[0]
+
+
+def u32(d, p=0):
+    """Unsigned little-endian 32-bit field at offset p."""
+    return struct.unpack_from("<I", d, p)[0]
+
+
+def words(*values):
+    """The values as consecutive unsigned little-endian 16-bit fields."""
+    return struct.pack("<%dH" % len(values), *values)
+
+
+def header(d, p):
+    """(code, body length, body offset) of the tag whose header starts at p, in the short or the long form."""
+    head = u16(d, p)
+    p += 2
+    code, ln = head >> 6, head & LONG_FORM
+    if ln == LONG_FORM:
+        ln = u32(d, p)
+        p += 4
+    return code, ln, p
 
 
 class MergeRefused(Exception):
@@ -55,12 +82,7 @@ class Bits:
 def read_tags(d, p, end):
     out = []
     while p < end:
-        hdr = struct.unpack_from("<H", d, p)[0]
-        p += 2
-        code, ln = hdr >> 6, hdr & 0x3F
-        if ln == 0x3F:
-            ln = struct.unpack_from("<I", d, p)[0]
-            p += 4
+        code, ln, p = header(d, p)
         out.append((code, d[p:p + ln]))
         p += ln
         if code == 0:
@@ -91,7 +113,7 @@ def read_fills(b, p, ver, bitmaps, gradients=None):
     n = b[p]
     p += 1
     if n == 0xFF and ver >= 2:
-        n = struct.unpack_from("<H", b, p)[0]
+        n = u16(b, p)
         p += 2
     for _ in range(n):
         t = b[p]
@@ -109,7 +131,7 @@ def read_fills(b, p, ver, bitmaps, gradients=None):
             if t == 0x13:
                 p += 2
         elif 0x40 <= t <= 0x43:
-            bitmaps.add(struct.unpack_from("<H", b, p)[0])
+            bitmaps.add(u16(b, p))
             p += 2
             br = Bits(b, p)
             skip_matrix(br)
@@ -123,7 +145,7 @@ def read_lines(b, p, ver, bitmaps, gradients=None):
     n = b[p]
     p += 1
     if n == 0xFF:
-        n = struct.unpack_from("<H", b, p)[0]
+        n = u16(b, p)
         p += 2
     for _ in range(n):
         if ver < 4:
@@ -193,8 +215,8 @@ def shape_gradient_count(code, b):
 
 def tag(code, body):
     if len(body) < 0x3F and code not in (6, 21, 35, 20, 36, 90):
-        return struct.pack("<H", (code << 6) | len(body)) + body
-    return struct.pack("<HI", (code << 6) | 0x3F, len(body)) + body
+        return words((code << 6) | len(body)) + body
+    return words((code << 6) | LONG_FORM) + struct.pack("<I", len(body)) + body
 
 
 def split(d):
@@ -206,12 +228,7 @@ def split(d):
         p, out = head_len, []
         while p < len(d):
             start = p
-            hdr = struct.unpack_from("<H", d, p)[0]
-            p += 2
-            code, ln = hdr >> 6, hdr & 0x3F
-            if ln == 0x3F:
-                ln = struct.unpack_from("<I", d, p)[0]
-                p += 4
+            code, ln, p = header(d, p)
             if p + ln > len(d):
                 raise MergeRefused("truncated tag %d" % code)
             out.append((code, d[p:p + ln], d[start:p + ln]))
@@ -231,14 +248,14 @@ def first_show(root):
 
 
 def defined_ids(root):
-    return [struct.unpack_from("<H", body, 0)[0] for code, body, _ in root if code in DEFINES and len(body) >= 2]
+    return [u16(body, 0) for code, body, _ in root if code in DEFINES and len(body) >= 2]
 
 
 def export_names(root):
     names = []
     for code, body, _ in root:
         if code == 56:
-            n = struct.unpack_from("<H", body, 0)[0]
+            n = u16(body, 0)
             q = 2
             for _ in range(n):
                 q += 2
@@ -258,14 +275,14 @@ def function_names(body):
             break
         if c < 0x80:
             continue
-        n = struct.unpack_from("<H", body, p)[0]
+        n = u16(body, p)
         p += 2
         if c in (0x9B, 0x8E):
             rec = body[p:p + n]
             j = rec.index(b"\0")
             name = rec[:j].decode("latin-1")
             q = j + 1
-            count = struct.unpack_from("<H", rec, q)[0]
+            count = u16(rec, q)
             q += 2
             if c == 0x8E:
                 q += 3
@@ -276,7 +293,7 @@ def function_names(body):
                     q = rec.index(b"\0", q) + 1
             if name:
                 names.append(name)
-            p += n + struct.unpack_from("<H", rec, q)[0]
+            p += n + u16(rec, q)
             continue
         p += n
     return names
@@ -322,8 +339,8 @@ def shift_gradients(root, before, count):
     """Move the external gradient image records numbered at or after `before` up by `count`."""
     out = []
     for code, body, raw in root:
-        if code == GRADIENT_IMAGE and count and struct.unpack_from("<H", body, 0)[0] >= before:
-            body = struct.pack("<H", struct.unpack_from("<H", body, 0)[0] + count) + body[2:]
+        if code == GRADIENT_IMAGE and count and u16(body, 0) >= before:
+            body = struct.pack("<H", u16(body, 0) + count) + body[2:]
             raw = tag(code, body)
         out.append((code, body, raw))
     return out
@@ -346,7 +363,7 @@ def check_foreign(root, insert_at, info):
         raise MergeRefused("root function name clash: %s" % names[0])
     before = gradient_total(root[:insert_at])
     total = gradient_total(root)
-    records = [struct.unpack_from("<H", b, 0)[0] for c, b, _ in root if c == GRADIENT_IMAGE]
+    records = [u16(b, 0) for c, b, _ in root if c == GRADIENT_IMAGE]
     if before != info["gradients_before"] or any(r >= total for r in records):
         raise MergeRefused("gradient fills don't add up (%d before the block, expected %d; %d in all, "
                            "highest image record %d)" % (before, info["gradients_before"], total,
