@@ -1,0 +1,45 @@
+# Commit hooks: the CI lint job's checks, run before each commit (PHASE3 3bz, docs/CI.md).
+# Set up once per clone: pip install -r requirements-dev.txt, then pre-commit install.
+# ruff and actionlint must match CI's versions; quality_checks.py repository enforces that.
+minimum_pre_commit_version: '4.0.0'
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      # Extracted game movies are 440-740 KB; the largest tracked file is a 256 KiB padded fixture.
+      - id: check-added-large-files
+        args: ['--maxkb=300']
+      - id: check-json
+        # These fixtures are invalid JSON on purpose (duplicate keys, NaN) to test the report validator.
+        exclude: ^tools/fixtures/perf_reports/invalid-
+      - id: check-toml
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.2
+    hooks:
+      - id: ruff-check
+
+  - repo: local
+    hooks:
+      # actionlint with ShellCheck, as in CI's actionlint image. GitHub rejects an invalid workflow file
+      # outright, so no CI job runs to report it (PHASE3 3by).
+      - id: actionlint
+        name: actionlint
+        language: python
+        additional_dependencies: [actionlint-py==1.7.12.25, shellcheck-py==0.11.0.1]
+        entry: actionlint -no-color
+        files: ^\.github/workflows/.*\.ya?ml$
+      # New whitespace errors and conflict markers in the staged lines only (AGENTS: git diff --cached --check).
+      - id: diff-check
+        name: git diff --cached --check
+        language: system
+        entry: git diff --cached --check
+        pass_filenames: false
+      - id: repository-checks
+        name: quality_checks.py repository
+        language: python
+        entry: python -I tools/quality_checks.py repository
+        pass_filenames: false
+        always_run: true

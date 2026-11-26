@@ -130,6 +130,8 @@ Use **Conventional Commits**: `<type>(<optional scope>): <imperative summary>`. 
 - **Never `git merge` without `--ff-only`**, and never `git pull` without `--rebase`. Rebase only commits that haven't been pushed.
 - **On GitHub,** use "Rebase and merge" or "Squash and merge" only.
 
+**Commit hooks:** `.pre-commit-config.yaml` runs the CI lint job's checks on every commit: ruff, actionlint with ShellCheck, JSON and TOML syntax, large files, conflict markers, `git diff --cached --check` and `quality_checks.py repository`. Set them up once per clone with `.venv/Scripts/python.exe -I -m pip install -r requirements-dev.txt`, then `.venv/Scripts/python.exe -I -m pre_commit install --allow-missing-config`. Never bypass a failing hook with `--no-verify`; fix the cause. Run `pre_commit run --all-files` after changing the config.
+
 Before committing, review the staged diff and file list, run `git diff --cached --check`, and check that no game assets, build outputs, secrets or unrelated changes are staged. Summarize validation and any pending in-game checks in the commit body when relevant. Verify the resulting commit's author, committer and message after committing.
 
 ### No agent attribution

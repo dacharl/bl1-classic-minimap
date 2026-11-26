@@ -146,8 +146,31 @@ def line_ending_errors(attributes=None):
             for line in attributes if not line.endswith(': eol: lf')]
 
 
+def hook_version_errors(hooks, requirements, ci):
+    """The commit hooks must lint with CI's ruff and actionlint, or commits pass that CI fails (PHASE3 3bz)."""
+    errors = []
+    ruff = re.search(r'astral-sh/ruff-pre-commit\s+rev:\s*v(\S+)', hooks)
+    pinned = re.search(r'^ruff==(\S+)', requirements, re.M)
+    if not ruff:
+        errors.append('.pre-commit-config.yaml: no ruff-pre-commit hook')
+    elif not pinned or ruff[1] != pinned[1]:
+        errors.append(f'.pre-commit-config.yaml: ruff v{ruff[1]} differs from requirements-ci.txt '
+                      f'ruff=={pinned[1] if pinned else "?"}')
+    actionlint = re.search(r'actionlint-py==(\d+\.\d+\.\d+)', hooks)
+    image = re.search(r'rhysd/actionlint:(\S+)', ci)
+    if not actionlint:
+        errors.append('.pre-commit-config.yaml: no actionlint-py hook')
+    elif not image or actionlint[1] != image[1]:
+        errors.append(f'.pre-commit-config.yaml: actionlint {actionlint[1]} differs from ci.yml '
+                      f'rhysd/actionlint:{image[1] if image else "?"}')
+    return errors
+
+
 def repository_errors():
     errors = []
+    errors += hook_version_errors((ROOT / '.pre-commit-config.yaml').read_text(encoding='utf-8'),
+                                  (ROOT / 'requirements-ci.txt').read_text(encoding='utf-8'),
+                                  (ROOT / '.github/workflows/ci.yml').read_text(encoding='utf-8'))
     quality = tomllib.loads((ROOT / 'pyproject.toml').read_text())['tool']['quality']
     workflows = ROOT / '.github/workflows'
     errors += release_gate_errors((workflows / 'ci.yml').read_text(encoding='utf-8'),

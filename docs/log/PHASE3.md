@@ -2784,3 +2784,35 @@ and actionlint runs only in the hosted lint job (not available locally).
   through its `workflow_call` of `ci.yml`.
 - Fix: the step is a `run: |` block again. actionlint passes on all workflows. ShellCheck isn't installed locally,
   so the shell inside `run:` steps is still checked only by the hosted lint job.
+
+## 3bz. Commit hooks run the CI lint checks (2026-11-26, offline only)
+
+**Why:** §3by pushed a workflow GitHub rejected, because actionlint only ran in CI. The repository had no commit
+hooks.
+
+**Tool:** pre-commit 4.7.0, the standard Python tool for this, pinned in a new `requirements-dev.txt` (which
+includes `requirements-ci.txt`). prek 0.5.12, a Rust reimplementation, reads the same config, so switching later
+costs nothing.
+
+**Hooks (`.pre-commit-config.yaml`):**
+- `ruff-check` from ruff-pre-commit v0.17.2, CI's pinned ruff; it reads the `pyproject.toml` rules.
+- `actionlint` as a local hook with `actionlint-py==1.7.12.25` and `shellcheck-py==0.11.0.1`, matching CI's
+  `rhysd/actionlint:1.7.12` image, ShellCheck included, without Go or Docker.
+- `quality_checks.py repository` on every commit (0.7 s).
+- From pre-commit-hooks v6.0.0: `check-json` (excluding the deliberately invalid `invalid-*` perf-report
+  fixtures), `check-toml`, `check-merge-conflict`, `check-case-conflict` and `check-added-large-files
+  --maxkb=300`. Extracted game movies are 440–740 KB and the largest tracked file is the 256 KiB padded fixture.
+- `git diff --cached --check`, so only new whitespace errors fail, as AGENTS asks. The pre-commit-hooks fixers
+  would rewrite whole touched files.
+
+**Version drift:** `quality_checks.hook_version_errors` fails the repository check when the hooks' ruff differs
+from `requirements-ci.txt` or their actionlint from the `ci.yml` image.
+- Test (red first): `test_commit_hooks_lint_with_the_versions_ci_uses` covers a match, each mismatch, missing
+  hooks and the real files. It failed with an ImportError.
+
+**Verified locally:**
+- `pre-commit run --all-files` passes every hook.
+- With `ci.yml` temporarily broken, the actionlint hook failed on an unquoted `$bin` (ShellCheck SC2086) and on
+  §3by's one-line `run:` (`could not parse as YAML`). The file was then restored byte for byte.
+- `pre-commit install --allow-missing-config` put the hook in the shared `.git/hooks`, using the main checkout's
+  `.venv`. Commits on older branches without the config skip the hooks instead of failing.

@@ -61,6 +61,18 @@ Cosmic Ray still records such mutants as timeouts (undetected). The Windows path
 
 ## Local commands
 
+**Commit hooks** (`.pre-commit-config.yaml`, pre-commit 4.7.0 from `requirements-dev.txt`) run the lint job's checks before each commit, so a commit can't pass locally and then fail lint in CI (PHASE3 §3bz):
+
+| Hook | Files | Same as CI |
+|---|---|---|
+| `ruff-check` (ruff-pre-commit v0.17.2) | Python | `ruff check`, same version and `pyproject.toml` rules |
+| `actionlint` (actionlint-py 1.7.12.25 with shellcheck-py) | `.github/workflows/*.yml` | the `rhysd/actionlint:1.7.12` image, ShellCheck included |
+| `quality_checks.py repository` | always | the repository checks |
+| `check-json`, `check-toml` | JSON (minus the deliberately invalid `invalid-*` report fixtures), TOML | syntax only; CI's tests read them |
+| `check-added-large-files --maxkb=300`, `check-merge-conflict`, `check-case-conflict`, `git diff --cached --check` | staged files | guards for game files and commit hygiene (AGENTS) |
+
+`quality_checks.py repository` fails if the hooks' ruff or actionlint differ from `requirements-ci.txt` and `ci.yml`. Install with `pip install -r requirements-dev.txt` and `pre_commit install --allow-missing-config`: the hook lives in the shared `.git/hooks`, and the option lets commits on older branches without the config go through. The first run downloads each hook's environment. prek, a Rust reimplementation, reads the same config if pre-commit ever becomes too slow.
+
 From the repository root, create a virtual environment and install the pinned tools:
 
 ```powershell

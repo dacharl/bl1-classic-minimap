@@ -120,6 +120,27 @@ class GateChecks(unittest.TestCase):
         self.assertEqual(line_ending_errors(['tools/fixtures/a.json: eol: unspecified']),
                          ['tools/fixtures/a.json: must check out with LF (.gitattributes eol=lf)'])
 
+    def test_commit_hooks_lint_with_the_versions_ci_uses(self):
+        """A hook with another ruff or actionlint would pass commits that CI then fails (PHASE3 3bz)."""
+        from quality_checks import hook_version_errors
+
+        hooks = ('repos:\n  - repo: https://github.com/astral-sh/ruff-pre-commit\n    rev: v0.17.2\n'
+                 '  - repo: local\n    hooks:\n      - id: actionlint\n'
+                 '        additional_dependencies: [actionlint-py==1.7.12.25, shellcheck-py==0.11.0.1]\n')
+        requirements = 'ruff==0.17.2\ncoverage==7.17.0\n'
+        ci = '          rhysd/actionlint:1.7.12 -color\n'
+        self.assertEqual(hook_version_errors(hooks, requirements, ci), [])
+        self.assertEqual(hook_version_errors(hooks.replace('v0.17.2', 'v0.17.6'), requirements, ci),
+                         ['.pre-commit-config.yaml: ruff v0.17.6 differs from requirements-ci.txt ruff==0.17.2'])
+        self.assertEqual(hook_version_errors(hooks, requirements, ci.replace('1.7.12', '1.7.13')),
+                         ['.pre-commit-config.yaml: actionlint 1.7.12 differs from ci.yml rhysd/actionlint:1.7.13'])
+        self.assertEqual(hook_version_errors('repos: []\n', requirements, ci),
+                         ['.pre-commit-config.yaml: no ruff-pre-commit hook',
+                          '.pre-commit-config.yaml: no actionlint-py hook'])
+        self.assertEqual(hook_version_errors((ROOT / '.pre-commit-config.yaml').read_text(encoding='utf-8'),
+                                             (ROOT / 'requirements-ci.txt').read_text(encoding='utf-8'),
+                                             (ROOT / '.github/workflows/ci.yml').read_text(encoding='utf-8')), [])
+
     def test_the_real_ci_triggers_are_safe(self):
         self.assertEqual(ci_trigger_errors((ROOT / '.github/workflows/ci.yml').read_text(encoding='utf-8')), [])
 
