@@ -2579,5 +2579,9 @@ coverage floors (core 90.97% line / 87.36% branch), ruff and repository checks p
 --profiler`: the in-mod build matches (`3c9e5037…3f55`). Bundle in the worktree's `dist/releases/0.16.3/`:
 `classic_minimap.sdkmod` `53dad688…3afb`, `classic_minimap_profiler.sdkmod` `0dfec4a7…cbfb`.
 
-**Unverified (in game):** not installed yet. After a trip on the same HUD the log should show "new area's map anchor
+**Installed on the PC (2026-11-26 13:42 UTC, game closed):** both files through `install.py --profiler`, SHA-256
+verified. v0.16.2 `7adf78b4…e98d` and profiler 0.1.25 `d71f7a21…82b9` are backed up in the main checkout's
+`dist\v0.16.2-20261126T134240.870408Z\`.
+
+**Unverified (in game):** after a trip on the same HUD the log should show "new area's map anchor
 found after …" and the map should appear with the new area's art, at most about 0.2 s after the tunnel.
