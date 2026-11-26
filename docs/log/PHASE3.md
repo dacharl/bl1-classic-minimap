@@ -2479,3 +2479,46 @@ variants.
 
 **Unverified:** the POSIX kill path, until the next hosted Ubuntu run. No Linux is available locally (no WSL
 distribution or Docker).
+
+## 3bq. Run 42: v0.16.1 on the PC with Extended UI; the merge takes 1.39 s (2026-11-26)
+
+**What was played:** v0.16.1 and profiler 0.1.24 (§3bo) with Extended UI 1.3.2 and Mission Selector 1.1.1, Enhanced
+art. Arid Hills, the DLC3 hub (`dlcmap1`), Dry, Arid again and `interlude1`; one 60 s profiler capture from 01:21:10
+to 01:22:10 UTC covering two level changes. Evidence: the user's `unrealsdk.log` and the capture's report
+(`917cedfb…`), both read from the game folder. No errors or refusals from either mod.
+
+**Merge (first main menu, 01:18:53):** `merged in 1.39s (read 0.77s, merge 0.28s, write 0.35s; 843049 bytes)`.
+Before v0.16.1 the same merge took 3.0–3.4 s on the PC (§3ai, §3ap); the parts now add up to the total, so there is
+no unexplained second. The Python merge is 0.28 s in game against 0.19 s offline (the SDK's Python 3.14 against 3.13
+here). Reading `RawData` is now over half the total: reading the movie from its package on disk (0.06 s offline) is
+the next step, then caching the merged bytes to drop the 0.28 s.
+
+**Movie build (01:16:46, a cache miss because the version changed):** 0.71 s with Enhanced art, against 1.95–3.60 s
+on the PC before (§3al, §3aq). The builder counts gradients with the same shape walker, so it got faster too.
+
+**Profiler capture (core 0.16.1; the nearest earlier report is core 0.10.0 in Arid, 2026-10-25, so this is a
+rough comparison only):**
+
+| Metric | 0.10.0 | 0.16.1 |
+|---|---:|---:|
+| Admitted ticks: count, mean | 872, 2.19 ms | 892, 1.39 ms |
+| Slowest tick | 25.6 ms | 12.7 ms |
+| `objective_key` mean | 2.31 ms | 1.20 ms |
+| `threat_string` mean | 0.58 ms | 0.20 ms |
+| `hidden_reason` mean | 0.47 ms | 0.26 ms |
+| `rebuild_in_place` | not observed | 4, max 9.9 ms |
+
+Admitted p95 is ≤ 5 ms in both (bucket upper bound). The capture saw the per-frame metrics, two captures, four
+rebuilds and the `cmd` ops; only `start` and `cmd.frame` were unobserved (`metric_unobserved`). So the v0.16.0 cleanup
+didn't cost the profiler any coverage (§3bj).
+
+**Level changes (loading movie → map ready → shown):** DLC3 hub 5.3 s + 3.5 s; Dry 4.0 s + 3.6 s; Arid 6.6 s + 3.0
+s; `interlude1` 6.2 s + 3.5 s. That's 7.6–9.7 s in all, much as in run 19: the anchor wait, then the 3 s settle rule.
+This is still a tuning item.
+
+**Also seen:** the game put the ECHO panel back 17 times, and the mod moved it each time. The native save icon was
+hidden (scale 0.5 → 0).
+
+**Options menu (user, same session):** the grouped options are fine, so v0.16.0's menu is confirmed (§3bj).
+
+**Unverified:** the Deck on v0.16.1.
