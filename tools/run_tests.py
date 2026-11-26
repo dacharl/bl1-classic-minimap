@@ -16,8 +16,9 @@ ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
 from parallel_workers import worker_count  # noqa: E402
 
-DEFAULT_TESTS = ['test_ci.SourceChecks', 'test_quality.GateChecks', 'test_runners.RunnerChecks', 'test_profiler',
-                 'test_land.LandChecks', 'test_workflow.WorkflowChecks', 'test_swfmerge', 'test_hudmovie']
+# Slowest first, so the short processes fill the gaps instead of the long ones running last (PHASE3 3by).
+DEFAULT_TESTS = ['test_runners.RunnerChecks', 'test_land.LandChecks', 'test_workflow.WorkflowChecks',
+                 'test_ci.SourceChecks', 'test_hudmovie', 'test_profiler', 'test_swfmerge', 'test_quality.GateChecks']
 # These cases run the real mod's main(), which works only once per process.
 PER_CASE = ['test_ci.SourceChecks']
 # Seconds per process: far above the slowest suite (about 30 s locally), far below CI's 10-minute job limit, so a

@@ -2706,3 +2706,42 @@ rollback case. `install.py` is unchanged and still checks the real process list 
 child-process tests failed with the error above; after the change all 12 `test_workflow` tests pass with it running.
 The stand-in was then killed by PID. 140 unit tests pass with coverage, and the coverage gate, ruff and repository
 checks pass. The real-movie suites don't cover this and weren't rerun.
+
+## 3by. A faster Windows CI job: a cached tools environment and the slowest suites first (2026-11-26, offline only)
+
+**What happened:** after §3bp and §3bx, both test jobs passed on `dcfcd1d`. Ubuntu/3.13 took about 30 s;
+Windows/3.14 took about 90 s. GitHub rounds each job up to whole minutes and counts Windows minutes double, so the
+Windows job bills 4 minutes per push. Under 60 s it would bill 2.
+
+**Where the Windows time went (hosted log):**
+
+| Step | Windows | Ubuntu |
+|---|---:|---:|
+| pip install of `requirements-ci.txt` (about 30 packages) | 17 s | 4.7 s |
+| `run_tests.py --coverage`, 2 workers | 49 s | 19 s |
+| checkout | 8.5 s | 1 s |
+| setup-python and pip download cache | 5 s | 1.4 s |
+| coverage reports, upload, cleanup | about 8 s | about 3 s |
+
+- pip already used the download cache; the time is installing. Cosmic Ray brings 27 of the 30 packages, but
+  `test_runners` uses Cosmic Ray's own kill function on Windows, so it can't be left out.
+- On the 2-vCPU runner `test_land` (16 s), `test_runners` (17 s) and `test_workflow` (8 s) were submitted after the
+  seven short `test_ci` processes, so they ran last. Locally each `test_land` case takes about 2.5 s, mostly in the
+  ten `git` processes of its fixture; the slow `test_runners` cases wait on deliberate sleeps and timeouts.
+- Checkout is mostly `actions/checkout`'s own `git submodule foreach` calls; left alone.
+
+**Fix (no mod version change):**
+- The test job restores the installed environment, a venv in `$RUNNER_TEMP/ci-venv`, with `actions/cache@v6`, keyed on
+  the OS, the exact Python version from setup-python and the hash of `requirements-ci.txt`. A miss creates the venv
+  and installs; either way the venv goes on `PATH`. A new step checks that `python` is that venv and runs
+  `pip check`. setup-python's `cache: pip` is dropped from the test job (it cost about 4 s on Windows even when the
+  venv would be restored). The lint job is unchanged.
+- `run_tests.DEFAULT_TESTS` starts with the three slow suites.
+
+**Tests (red first):** `test_default_run_starts_the_slowest_suites_first` failed with `test_ci` cases first, then
+passed. The venv steps were run locally in Git Bash with `RUNNER_OS=Windows` and a scratch `RUNNER_TEMP`: the venv
+was created, found on `PATH` and recognised, and the full coverage run passed inside it. Locally (2 workers,
+coverage) the old order took 58.4 s and 62.9 s, the new 56.3 s and 57.7 s.
+
+**Unverified:** the hosted savings. The cache only helps from the second run on a given key (the first saves it),
+and actionlint runs only in the hosted lint job (not available locally).

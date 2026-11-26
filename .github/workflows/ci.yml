@@ -63,11 +63,33 @@ jobs:
         with:
           persist-credentials: false
       - uses: actions/setup-python@v7
+        id: python
         with:
           python-version: ${{ matrix.python }}
-          cache: pip
-          cache-dependency-path: requirements-ci.txt
-      - run: python -I -m pip install -r requirements-ci.txt
+      # The whole installed environment is cached, not just pip's downloads: installing the ~30 packages took
+      # 17 s on Windows (PHASE3 3by). The key holds the exact interpreter and the pinned requirements.
+      - name: Restore the CI tools environment
+        id: venv
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/ci-venv
+          key: ci-venv-${{ runner.os }}-${{ steps.python.outputs.python-version }}-${{ hashFiles('requirements-ci.txt') }}
+      - name: Install the CI tools
+        if: steps.venv.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          python -I -m venv "$RUNNER_TEMP/ci-venv"
+          if [ "$RUNNER_OS" = Windows ]; then bin="$RUNNER_TEMP/ci-venv/Scripts"; else bin="$RUNNER_TEMP/ci-venv/bin"; fi
+          "$bin/python" -I -m pip install -r requirements-ci.txt
+      - name: Use the CI tools environment
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = Windows ]; then bin="$RUNNER_TEMP/ci-venv/Scripts"; else bin="$RUNNER_TEMP/ci-venv/bin"; fi
+          echo "$bin" >> "$GITHUB_PATH"
+      - name: Check the CI tools environment
+        run: |
+          python -I -c "import sys; assert sys.prefix != sys.base_prefix, 'not the CI venv: ' + sys.prefix"
+          python -I -m pip check
       - name: Run unit tests with automatic workers and combined branch coverage
         run: python -B -I tools/run_tests.py --coverage
       - run: python -I -m coverage report

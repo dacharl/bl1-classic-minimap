@@ -193,6 +193,16 @@ class RunnerChecks(unittest.TestCase):
         self.assertNotIn('test_ci.SourceChecks', jobs)
         self.assertIn('test_ci.SourceChecks.test_original_art_movie_passes_both_suites', jobs)
 
+    def test_default_run_starts_the_slowest_suites_first(self):
+        """On the 2-vCPU Windows runner test_land (16 s), test_runners (17 s) and test_workflow (8 s) started
+        after the seven short test_ci processes and ran last, one after another (PHASE3 3by)."""
+        from run_tests import DEFAULT_TESTS, process_jobs
+
+        jobs = process_jobs(DEFAULT_TESTS)
+        slow = ['test_runners.RunnerChecks', 'test_land.LandChecks', 'test_workflow.WorkflowChecks']
+        self.assertEqual(jobs[:3], slow)
+        self.assertEqual(len(jobs), len(set(jobs)))
+
     def test_explicit_test_ids_keep_one_process_per_case(self):
         result = subprocess.run(
             [sys.executable, '-B', '-I', str(Path(__file__).with_name('run_tests.py')),
