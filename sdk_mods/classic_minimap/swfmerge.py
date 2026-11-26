@@ -11,7 +11,7 @@ against it and refuses on any mismatch; it never guesses.
 import json
 import struct
 
-StructError = struct.error      # a plain name: Cosmic Ray's ExceptionReplacer fails on `except (…, struct.error)` (PHASE3 3cc)
+StructError = struct.error      # a plain name: Cosmic Ray's ExceptionReplacer fails on `except (…, struct.error)` (PHASE3 3cf)
 
 METADATA = 77
 MAGIC = b"bl1mm-block\0"

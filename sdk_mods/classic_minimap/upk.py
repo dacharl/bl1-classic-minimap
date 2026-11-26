@@ -7,7 +7,7 @@ import re
 import struct
 import sys
 
-StructError = struct.error      # a plain name: Cosmic Ray's ExceptionReplacer fails on `except (…, struct.error)` (PHASE3 3cc)
+StructError = struct.error      # a plain name: Cosmic Ray's ExceptionReplacer fails on `except (…, struct.error)` (PHASE3 3cf)
 
 
 class PackageError(ValueError):

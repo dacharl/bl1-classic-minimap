@@ -1,7 +1,7 @@
 """Unit tests for the binary readers and writers under the movie builder: as2asm (AS2 bytecode), upk (UE3
 packages) and swfdeps (character dependencies). Each fixture is authored here from the file formats, not
 produced by the code under test. They exist because the 2026-11-26 mutation run left most mutants of these
-three files alive (PHASE3 3cc): opcode values, push encodings, string forms, outer chains and the per-tag
+three files alive (PHASE3 3cf): opcode values, push encodings, string forms, outer chains and the per-tag
 reference scan were not pinned.
 """
 import contextlib
