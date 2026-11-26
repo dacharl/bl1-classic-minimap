@@ -671,11 +671,10 @@ def main(gfx_path, on_import=None):
     close(player.get('_rotation'), 29344 * 360.0 / 65536)
     assert len(h.calls) == calls_after_capture, 'no native helper calls per tick'
 
-    # 3v. visibility (Enhanced's map is a child of p1; ours mirrors the game's own HUD gates + the
-    #     diagnostics collector's 3 s settle). Still settling right after spawn:
-    assert m.get('_visible') is False
-    step(mod.SETTLE_SECONDS)                           # live levels unchanged for 3 s -> shown
+    # 3v. visibility (Enhanced's map is a child of p1 with no wait of its own; ours mirrors the game's HUD
+    #     gates). Shown on the first running tick after spawn: no settle wait (run 42: it cost 3-3.6 s per trip).
     assert m.get('_visible') is True
+    assert not hasattr(mod, 'SETTLE_SECONDS')
     # shown + docked: ECHO, mission title and checklist take Enhanced's places (UpdateEchoPosition)
     e16 = ENH['16:9']
     close(p1c.get('echo').get('_x'), e16['echo'][0]); close(p1c.get('echo').get('_y'), e16['echo'][1])
@@ -715,14 +714,16 @@ def main(gfx_path, on_import=None):
         close(p1c.get('echo').get('_x'), e16['echo'][0]); close(p1c.get('quest').get('_x'), e16['quest'][0])
         step(mod.DOCK_CHECK_INTERVAL)
     assert 'the game put the ECHO panel back behind the map; moved it again (1 time)' in buf.getvalue(), buf.getvalue()
-    # a level streams in (e.g. travel) -> hidden while it settles, back after 3 s; no flicker on rebuild
-    world.StreamingLevels.append(types.SimpleNamespace(bIsVisible=True, LoadedLevel='Level arid_settle.TheWorld'))
-    step(0.3)
-    assert m.get('_visible') is False
+    # an area streams in or out: the map stays up and its markers are rebuilt in place (the tunnel has its own
+    # check, IsLoadingMoviePlaying, so streaming needn't hide anything)
+    n_streamed = len(helpers)
+    movie.visible_sets.clear()
+    world.StreamingLevels.append(types.SimpleNamespace(bIsVisible=True, LoadedLevel='Level arid_stream.TheWorld'))
+    step(0.6); step()
     world.StreamingLevels.pop()
-    step(0.3); step(); step()                          # rebuild for the area change runs while hidden
-    assert m.get('_visible') is False
-    step(mod.SETTLE_SECONDS); step()
+    step(0.6); step()
+    assert len(helpers) == n_streamed + 2, 'each area change rebuilds the markers'
+    assert False not in movie.visible_sets, 'streaming must not hide the map'
     assert m.get('_visible') is True and mod.S.phase == 'running'
     # a failing check never hides the map for good or resets it
     pc.IsLoadingMoviePlaying = None                    # calling it raises TypeError
@@ -763,8 +764,8 @@ def main(gfx_path, on_import=None):
     slots[1].WaypointLocation = vec(-5000.0, 30000.0, 0.0)        # a second objective appears
     step(0.6); step(); step()
     assert len(helpers) == n + 2
-    step(mod.SETTLE_SECONDS)
-    assert m.get('_visible') is True, 'objective rebuilds must not trigger the settle hide'
+    step(3.0)
+    assert m.get('_visible') is True, 'objective rebuilds must not hide the map'
     player = movie.root.get('mmPlayer')
     ms = m.get('maps')
 
@@ -1110,8 +1111,7 @@ def main(gfx_path, on_import=None):
 
     # 11. disable tears the map down, restores the compass and the HUD column
     pc.myHUD = HUD(movie2)
-    step(); step()
-    step(mod.SETTLE_SECONDS); step()
+    step(); step(); step()
     p1d = movie2.root.get('p1')
     assert movie2.root.get('map').get('_visible') is True
     close(p1d.get('echo').get('_x'), ENH['16:9']['echo'][0])
@@ -1230,7 +1230,7 @@ def main(gfx_path, on_import=None):
         assert 'native save icon restored' not in buf.getvalue(), buf.getvalue()
         unhide()
         with contextlib.redirect_stdout(io.StringIO()):
-            step(mod.SETTLE_SECONDS); step(0.3)
+            step(0.3)
         assert save.get('_visible') is True and hud.SavingMaterialScale == 0.0
     with contextlib.redirect_stdout(buf):
         KEYBINDS['Minimap diagnostics']()

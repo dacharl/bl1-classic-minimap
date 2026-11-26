@@ -55,7 +55,7 @@ from . import hudmovie
 from .swfmerge import MergeRefused
 from .swfmerge import merge as merge_movie
 
-__version__ = "0.16.1"
+__version__ = "0.16.2"
 
 
 STAGE_W = 1280.0                       # classic HUD stage is 1280x720
@@ -79,9 +79,7 @@ LAYOUTS = {
 TICK_INTERVAL = 0.05                   # 20 Hz, like Enhanced's HUD scheduler interval
 THREAT_INTERVAL = 0.25
 OBJECTIVE_CHECK_INTERVAL = 0.5         # mission/area change check (Objective Distance caches on the same key)
-EPOCH_CHECK_INTERVAL = 0.25            # live-level set check for the settle rule
 WAYPOINT_GRID = 100.0                  # objective-position rounding (Unreal units, ~2 m) for the rebuild key
-SETTLE_SECONDS = 3.0                   # steam-deck-scripts specs: start after 3 s of stable ready context
 READY_TIMEOUT = 5.0                    # seconds to wait for the zone frame before re-initialising
 RETRY_INTERVAL = 1.0                   # MinimapCreate retry spacing while the HUD movie comes up
 MAX_ATTEMPTS = 60
@@ -176,10 +174,6 @@ class State:
         self._movie: WeakPointer = WeakPointer()
         self.tracker: WeakPointer = WeakPointer()   # survives resets; re-found when it reads None
         self.globals_ref: WeakPointer = WeakPointer()
-        # level epoch for the settle rule; survives map rebuilds (a mission change shouldn't hide the map)
-        self.epoch: Any = None
-        self.epoch_since: Any = None
-        self.next_epoch_check = 0.0
         # threat source survives resets: once the radar proved empty, don't re-learn it every rebuild
         self.threat_source = "radar"
         self.radar_empty = 0
@@ -971,7 +965,7 @@ def refit_when_shown(pc: Any, movie: Any) -> None:
 
     After a level change the capture can run while the pawn still has its previous zone's location (run 15:
     Tartarus coordinates in Arid gave 108% instead of 400%). Enhanced fits at HUD init, after loading; by the
-    time the map shows (no loading movie, live levels settled) the pawn has been placed. Only the pawn point
+    time the map shows (the loading movie is over) the pawn has been placed. Only the pawn point
     is refreshed: the capture's waypoints stay, since objective changes keep the fit (as in Enhanced). Same
     points: no change. Different points: refit and redraw."""
     S.fit_pending = False
@@ -1279,8 +1273,8 @@ def waypoint_key(pc: Any) -> tuple[str, ...]:
 
 
 def live_levels(pc: Any) -> tuple[str, ...]:
-    """The persistent level plus visible streaming levels, as strings (the diagnostics collector's epoch,
-    steam-deck-scripts BL1MapDiagnostics/collector.py context())."""
+    """The persistent level plus visible streaming levels, as strings: part of objective_key, so an area
+    streaming in or out rebuilds the markers (steam-deck-scripts BL1MapDiagnostics/collector.py context())."""
     info = pc.WorldInfo
     levels = [str(info.PersistentLevel)] if getattr(info, "PersistentLevel", None) is not None else []
     for streaming in info.StreamingLevels:
@@ -1299,9 +1293,9 @@ def hidden_reason(pc: Any, movie: Any, now: float) -> str:
     - loading movie: the travel "blue tunnel" (WillowPlayerController.IsLoadingMoviePlaying());
     - HUD off / cinematic / status menu / dead: what WillowPlayerController.ShowStatusMenu checks
       (myHUD.bShowHUD, bCinematicMode) plus the open menu and a dead pawn;
-    - p1 hidden: the stock HUD clip is hidden;
-    - settling: the live-level set changed less than SETTLE_SECONDS ago (the diagnostics collector waits
-      for three seconds of stable ready context).
+    - p1 hidden: the stock HUD clip is hidden.
+    There is no settle wait after a level change (removed in v0.16.2, run 42: it hid the map 3-3.6 s per
+    trip): the loading-movie check covers the tunnel, and areas streaming in rebuild the markers in place.
     """
     hud = pc.myHUD
     pawn = pc.Pawn
@@ -1320,20 +1314,7 @@ def hidden_reason(pc: Any, movie: Any, now: float) -> str:
                 return reason
         except Exception as ex:   # one broken check is skipped; it must not disable the others (run 8)
             warn_once("vis:" + reason, f"visibility check '{reason}' unavailable ({type(ex).__name__}: {ex})")
-    if S.epoch_since is None or now - S.epoch_since < SETTLE_SECONDS:
-        return "settling"
     return ""
-
-
-def update_epoch(pc: Any, now: float) -> None:
-    """Restart the settle clock whenever the live-level set changes (survives map rebuilds)."""
-    try:
-        epoch = live_levels(pc)
-    except Exception as ex:
-        warn_once("epoch:" + type(ex).__name__, f"level check unavailable ({type(ex).__name__}: {ex})")
-        return
-    if epoch != S.epoch:
-        S.epoch, S.epoch_since = epoch, now
 
 
 def set_visible(movie: Any, show: bool, reason: str) -> None:
@@ -1365,9 +1346,6 @@ def tick(pc: Any) -> None:
         return
     if pc.Pawn is None:                  # main menu, loading, dead/respawning: nothing to show
         return
-    if now >= S.next_epoch_check:
-        S.next_epoch_check = now + EPOCH_CHECK_INTERVAL
-        update_epoch(pc, now)
     if movie != S.movie:                 # new HUD (level load, fast travel): start over
         S.reset()
         start(pc, movie)

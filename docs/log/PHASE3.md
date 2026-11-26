@@ -2522,3 +2522,31 @@ hidden (scale 0.5 → 0).
 **Options menu (user, same session):** the grouped options are fine, so v0.16.0's menu is confirmed (§3bj).
 
 **Unverified:** the Deck on v0.16.1.
+
+## 3br. v0.16.2: no settle wait after a level change (2026-11-26, offline only)
+
+**Why:** the user found the wait after Arid Hills → Arid Badlands long. Run 42's log showed that "map ready" comes the
+moment the new level appears (the mod pauses while there's no pawn), then the minimap stays hidden another
+3.0–3.6 s on every trip. That is the settle rule: hidden until the live-level set has been unchanged for 3 s,
+restarted by every area that streams in.
+
+**Cause:** v0.5.0 (§3h) took the rule from the steam-deck-scripts diagnostics collector, which waits for stable level
+state before measuring. It was never a drawing need. The tunnel has its own check (`IsLoadingMoviePlaying`, which
+hid the map on every trip in run 42), Enhanced's minimap has no wait at all, and the live-level set is part of
+`objective_key`, so an area streaming in rebuilds the markers in place.
+
+**Change → core v0.16.2, profiler 0.1.25 (its supported list):** the settle rule is removed: `SETTLE_SECONDS`,
+`EPOCH_CHECK_INTERVAL`, the level epoch and `update_epoch`. The other gates stay: loading movie, HUD off,
+cinematic, status menu, no live pawn, HUD clip hidden. The run-15 refit still runs the first time the map shows; its
+stale pawn position came from during the tunnel, which still hides the map.
+
+**Tests (red first):** the mod suite now expects the map on the first running tick after spawn (it failed: still
+settling), and an area streaming in or out to rebuild the markers without ever hiding the map. Three other scenarios
+no longer wait out the settle time. The run-15 refit scenario passes unchanged. Both suites on both art variants, 140
+unit tests, the coverage floors (core 90.43% line / 86.59% branch), ruff and repository checks pass.
+`release.py --game --enhanced --profiler`: the in-mod build matches (`b8aef443…400b`). Bundle in the worktree's
+`dist/releases/0.16.2/`: `classic_minimap.sdkmod` `7adf78b4…e98d`, `classic_minimap_profiler.sdkmod`
+`d71f7a21…82b9`. Not installed.
+
+**Unverified (in game):** the map should show about 3 s sooner after every trip. To watch: a wrong zoom right after
+arriving (the run-15 case), and markers popping in as areas stream.
