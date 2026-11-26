@@ -59,6 +59,8 @@ def prepare_worker(root, registry=None):
 
 
 def run_item(item, command, timeout):
+    # test_mutants.py picks its suites from this; each worker process handles one mutant at a time.
+    os.environ['MINIMAP_MUTATED_FILE'] = item.mutations[0].module_path.as_posix()
     result = mutate_and_test(item.mutations, command, timeout)
     return item, result
 
@@ -166,6 +168,19 @@ def report(db, paths, output):
     return counts
 
 
+def progress_suffix(completed, remaining, elapsed):
+    """' | 100.0/min, ETA 12m 00s' from the results finished this session, the ones still to run and the seconds
+    since it started; '' until there is a rate. The ETA is the remaining count at the average rate so far."""
+    if completed <= 0 or elapsed <= 0:
+        return ''
+    per_minute = completed * 60 / elapsed
+    if remaining <= 0:
+        return f' | {per_minute:.1f}/min, done'
+    seconds = round(remaining * elapsed / completed)
+    eta = f'{seconds // 3600}h {seconds % 3600 // 60:02d}m' if seconds >= 3600 else f'{seconds // 60}m {seconds % 60:02d}s'
+    return f' | {per_minute:.1f}/min, ETA {eta}'
+
+
 def terminate_pool(pool):
     # Python 3.11/3.13 have no public terminate_workers API. Capture handles before shutdown.
     workers = list(pool._processes.values())
@@ -219,7 +234,7 @@ def execute(items, db, paths, output, root, command, config, args):
         finished = False
         try:
             unfinished = {pool.submit(run_item, item, command, config.timeout) for item in items}
-            last_result = time.monotonic()
+            started = last_result = time.monotonic()
             completed = 0
             while unfinished:
                 done, unfinished = concurrent.futures.wait(unfinished, timeout=min(1.0, args.stall_timeout),
@@ -234,7 +249,8 @@ def execute(items, db, paths, output, root, command, config, args):
                     last_result = time.monotonic()
                     if completed % args.progress_every == 0 or not unfinished:
                         counts = report(db, paths, output)
-                        print(f'{db.num_results}/{db.num_work_items}: {dict(counts)}', flush=True)
+                        rate = progress_suffix(completed, len(unfinished), time.monotonic() - started)
+                        print(f'{db.num_results}/{db.num_work_items}: {dict(counts)}{rate}', flush=True)
             finished = True
         finally:
             # A context-manager shutdown waits forever for a hung worker: stop the trees first.

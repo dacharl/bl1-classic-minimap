@@ -13,6 +13,8 @@ die with it, or the worker waits forever. Two full runs stalled that way (PHASE3
     is still recorded as a timeout), and watchdog_run.py ends a suite stuck in Python code. A loop inside one
     C call holds the GIL, so only the first two layers can stop that.
 """
+import json
+import os
 import subprocess
 import sys
 import time
@@ -22,6 +24,33 @@ HERE = Path(__file__).resolve().parent
 PER_CASE_SUITE = 'test_ci.py'   # its cases run the real mod's main(), which works only once per process
 OTHER_SUITES = ('test_builder_formats.py', 'test_swfmerge.py', 'test_hudmovie.py', 'test_profiler.py')   # fast ones first: a kill ends the run
 SUITE_BUDGET = 25.0            # seconds for all suites together; cosmic-ray.toml timeout is 20
+MUTATED_FILE_ENV = 'MINIMAP_MUTATED_FILE'   # set by run_mutations.py's run_item: the file under mutation
+PROBE_ENV = 'MINIMAP_SUITE_PROBE'           # measurement: run every suite and append which failed to this file
+
+# Suites that can kill a mutant, per mutated file, the one that kills most first. A name that is not a key here
+# (or an unknown mutation) runs everything, so only a measured entry ever skips a suite.
+#
+# Measured on 2026-11-26 (PHASE3 §3cg): every suite on a sample of each file's mutants (MINIMAP_SUITE_PROBE), then
+# kept each suite that killed any of them, most kills first, and dropped the rest. A process costs about 0.7 s, so
+# a survivor (which runs its whole list) went from 11 processes to 2 to 7. An entry is a script, 'script::case' or
+# 'test_ci.py' for all its cases; re-measure after adding tests or moving code between files.
+CI = PER_CASE_SUITE + '::SourceChecks.'
+SUITES_BY_FILE = {
+    'sdk_mods/classic_minimap/__init__.py': (CI + 'test_mod_without_game_assets', 'test_profiler.py'),
+    'tools/build_sdkmod.py': ('test_profiler.py', CI + 'test_sdkmod_archive_layout_and_cache_exclusion'),
+    'sdk_mods/classic_minimap/swfmerge.py': ('test_swfmerge.py', 'test_builder_formats.py',
+                                              CI + 'test_classic_gradients_keep_their_external_images'),
+    'sdk_mods/classic_minimap/hudmovie.py': ('test_hudmovie.py',),
+    'sdk_mods/classic_minimap/swfbuild.py': (CI + 'test_original_art_movie_passes_both_suites',
+                                              CI + 'test_original_art_is_glyphs_and_our_own_shapes',
+                                              'test_hudmovie.py', 'test_swfmerge.py', 'test_builder_formats.py',
+                                              'test_profiler.py'),
+    'sdk_mods/classic_minimap/as2asm.py': ('test_builder_formats.py', 'test_profiler.py'),
+    'sdk_mods/classic_minimap/swfdeps.py': ('test_builder_formats.py', 'test_profiler.py', 'test_hudmovie.py'),
+    'sdk_mods/classic_minimap/upk.py': ('test_builder_formats.py', 'test_hudmovie.py'),
+    'sdk_mods/classic_minimap_profiler/__init__.py': ('test_profiler.py',),
+    'sdk_mods/classic_minimap_profiler/profiler.py': ('test_profiler.py',),
+}
 
 
 def case_suites(path=None):
@@ -32,6 +61,16 @@ def case_suites(path=None):
     tree = ast.parse(Path(path).read_text(encoding='utf-8'))
     return tuple(f'{PER_CASE_SUITE}::{cls.name}.{fn.name}' for cls in tree.body if isinstance(cls, ast.ClassDef)
                  for fn in cls.body if isinstance(fn, ast.FunctionDef) and fn.name.startswith('test_'))
+
+
+def suites_for(mutated_file, table=None):
+    """The suites to run for a mutant in `mutated_file` (a path under the project, any separator), in kill order.
+    'test_ci.py' in a list stands for its per-case processes. An unlisted or unknown file gets every suite."""
+    table = SUITES_BY_FILE if table is None else table
+    chosen = table.get(str(mutated_file).replace('\\', '/')) if mutated_file else None
+    if chosen is None:
+        chosen = OTHER_SUITES + (PER_CASE_SUITE,)
+    return tuple(case for suite in chosen for case in (case_suites() if suite == PER_CASE_SUITE else (suite,)))
 
 
 def child_python():
@@ -105,7 +144,9 @@ def kill_tree(proc):
 
 
 def main(suites=None, budget=SUITE_BUDGET):
-    suites = OTHER_SUITES + case_suites() if suites is None else suites
+    suites = suites_for(os.environ.get(MUTATED_FILE_ENV)) if suites is None else suites
+    probe = os.environ.get(PROBE_ENV)
+    failed = []
     deadline = time.monotonic() + budget
     wall_deadline = time.time() + budget + 1.0      # the suites' own watchdog, just after this one
     job = kill_on_close_job() if sys.platform == 'win32' else None
@@ -126,9 +167,14 @@ def main(suites=None, budget=SUITE_BUDGET):
             kill_tree(proc)
             print(f'{path.name}: still running after the {budget:g} s budget; process tree killed', flush=True)
             return 1
-        if code:
+        if code and probe:
+            failed.append(str(suite))
+        elif code:
             return code
-    return 0
+    if probe:
+        with open(probe, 'a', encoding='utf-8') as log:
+            log.write(json.dumps({'file': os.environ.get(MUTATED_FILE_ENV), 'failed': failed}) + '\n')
+    return 1 if failed else 0
 
 
 if __name__ == '__main__':

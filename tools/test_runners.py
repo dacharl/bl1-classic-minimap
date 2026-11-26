@@ -183,6 +183,80 @@ class RunnerChecks(unittest.TestCase):
         self.assertTrue(all(case.startswith('test_ci.py::') for case in cases))
         self.assertTrue({'test_builder_formats.py', 'test_hudmovie.py', 'test_swfmerge.py', 'test_profiler.py'} <= set(test_mutants.OTHER_SUITES))
 
+    def test_every_mutated_file_has_a_suite_list_and_unknown_files_run_everything(self):
+        """A file's list names real suites, the whole of test_ci only as 'test_ci.py', and a file with no list (or
+        no file at all) gets every suite, so only a measured entry can skip one."""
+        import tomllib
+        import test_mutants
+
+        tools = Path(__file__).resolve().parent
+        config = tomllib.loads((tools.parent / 'cosmic-ray.toml').read_text())
+        everything = test_mutants.OTHER_SUITES + test_mutants.case_suites()
+        for module in config['cosmic-ray']['module-path']:
+            listed = test_mutants.SUITES_BY_FILE.get(module)
+            self.assertTrue(listed, f'{module} has no suite list')
+            self.assertEqual(len(set(listed)), len(listed))
+            for suite in listed:
+                script, _, case = suite.partition('::')
+                self.assertTrue((tools / script).exists(), f'{module}: {suite} is not a suite')
+                self.assertTrue(not case or suite in test_mutants.case_suites(), f'{module}: {suite} is not a case')
+            self.assertLessEqual(set(test_mutants.suites_for(module)), set(everything))
+        self.assertEqual(test_mutants.suites_for(None), everything)
+        self.assertEqual(test_mutants.suites_for('tools/never_listed.py'), everything)
+        table = {'a/x.py': ('test_swfmerge.py', 'test_ci.py')}
+        self.assertEqual(test_mutants.suites_for('a\\x.py', table),
+                         ('test_swfmerge.py',) + test_mutants.case_suites())
+
+    def test_mutation_worker_tells_the_command_which_file_it_mutates(self):
+        import os
+        import run_mutations
+        from pathlib import PurePosixPath
+        from types import SimpleNamespace
+
+        seen = {}
+
+        def fake(mutations, command, timeout):
+            seen['file'] = os.environ.get('MINIMAP_MUTATED_FILE')
+            return 'result'
+
+        item = SimpleNamespace(mutations=[SimpleNamespace(module_path=PurePosixPath('sdk_mods/m/x.py'))])
+        original = run_mutations.mutate_and_test
+        run_mutations.mutate_and_test = fake
+        try:
+            self.assertEqual(run_mutations.run_item(item, 'cmd', 1), (item, 'result'))
+        finally:
+            run_mutations.mutate_and_test = original
+            os.environ.pop('MINIMAP_MUTATED_FILE', None)
+        self.assertEqual(seen['file'], 'sdk_mods/m/x.py')
+
+    def test_probe_mode_runs_every_suite_and_logs_the_failing_ones(self):
+        import json
+        import os
+        import tempfile
+        import test_mutants
+
+        with tempfile.TemporaryDirectory() as tmp:
+            good, bad, log = Path(tmp, 'good.py'), Path(tmp, 'bad.py'), Path(tmp, 'probe.jsonl')
+            good.write_text('')
+            bad.write_text('raise SystemExit(5)\n')
+            os.environ.update({'MINIMAP_SUITE_PROBE': str(log), 'MINIMAP_MUTATED_FILE': 'a/x.py'})
+            try:
+                self.assertEqual(test_mutants.main(suites=[str(bad), str(good), str(bad)], budget=20), 1)
+            finally:
+                del os.environ['MINIMAP_SUITE_PROBE'], os.environ['MINIMAP_MUTATED_FILE']
+            self.assertEqual(json.loads(log.read_text()), {'file': 'a/x.py', 'failed': [str(bad), str(bad)]})
+
+    def test_mutation_progress_line_shows_throughput_and_eta(self):
+        from run_mutations import progress_suffix
+
+        # 600 results in 6 minutes is 100 a minute; 1,200 left take 12 minutes
+        self.assertEqual(progress_suffix(600, 1200, 360), ' | 100.0/min, ETA 12m 00s')
+        self.assertEqual(progress_suffix(50, 6000, 60), ' | 50.0/min, ETA 2h 00m')
+        self.assertEqual(progress_suffix(90, 10, 60), ' | 90.0/min, ETA 0m 07s')
+        self.assertEqual(progress_suffix(600, 0, 360), ' | 100.0/min, done')
+        self.assertEqual(progress_suffix(0, 100, 30), '', 'no rate before the first result')
+        self.assertEqual(progress_suffix(5, 100, 0), '', 'no rate without elapsed time')
+
     def test_mutation_module_filter_keeps_configured_order_and_rejects_unknowns(self):
         from run_mutations import selected_modules
 
