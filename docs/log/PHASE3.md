@@ -2613,3 +2613,45 @@ verified. v0.16.3 `53dad688…3afb` and profiler 0.1.26 `0dfec4a7…cbfb` are ba
 
 **Unverified (in game):** trips into Arid should show the Arid map at once, with the found line
 giving about 0.3 s after the tunnel.
+
+## 3bu. Run 45: v0.16.4 on the PC; every trip shows the new area's map (2026-11-26)
+
+**Run 45 (v0.16.4, PC, Extended UI):** the merge took 1.40 s and the movie build 0.61 s. Five trips on the same HUD,
+all drawn with the new area's map and none showing the old one:
+
+| Trip | Hidden (tunnel) | Anchor found | Shown |
+|---|---|---|---|
+| arid_mine → Arid | 56:19.26 | 26.26 (6.55 s, 0.52 s after the tunnel) | 26.26 |
+| Arid → arid_mine | 30.92 | 35.47 (4.02 s, 0.45 s after) | 35.47 |
+| arid_mine → dry | 41.33 | 45.17 (3.48 s, 0.36 s after) | 48.85 |
+| dry → Arid | 54.20 | 57:00.94 (6.48 s, 0.41 s after) | 00.94 |
+| Arid → dry | 06.39 | 10.26 (3.58 s, 0.25 s after) | 10.26 |
+
+Each trip logged one rebuild line. On four trips the map showed the moment the anchor arrived; the anchor came 0.25–0.52 s
+after the loading movie stopped, so on those trips the map now shows that much after the tunnel.
+
+**Open:** on the arid_mine → dry trip the map showed 3.7 s after the anchor, with the right map. The user notes the two
+maps aren't connected (arid_mine ↔ Arid ↔ dry are the connected areas): that trip was a fast travel, whose station
+also plays the blue tunnel, and the rest of the HUD is off while the tunnel shows, so the "HUD off" gate may have
+held the map until the HUD came back. v0.16.5 logs this (§3bv). The found line's "0.36 s
+after the tunnel" means the loading-movie check read false at a retry, yet something still hid the map until 48.85.
+The log records no reason while the map is already hidden, so whether the tunnel check flickered or another gate
+(HUD off, no live pawn) held it is unknown. It did no harm: the map that appeared was right.
+
+## 3bv. v0.16.5: log each hide-reason change while the map is hidden (2026-11-26, offline only)
+
+**Why:** in run 45 a fast travel (arid_mine → dry) kept the map hidden 3.7 s after the loading-movie check cleared, and
+the log couldn't say why: a reason was logged only when the map went from shown to hidden. The user notes the rest of
+the HUD is off while the blue tunnel shows, so the "HUD off" gate may hold the map until the HUD comes back.
+
+**Change → core v0.16.5, profiler 0.1.28:** while the map is already hidden, a change of reason logs
+"minimap hidden: <reason> (was: <previous>)". No visibility behavior changes.
+
+**Tests (red first):** the mod suite hides the map with the loading movie and HUD off together, clears the loading
+movie, then the HUD; it expects "minimap hidden: HUD off (was: loading movie)" and one "minimap shown" (it failed: no
+line). Both suites on both art variants, the unit tests, the coverage floors (core 90.89% line / 87.57% branch), ruff
+and repository checks pass. `release.py --game --enhanced --profiler`: the in-mod build matches (`061eebb7…7dc5`).
+Bundle in the worktree's `dist/releases/0.16.5/`: `classic_minimap.sdkmod` `8a884a41…ca91`,
+`classic_minimap_profiler.sdkmod` `506933f1…063a`.
+
+**Unverified (in game):** not installed yet. A fast travel should log which gate holds the map after the tunnel.

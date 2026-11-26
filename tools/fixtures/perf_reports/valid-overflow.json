@@ -8,8 +8,8 @@
  },
  "producer": {
   "name": "classic_minimap_profiler",
-  "version": "0.1.27",
-  "core_version": "0.16.4"
+  "version": "0.1.28",
+  "core_version": "0.16.5"
  },
  "capture": {
   "id": "000000000000000000000000c0ffee40",

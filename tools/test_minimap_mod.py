@@ -698,6 +698,20 @@ def main(gfx_path, on_import=None):
         off(); step()
         assert m.get('_visible') is True, label + ' cleared: minimap back'
         close(p1c.get('echo').get('_x'), e16['echo'][0])
+    # run 45: a fast travel stayed hidden 3.7 s after the tunnel check cleared, for a reason the log didn't say.
+    # A reason change while hidden is logged with the reason it replaces.
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        pc.loading_movie = True; pc.myHUD.bShowHUD = False
+        step()
+        pc.loading_movie = False
+        step()
+        pc.myHUD.bShowHUD = True
+        step()
+    out = buf.getvalue()
+    assert 'minimap hidden: loading movie\n' in out, out
+    assert 'minimap hidden: HUD off (was: loading movie)' in out, out
+    assert out.count('minimap shown') == 1 and m.get('_visible') is True, out
     # Run 25 (Deck): the game re-plays p1's first frame, putting ECHO back behind the map with the shift still on.
     # Run 41: before any reset mmHudFixes is undefined; F7 said 'hud_fixes': inf
     buf = io.StringIO()

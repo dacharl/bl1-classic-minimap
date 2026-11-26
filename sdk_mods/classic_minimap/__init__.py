@@ -55,7 +55,7 @@ from . import hudmovie
 from .swfmerge import MergeRefused
 from .swfmerge import merge as merge_movie
 
-__version__ = "0.16.4"
+__version__ = "0.16.5"
 
 
 STAGE_W = 1280.0                       # classic HUD stage is 1280x720
@@ -1352,6 +1352,10 @@ def set_visible(movie: Any, show: bool, reason: str) -> None:
         if reason != S.last_hidden_reason:
             log(f"minimap {'shown' if show else 'hidden: ' + reason}")
             S.last_hidden_reason = reason
+    elif not show and reason != S.last_hidden_reason:
+        # already hidden, another gate now holds it (run 45: the tunnel ends, the HUD stays off a while)
+        log(f"minimap hidden: {reason} (was: {S.last_hidden_reason})")
+        S.last_hidden_reason = reason
     want = show and S.dock is not None
     if want != S.hud_on:
         hud_shift(movie, want)
