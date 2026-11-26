@@ -11,7 +11,7 @@ A minimap for **Borderlands Game of the Year (classic)**, modelled on the one in
 
 The ECHO panel (including the Angel videos), the mission title and the objective checklist move left to make room while the minimap is shown, as they do in Enhanced. The minimap hides itself during the travel tunnel, in menus, in cutscenes and when you're down.
 
-> **Status:** v0.16.0 is a private test build: one-file install, with the HUD movie built from your own game files. It has been played on the PC (with and without Enhanced's art, and with Extended UI) and, up to v0.14.7, on the Steam Deck. The first public release will be 1.0.0.
+> **Status:** v0.16.5 is a private test build: one-file install, with the HUD movie built from your own game files. It has been played on the PC (with and without Enhanced's art, and with Extended UI) and, up to v0.14.7, on the Steam Deck. The first public release will be 1.0.0.
 
 ## Requirements
 
@@ -98,7 +98,7 @@ While the map is docked, the game's autosave icon is replaced by a matching one 
 
 With Enhanced installed, the minimap uses Enhanced's own box, window, turn-in and "!" marks, north "N" and enemy diamond. Without it, the mod draws its own:
 
-- "N", a gold "!" and a green "X" (turn-in), the same colors as Enhanced's marks, drawn in the game's own HUD font with a dark outline;
+- "N", a gold "!" and a green "?" (turn-in), the same colors as Enhanced's marks, drawn in the game's own HUD font with a dark outline;
 - a dark frame around the map window, and a red enemy diamond.
 
 The zone maps, landmark icons and objective diamond always come from classic itself.

@@ -1,7 +1,7 @@
 [project]
 name = "Classic Minimap"
 version = "0.16.5"
-description = "An Enhanced-style minimap for classic Borderlands GOTY. Needs GfxHUD_Minimap.upk."
+description = "An Enhanced-style minimap for classic Borderlands GOTY. Builds its HUD movie from your own game files."
 authors = [{ name = "dacharl" }]
 
 [tool.sdkmod]
