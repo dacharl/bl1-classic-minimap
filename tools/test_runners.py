@@ -171,6 +171,18 @@ class RunnerChecks(unittest.TestCase):
         # Cosmic Ray must time out first (recorded as a timeout); the budget then only cleans up.
         self.assertGreater(test_mutants.SUITE_BUDGET, config['cosmic-ray']['timeout'])
 
+    def test_mutation_command_runs_each_mod_main_case_in_its_own_process(self):
+        """test_ci's cases call the real mod's main(), which works once per process: the whole file in one process
+        failed its baseline and no mutation run could start. Builder files are killed by test_hudmovie and
+        test_swfmerge, so those must be in the command too (PHASE3 §3ca)."""
+        import test_mutants
+
+        cases = test_mutants.case_suites()
+        self.assertIn('test_ci.py::SourceChecks.test_mod_without_game_assets', cases)
+        self.assertIn('test_ci.py::SourceChecks.test_original_art_movie_passes_both_suites', cases)
+        self.assertTrue(all(case.startswith('test_ci.py::') for case in cases))
+        self.assertTrue({'test_hudmovie.py', 'test_swfmerge.py', 'test_profiler.py'} <= set(test_mutants.OTHER_SUITES))
+
     def test_mutation_module_filter_keeps_configured_order_and_rejects_unknowns(self):
         from run_mutations import selected_modules
 

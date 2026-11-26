@@ -1,6 +1,6 @@
 """Run a test script as __main__ with an in-process watchdog: past an absolute deadline the process exits.
 
-Usage: python -B -I tools/watchdog_run.py <deadline: time.time() seconds> <script.py>
+Usage: python -B -I tools/watchdog_run.py <deadline: time.time() seconds> <script.py> [args]
 
 Used by test_mutants.py. With a venv, Cosmic Ray's timeout kills the python.exe launcher, which also ends
 test_mutants (the launcher's job object) but not the suite it started; a suite stuck in a mutant's
@@ -25,7 +25,7 @@ def watchdog(deadline):
 def main():
     deadline, script = float(sys.argv[1]), sys.argv[2]
     threading.Thread(target=watchdog, args=(deadline,), daemon=True).start()
-    sys.argv = [script]
+    sys.argv = [script, *sys.argv[3:]]      # test names for unittest.main
     sys.path.insert(0, os.path.dirname(os.path.abspath(script)))
     runpy.run_path(script, run_name='__main__')
 

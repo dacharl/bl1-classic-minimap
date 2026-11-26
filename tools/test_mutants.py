@@ -19,8 +19,19 @@ import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-SUITES = ('test_ci.py', 'test_profiler.py')
+PER_CASE_SUITE = 'test_ci.py'   # its cases run the real mod's main(), which works only once per process
+OTHER_SUITES = ('test_swfmerge.py', 'test_hudmovie.py', 'test_profiler.py')   # fast ones first: a kill ends the run
 SUITE_BUDGET = 25.0            # seconds for all suites together; cosmic-ray.toml timeout is 20
+
+
+def case_suites(path=None):
+    """'test_ci.py::SourceChecks.test_x' for each test method, so each case gets its own process. The names come
+    from the syntax tree: importing the module here would import the code under mutation into this process."""
+    import ast
+    path = path or HERE / PER_CASE_SUITE
+    tree = ast.parse(Path(path).read_text(encoding='utf-8'))
+    return tuple(f'{PER_CASE_SUITE}::{cls.name}.{fn.name}' for cls in tree.body if isinstance(cls, ast.ClassDef)
+                 for fn in cls.body if isinstance(fn, ast.FunctionDef) and fn.name.startswith('test_'))
 
 
 def child_python():
@@ -93,14 +104,16 @@ def kill_tree(proc):
     proc.wait()
 
 
-def main(suites=SUITES, budget=SUITE_BUDGET):
+def main(suites=None, budget=SUITE_BUDGET):
+    suites = OTHER_SUITES + case_suites() if suites is None else suites
     deadline = time.monotonic() + budget
     wall_deadline = time.time() + budget + 1.0      # the suites' own watchdog, just after this one
     job = kill_on_close_job() if sys.platform == 'win32' else None
     for suite in suites:
-        path = Path(suite) if Path(suite).is_absolute() else HERE / suite
+        script, _, case = str(suite).partition('::')
+        path = Path(script) if Path(script).is_absolute() else HERE / script
         proc = subprocess.Popen([child_python(), '-B', '-I', str(HERE / 'watchdog_run.py'), str(wall_deadline),
-                                 str(path)], cwd=HERE.parent)
+                                 str(path), *([case] if case else [])], cwd=HERE.parent)
         if job is not None:
             kernel32, handle = job
             import ctypes
