@@ -16,6 +16,13 @@ repos:
         exclude: ^tools/fixtures/perf_reports/invalid-
       - id: check-toml
 
+  # Secrets in the staged changes. Same version as secrets.yml, which scans the whole history in CI.
+  # The hook builds gitleaks with Go; pre-commit downloads a Go toolchain on first use when none is installed.
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.17.2
     hooks:

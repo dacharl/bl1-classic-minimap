@@ -1,6 +1,8 @@
 # CI checks
 
-**Continuous, blocking checks:** `.github/workflows/ci.yml` runs on pushes to `main` (including merged PRs), PRs targeting `main`, merge-queue events and manual dispatch. It has two jobs: **lint** (Ruff, dependency consistency, repository checks, actionlint) and **unit tests with per-file line and branch coverage floors**. These are the only checks that run continuously; configure them as required status checks.
+**Continuous, blocking checks:** `.github/workflows/ci.yml` runs on pushes to `main` (including merged PRs), PRs targeting `main`, merge-queue events and manual dispatch. It has two jobs: **lint** (Ruff, dependency consistency, repository checks, actionlint) and **unit tests with per-file line and branch coverage floors**. These and the secret scan are the only checks that run continuously; configure them as required status checks.
+
+**Secret scan:** `.github/workflows/secrets.yml` runs gitleaks 8.30.1 over the **whole git history** on every push to any branch, every PR, merge-queue events and manual dispatch. It has no path filter, because a secret in a docs-only change is as public as one in code. It downloads the pinned Linux release and checks its SHA-256 (from the release's `checksums.txt`) before running it, and prints findings redacted. On a public repository, also turn on GitHub's own **secret scanning** and **push protection** (Settings → Code security; free for public repositories on personal accounts). They check against providers' token formats and block a push, which gitleaks in CI can only report after the fact (PHASE3 §3ca).
 
 **Test matrix:** two jobs. **Windows/Python 3.14** is the game's OS and the interpreter the PythonSDK embeds (`python314.dll` in `Binaries\Plugins`). **Ubuntu/Python 3.13** is the version the local tools run on, and covers the mutation runner's POSIX process-group cleanup. Lint and mutation testing use Python 3.13. Python 3.11 was dropped in PHASE3 §3bn: nothing runs on it.
 
@@ -65,13 +67,14 @@ Cosmic Ray still records such mutants as timeouts (undetected). The Windows path
 
 | Hook | Files | Same as CI |
 |---|---|---|
+| `gitleaks` (gitleaks v8.30.1) | staged changes | the secret scan in `secrets.yml`, same version and rules; CI also scans the whole history |
 | `ruff-check` (ruff-pre-commit v0.17.2) | Python | `ruff check`, same version and `pyproject.toml` rules |
 | `actionlint` (actionlint-py 1.7.12.25 with shellcheck-py) | `.github/workflows/*.yml` | the `rhysd/actionlint:1.7.12` image, ShellCheck included |
 | `quality_checks.py repository` | always | the repository checks |
 | `check-json`, `check-toml` | JSON (minus the deliberately invalid `invalid-*` report fixtures), TOML | syntax only; CI's tests read them |
 | `check-added-large-files --maxkb=300`, `check-merge-conflict`, `check-case-conflict`, `git diff --cached --check` | staged files | guards for game files and commit hygiene (AGENTS) |
 
-`quality_checks.py repository` fails if the hooks' ruff or actionlint differ from `requirements-ci.txt` and `ci.yml`. Install with `pip install -r requirements-dev.txt` and `pre_commit install --allow-missing-config`: the hook lives in the shared `.git/hooks`, and the option lets commits on older branches without the config go through. The first run downloads each hook's environment. prek, a Rust reimplementation, reads the same config if pre-commit ever becomes too slow.
+`quality_checks.py repository` fails if the hooks' ruff or actionlint differ from `requirements-ci.txt` and `ci.yml`, or their gitleaks from `GITLEAKS_VERSION` in `secrets.yml` (update its `GITLEAKS_SHA256` with it). The gitleaks hook builds from source with Go; pre-commit downloads a Go toolchain on its first run when none is installed. For a manual full-history scan, gitleaks 8.30.1 is in `C:\Users\Charles\Tools\gitleaks-8.30.1\` on this PC: `gitleaks git . --redact -v --log-opts=--all`. Install with `pip install -r requirements-dev.txt` and `pre_commit install --allow-missing-config`: the hook lives in the shared `.git/hooks`, and the option lets commits on older branches without the config go through. The first run downloads each hook's environment. prek, a Rust reimplementation, reads the same config if pre-commit ever becomes too slow.
 
 From the repository root, create a virtual environment and install the pinned tools:
 

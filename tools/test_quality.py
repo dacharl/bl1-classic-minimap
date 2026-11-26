@@ -141,6 +141,23 @@ class GateChecks(unittest.TestCase):
                                              (ROOT / 'requirements-ci.txt').read_text(encoding='utf-8'),
                                              (ROOT / '.github/workflows/ci.yml').read_text(encoding='utf-8')), [])
 
+    def test_the_secret_scan_hook_uses_the_gitleaks_version_ci_downloads(self):
+        """A hook with another gitleaks has other rules, so a commit it passes could fail the CI scan."""
+        from quality_checks import gitleaks_version_errors
+
+        hooks = '  - repo: https://github.com/gitleaks/gitleaks\n    rev: v8.30.1\n    hooks:\n      - id: gitleaks\n'
+        workflow = '  GITLEAKS_VERSION: 8.30.1\n'
+        self.assertEqual(gitleaks_version_errors(hooks, workflow), [])
+        self.assertEqual(gitleaks_version_errors(hooks.replace('v8.30.1', 'v8.31.0'), workflow),
+                         ['.pre-commit-config.yaml: gitleaks v8.31.0 differs from secrets.yml GITLEAKS_VERSION 8.30.1'])
+        self.assertEqual(gitleaks_version_errors(hooks, 'jobs: {}\n'),
+                         ['.pre-commit-config.yaml: gitleaks v8.30.1 differs from secrets.yml GITLEAKS_VERSION ?'])
+        self.assertEqual(gitleaks_version_errors('repos: []\n', workflow),
+                         ['.pre-commit-config.yaml: no gitleaks hook'])
+        self.assertEqual(gitleaks_version_errors(
+            (ROOT / '.pre-commit-config.yaml').read_text(encoding='utf-8'),
+            (ROOT / '.github/workflows/secrets.yml').read_text(encoding='utf-8')), [])
+
     def test_the_real_ci_triggers_are_safe(self):
         self.assertEqual(ci_trigger_errors((ROOT / '.github/workflows/ci.yml').read_text(encoding='utf-8')), [])
 

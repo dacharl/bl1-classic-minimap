@@ -2816,3 +2816,36 @@ from `requirements-ci.txt` or their actionlint from the `ci.yml` image.
   §3by's one-line `run:` (`could not parse as YAML`). The file was then restored byte for byte.
 - `pre-commit install --allow-missing-config` put the hook in the shared `.git/hooks`, using the main checkout's
   `.venv`. Commits on older branches without the config skip the hooks instead of failing.
+
+## 3ca. Secret scanning with gitleaks, before making the repository public (2026-11-26, offline only)
+
+**Why:** the repository is to be made public, and nothing checked for credentials. A secret deleted in a later
+commit would still be published with the history.
+
+**Tool:** gitleaks 8.30.1 (released 2026-03-21), offline and rule-based, so the same history always gives the same
+result. The `gitleaks/gitleaks-action` wrapper needs a licence key for organisation repositories and adds a Node
+step, so CI runs the release binary directly.
+
+**Changes:**
+- `.pre-commit-config.yaml`: the upstream `gitleaks` hook at v8.30.1 scans the staged changes. It builds with Go;
+  pre-commit downloaded a Go toolchain on the first run, since this PC has none.
+- `.github/workflows/secrets.yml`: on every push to any branch, PRs, merge-queue events and manual dispatch, with
+  no path filter (unlike `ci.yml`, docs-only pushes are scanned too). It checks out the full history
+  (`fetch-depth: 0`), downloads the Linux x64 release, verifies its pinned SHA-256 from the release's
+  `checksums.txt`, and runs `gitleaks git . --redact --verbose --exit-code 1`.
+- `quality_checks.gitleaks_version_errors`: the repository check fails when the hook's rev differs from
+  `GITLEAKS_VERSION` in `secrets.yml`. Test (red first): `test_the_secret_scan_hook_uses_the_gitleaks_version_ci_downloads`
+  covers a match, a mismatch, a missing pin, a missing hook and the real files; it failed with an ImportError.
+- CI.md and AGENTS describe the scan and the hook.
+
+**Verified locally:**
+- `gitleaks git . --redact -v --log-opts=--all` (Windows x64 build, checksum verified, in `C:\Users\Charles\Tools\`):
+  80 commits on all branches, 2.53 MB, no leaks. `gitleaks dir` over `sdk_mods/` in the main checkout: no leaks.
+- `pre-commit run --all-files` passes every hook, gitleaks included.
+- A staged file holding a fake GitHub token made the gitleaks hook fail (`github-pat`); the file was then removed.
+- `test_quality.py`, `quality_checks.py repository`, actionlint 1.7.12 and ruff pass.
+
+**Not yet verified:** the hosted `secrets.yml` run (it runs on the first push). GitHub's own secret scanning and push
+protection are free for public repositories and should be turned on once the repository is public. Scanners find
+credentials only: every commit's author and committer is a personal email address, and four tracked files contain
+local `C:\Users\Charles\` paths; neither is a secret, so the scan does not report them.

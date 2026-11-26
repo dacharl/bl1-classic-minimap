@@ -166,11 +166,25 @@ def hook_version_errors(hooks, requirements, ci):
     return errors
 
 
+def gitleaks_version_errors(hooks, workflow):
+    """The commit hook must scan with the gitleaks secrets.yml downloads: rules change between versions."""
+    hook = re.search(r'gitleaks/gitleaks\s+rev:\s*v(\S+)', hooks)
+    pinned = re.search(r'GITLEAKS_VERSION:\s*(\S+)', workflow)
+    if not hook:
+        return ['.pre-commit-config.yaml: no gitleaks hook']
+    if not pinned or hook[1] != pinned[1]:
+        return [f'.pre-commit-config.yaml: gitleaks v{hook[1]} differs from secrets.yml '
+                f'GITLEAKS_VERSION {pinned[1] if pinned else "?"}']
+    return []
+
+
 def repository_errors():
     errors = []
     errors += hook_version_errors((ROOT / '.pre-commit-config.yaml').read_text(encoding='utf-8'),
                                   (ROOT / 'requirements-ci.txt').read_text(encoding='utf-8'),
                                   (ROOT / '.github/workflows/ci.yml').read_text(encoding='utf-8'))
+    errors += gitleaks_version_errors((ROOT / '.pre-commit-config.yaml').read_text(encoding='utf-8'),
+                                      (ROOT / '.github/workflows/secrets.yml').read_text(encoding='utf-8'))
     quality = tomllib.loads((ROOT / 'pyproject.toml').read_text())['tool']['quality']
     workflows = ROOT / '.github/workflows'
     errors += release_gate_errors((workflows / 'ci.yml').read_text(encoding='utf-8'),
