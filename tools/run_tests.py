@@ -20,7 +20,8 @@ from parallel_workers import worker_count  # noqa: E402
 
 # Slowest first, so the short processes fill the gaps instead of the long ones running last (PHASE3 3by).
 DEFAULT_TESTS = ['test_runners.RunnerChecks', 'test_land.LandChecks', 'test_workflow.WorkflowChecks',
-                 'test_ci.SourceChecks', 'test_hudmovie', 'test_profiler', 'test_swfmerge', 'test_quality.GateChecks']
+                 'test_ci.SourceChecks', 'test_hudmovie', 'test_profiler', 'test_swfmerge', 'test_quality.GateChecks',
+                 'test_mutation_session.SessionChecks']
 # These cases run the real mod's main(), which works only once per process.
 PER_CASE = ['test_ci.SourceChecks']
 # These suites are each one long run of independent cases, so they are split into shards ("suite#2/3" is every third

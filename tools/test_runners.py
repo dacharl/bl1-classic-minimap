@@ -174,7 +174,7 @@ class RunnerChecks(unittest.TestCase):
     def test_mutation_command_runs_each_mod_main_case_in_its_own_process(self):
         """test_ci's cases call the real mod's main(), which works once per process: the whole file in one process
         failed its baseline and no mutation run could start. Builder files are killed by test_hudmovie and
-        test_swfmerge, so those must be in the command too (PHASE3 §3ca)."""
+        test_swfmerge, so those must be in the command too (PHASE3 §3cc)."""
         import test_mutants
 
         cases = test_mutants.case_suites()

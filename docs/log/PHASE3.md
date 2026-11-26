@@ -2885,3 +2885,53 @@ local `C:\Users\Charles\` paths; neither is a secret, so the scan does not repor
 - **Hosted result of two shards (run 45877254764, four attempts):** wall 47 to 67 s (mean 57 s against 61 s before, within noise); Windows job 44 to 61 s, its test step 25 to 35 s (23 s before, one run); Ubuntu test step 13 to 15 s, Ubuntu job 27 to 35 s with the lint steps. The Windows step was not faster, so three shards were tried next (below).
 - **Hosted result of three shards (run 45881027370, one run):** wall 56 s; Windows job 53 s, test step 32 s; Ubuntu job 36 s, test step 12 s. No Windows gain over two shards (25 to 35 s), a 1 to 3 s gain on Ubuntu. Windows is bound by total work (the git-heavy `test_land` cases and the movie-building `test_workflow` cases) divided by four workers plus start-up, not by one long process, so further splitting cannot help there; only less work per case would. Three shards stay, since they are no worse. With the repository public the minutes are free, so the remaining gain is wall time only.
 - **Eight attempts of the three-shard run (45881027370), all green:** wall 43 to 62 s (mean 54 s); Windows job 41 to 58 s (mean 51 s), test step 20 to 34 s (mean 29.5 s); Ubuntu job 21 to 36 s (mean 29 s), test step 10 to 19 s (mean 14.4 s). The two-shard means (57 s wall, 52 s Windows job, 29 s Windows step, 14 s Ubuntu step) are the same within the run-to-run spread, and the old layout's single sample (61 s wall, 41 s Windows job, 23 s step) is inside it too. The wall-time gain over the old layout is about 7 s, from the tests no longer waiting for lint. Shard count makes no measurable difference, so the sharding question is closed; only less work per `test_land` and `test_workflow` case, or a smaller Windows checkout (7 to 9 s), could still help, and with the repository public that is wall time only.
+
+## 3cf. Mutation re-measurement, with the builder files (2026-11-26, offline only)
+
+**Why:** PROGRESS listed two open measurements: the floors of 70 for the moved builder files (`hudmovie`, `swfbuild`, `as2asm`, `swfdeps`, `upk`; `swfmerge` too) were never measured, and the mod's score needed a fresh run after v0.16.0 removed about 370 lines.
+
+**Tooling fixes this needed**
+- **The mutation command could not start.** `tools/test_mutants.py` ran `test_ci.py` in one process, but two of its cases call the real mod's `main()`, which works once per process (the same cause as the "fails in the main checkout too" note in §3cb). The unmutated baseline failed, so no run could begin. It also never ran `test_hudmovie` or `test_swfmerge`, so a mutant in the builder files could not be killed. Now each `test_ci` case runs in its own process (case names read from the syntax tree, so the code under mutation is not imported into the parent), the builder suites are added, and `watchdog_run.py` forwards a test name. A test in `test_runners` covers it. Baseline run: about 7 s.
+- `cosmic-ray.toml` lists the six builder files (`swfmerge` included, since it also had an unmeasured floor of 70).
+- **Run resumption and a stall alarm** came from `feat/mutation-swf-tools` (PLAN_MUTATION_SWF_TOOLS, uncommitted there): `run_mutations.py` gains `--resume`, `--max-results`, `--stall-timeout` and incremental reports, with `test_mutation_session.py` (tiny real Cosmic Ray projects) added to the default unit run. Taken as is; it was not changed on `main` since the branch point. Its `swfinspect.py` and the rest were left on that branch. Not exercised by this run (it ran without `--resume`).
+
+**Measured (Windows, Python 3.13, 8 workers, 13,923 mutants, about 3 h)**
+
+| File | Mutants | Killed | Score | Floor | |
+|---|---:|---:|---:|---:|---|
+| `__init__.py` (mod) | 3,690 | 2,802 | 75.93% | 70 | pass (was 74.41% on 2,767) |
+| `swfmerge.py` | 1,802 | 1,495 | 82.96% | 70 | score passes; 2 tool errors fail the gate |
+| `hudmovie.py` | 455 | 398 | 87.47% | 70 | pass |
+| `swfbuild.py` | 4,867 | 3,736 | 76.76% | 70 | pass |
+| `as2asm.py` | 910 | 517 | 56.81% | 70 | **below** |
+| `swfdeps.py` | 643 | 166 | 25.82% | 70 | **far below** |
+| `upk.py` | 549 | 333 | 60.66% | 70 | **below**; 1 tool error |
+| `tools/build_sdkmod.py` | 39 | 32 | 82.05% | 80 | pass |
+| profiler `__init__.py` | 34 | 31 | 91.18% | 85 | pass |
+| profiler `profiler.py` | 934 | 762 | 81.58% | 78 | pass |
+
+Timeouts (counted as undetected): mod 43, `swfbuild` 61, `profiler` 43, others under 25. `tools/quality_checks.py mutation` fails on `as2asm`, `swfdeps`, `upk` and the three tool errors. The floors were not changed.
+
+**Three tool errors:** Cosmic Ray's `ExceptionReplacer` raises `AttributeError: 'PythonNode' object has no attribute 'value'` on `except` clauses naming an attribute inside a tuple (`except (IndexError, struct.error) as ex:`), at `swfmerge.py` 219 and 364 and `upk.py` 128. They count as errors, which fail the gate. A fix is to bind the attribute to a plain name first (for example `StructError = struct.error`) so that the `except` tuple has only names; not done here.
+
+**Survivors (from operator counts and a sample of about 30 diffs; not every survivor was read)**
+- **`swfdeps.py` (454 survivors, 228 in `refs`, 137 in `main`, 49 in `_scan`):** a real gap. The offline tests barely exercise the per-tag dependency scan: which character IDs each tag type references (fill bitmaps, place-object, buttons, import/export). The sample shows offset and flag changes (`4 + ...`, `tb[1] & 0x08`, `code == 37`) surviving. `main` is the diagnostic CLI's printed text; those survivors are mostly low value. Its coverage floor (60% line) matches.
+- **`as2asm.py` (369):** `decode` 90, `_decode_push` 66, `encode` 61, `_enc_push` 51. Real gap: opcode-table values (a changed `'Stop': 8` survived), push type tags and the integer range check at ±2**31 are not pinned by a round trip over every opcode and push type.
+- **`upk.py` (196):** `fstring` 46, `walk_tags` 31, `path` 28, `fname` 26, `objname` 22. Real gap: UTF-16 and negative-length strings, the outer-chain name path and error branches. A few survivors change only an error message's formatting (`'...' // (count, size)`), which is equivalent-ish.
+- **`swfbuild.py` (1,131):** `new_functions`, `build`, `glyph_text`, `polygon_shape`, `landmark_frames`; about 430 are `NumberReplacer`, and `Add` swaps survive 111 times against 1,594 kills. Mostly geometry constants and offsets. The real-movie suites check these; offline fixtures do not.
+- **Mod (845):** `tick`, `anchor_transform`, `capture`, `threat_points`, `reset`, `coord_scale`; comparison swaps (191) and numbers (223). The 32 `ExceptionReplacer` survivors are `except Exception:` handlers whose recovery path the stub tests don't reach. Warning-message string mutants (`"giver:" << ...`) are equivalent in effect.
+- **Equivalent or low value:** printed diagnostic text, error-message formatting, and `+`→other-operator swaps where the test inputs are zero or too small to tell them apart.
+
+**Highest-value tests to add (none added here)**
+1. `swfdeps`: authored tags that reference known character IDs through each path in `refs`, and a closure check on them.
+2. `as2asm`: assemble then decode every opcode and push type (and `-2**31`, `2**31-1`, `2**31`), comparing bytes.
+3. `upk`: a hand-built package with UTF-16 and negative-length strings, a nested outer chain, and the `RawData` size mismatch error.
+4. Mod: `anchor_transform` and `coord_scale` against worked values from recorded anchors (PHASE3), and each swallowed-exception branch of `tick`.
+5. `swfbuild`: a few geometry values (`polygon_shape`, `translate_matrix`) taken from the built movie.
+
+**Floors (recommendation; not changed)**
+- Keep the 70 floors for `__init__.py`, `swfmerge`, `hudmovie`, `swfbuild`. They pass with 5 to 17 points of headroom; raise to the measured score minus about 3 points (mod 73, `swfmerge` 80, `hudmovie` 84, `swfbuild` 74) when tightening.
+- `as2asm`, `swfdeps` and `upk` stay at 70 and fail until the tests in items 1 to 3 land. Lowering them would hide the gaps, so decide that, with the user, only if 1.0.0 cannot wait. Mutation is on demand and not part of the blocking CI, so a failing score does not block a merge or the release workflow.
+- Fix the three tool errors before relying on the gate; they fail it regardless of scores.
+
+**Validation:** 150 unit cases pass, with every coverage floor; Ruff and the repository checks pass. Not run: the real-movie suites (no source change to the mod or builder) and any hosted or POSIX run of the changed `test_mutants.py`. Nothing installed; installed hashes unchanged.
