@@ -127,12 +127,16 @@ class GateChecks(unittest.TestCase):
         hooks = ('repos:\n  - repo: https://github.com/astral-sh/ruff-pre-commit\n    rev: v0.17.2\n'
                  '  - repo: local\n    hooks:\n      - id: actionlint\n'
                  '        additional_dependencies: [actionlint-py==1.7.12.25, shellcheck-py==0.11.0.1]\n'
-                 '      - id: coverage-floors\n        additional_dependencies: [coverage==7.17.0]\n')
-        requirements = 'ruff==0.17.2\ncoverage==7.17.0\n'
+                 '      - id: coverage-floors\n        additional_dependencies: [coverage==7.17.0, cosmic-ray==8.7.0]\n')
+        requirements = 'ruff==0.17.2\ncoverage==7.17.0\ncosmic-ray==8.7.0\n'
         ci = '          rhysd/actionlint:1.7.12 -color\n'
         self.assertEqual(hook_version_errors(hooks, requirements, ci), [])
         self.assertEqual(hook_version_errors(hooks.replace('coverage==7.17.0', 'coverage==7.18.0'), requirements, ci),
                          ['.pre-commit-config.yaml: coverage 7.18.0 differs from requirements-ci.txt coverage==7.17.0'])
+        self.assertEqual(hook_version_errors(hooks.replace('cosmic-ray==8.7.0', 'cosmic-ray==8.8.0'), requirements, ci),
+                         ['.pre-commit-config.yaml: cosmic-ray 8.8.0 differs from requirements-ci.txt cosmic-ray==8.7.0'])
+        self.assertEqual(hook_version_errors(hooks.replace(', cosmic-ray==8.7.0', ''), requirements, ci),
+                         ['.pre-commit-config.yaml: no pinned cosmic-ray for the pre-push hook'])
         self.assertEqual(hook_version_errors(hooks.replace('v0.17.2', 'v0.17.6'), requirements, ci),
                          ['.pre-commit-config.yaml: ruff v0.17.6 differs from requirements-ci.txt ruff==0.17.2'])
         self.assertEqual(hook_version_errors(hooks, requirements, ci.replace('1.7.12', '1.7.13')),
@@ -140,7 +144,8 @@ class GateChecks(unittest.TestCase):
         self.assertEqual(hook_version_errors('repos: []\n', requirements, ci),
                          ['.pre-commit-config.yaml: no ruff-pre-commit hook',
                           '.pre-commit-config.yaml: no actionlint-py hook',
-                          '.pre-commit-config.yaml: no pinned coverage for the pre-push hook'])
+                          '.pre-commit-config.yaml: no pinned coverage for the pre-push hook',
+                          '.pre-commit-config.yaml: no pinned cosmic-ray for the pre-push hook'])
         self.assertEqual(hook_version_errors((ROOT / '.pre-commit-config.yaml').read_text(encoding='utf-8'),
                                              (ROOT / 'requirements-ci.txt').read_text(encoding='utf-8'),
                                              (ROOT / '.github/workflows/ci.yml').read_text(encoding='utf-8')), [])

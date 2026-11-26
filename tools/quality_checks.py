@@ -163,13 +163,14 @@ def hook_version_errors(hooks, requirements, ci):
     elif not image or actionlint[1] != image[1]:
         errors.append(f'.pre-commit-config.yaml: actionlint {actionlint[1]} differs from ci.yml '
                       f'rhysd/actionlint:{image[1] if image else "?"}')
-    coverage = re.search(r'additional_dependencies: \[coverage==(\S+?)\]', hooks)
-    required = re.search(r'^coverage==(\S+)', requirements, re.M)
-    if not coverage:
-        errors.append('.pre-commit-config.yaml: no pinned coverage for the pre-push hook')
-    elif not required or coverage[1] != required[1]:
-        errors.append(f'.pre-commit-config.yaml: coverage {coverage[1]} differs from requirements-ci.txt '
-                      f'coverage=={required[1] if required else "?"}')
+    for package in ('coverage', 'cosmic-ray'):   # the pre-push hook's environment runs the unit tests (test_runners)
+        pinned = re.search(rf'additional_dependencies: \[[^\]]*\b{package}==([^,\]\s]+)', hooks)
+        required = re.search(rf'^{package}==(\S+)', requirements, re.M)
+        if not pinned:
+            errors.append(f'.pre-commit-config.yaml: no pinned {package} for the pre-push hook')
+        elif not required or pinned[1] != required[1]:
+            errors.append(f'.pre-commit-config.yaml: {package} {pinned[1]} differs from requirements-ci.txt '
+                          f'{package}=={required[1] if required else "?"}')
     return errors
 
 

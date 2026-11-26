@@ -56,8 +56,9 @@ repos:
       - id: coverage-floors
         name: unit tests and coverage floors
         language: python
-        # Must match requirements-ci.txt; quality_checks.py repository enforces that.
-        additional_dependencies: [coverage==7.17.0]
+        # The tests run in this environment, so it needs what they import (cosmic-ray for test_runners). Both pins
+        # must match requirements-ci.txt; quality_checks.py repository enforces that.
+        additional_dependencies: [coverage==7.17.0, cosmic-ray==8.7.0]
         entry: python -I tools/check_coverage.py
         pass_filenames: false
         always_run: true
