@@ -1,6 +1,7 @@
 """Regression checks for automatic test worker selection and runner exit status."""
 import os
 import concurrent.futures
+import io
 import subprocess
 import sys
 import tempfile
@@ -181,7 +182,32 @@ class RunnerChecks(unittest.TestCase):
         self.assertIn('test_ci.py::SourceChecks.test_mod_without_game_assets', cases)
         self.assertIn('test_ci.py::SourceChecks.test_original_art_movie_passes_both_suites', cases)
         self.assertTrue(all(case.startswith('test_ci.py::') for case in cases))
-        self.assertTrue({'test_builder_formats.py', 'test_hudmovie.py', 'test_swfmerge.py', 'test_profiler.py'} <= set(test_mutants.OTHER_SUITES))
+        # the three builder suites import no SDK stubs, so they share one process (a process costs about 0.7 s)
+        self.assertEqual(set(test_mutants.OTHER_SUITES), {'test_builder_suites.py', 'test_profiler.py'})
+
+    def test_builder_suites_run_together_in_one_process_and_stop_at_the_first_failure(self):
+        import tempfile
+        import test_builder_suites
+
+        self.assertEqual(test_builder_suites.NAMES, ('test_builder_formats', 'test_swfmerge', 'test_hudmovie'))
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, 'fake_ok.py').write_text('import unittest\nclass A(unittest.TestCase):\n'
+                                               '    def test_a(self):\n        pass\n')
+            Path(tmp, 'fake_bad.py').write_text('import unittest\nclass B(unittest.TestCase):\n'
+                                                '    def test_b(self):\n        self.fail("boom")\n'
+                                                '    def test_c(self):\n        raise SystemExit("not reached")\n')
+            sys.path.insert(0, tmp)
+            try:
+                stream = io.StringIO()
+                self.assertEqual(test_builder_suites.main(('fake_ok',), stream), 0)
+                self.assertEqual(test_builder_suites.main(('fake_ok', 'fake_bad'), stream), 1)
+                self.assertIn('boom', stream.getvalue())
+            finally:
+                sys.path.remove(tmp)
+                for name in ('fake_ok', 'fake_bad'):
+                    sys.modules.pop(name, None)
+        # the real three, together
+        self.assertEqual(test_builder_suites.main(stream=io.StringIO()), 0)
 
     def test_every_mutated_file_has_a_suite_list_and_unknown_files_run_everything(self):
         """A file's list names real suites, the whole of test_ci only as 'test_ci.py', and a file with no list (or

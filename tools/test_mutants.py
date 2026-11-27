@@ -22,7 +22,9 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 PER_CASE_SUITE = 'test_ci.py'   # its cases run the real mod's main(), which works only once per process
-OTHER_SUITES = ('test_builder_formats.py', 'test_swfmerge.py', 'test_hudmovie.py', 'test_profiler.py')   # fast ones first: a kill ends the run
+# fast ones first: a kill ends the run. The three builder suites share one process (test_builder_suites.py).
+BUILDER = 'test_builder_suites.py'
+OTHER_SUITES = (BUILDER, 'test_profiler.py')
 SUITE_BUDGET = 25.0            # seconds for all suites together; cosmic-ray.toml timeout is 20
 MUTATED_FILE_ENV = 'MINIMAP_MUTATED_FILE'   # set by run_mutations.py's run_item: the file under mutation
 PROBE_ENV = 'MINIMAP_SUITE_PROBE'           # measurement: run every suite and append which failed to this file
@@ -38,25 +40,19 @@ CI = PER_CASE_SUITE + '::SourceChecks.'
 SUITES_BY_FILE = {
     'sdk_mods/classic_minimap/__init__.py': (CI + 'test_mod_without_game_assets', 'test_profiler.py'),
     'tools/build_sdkmod.py': ('test_profiler.py', CI + 'test_sdkmod_archive_layout_and_cache_exclusion'),
-    'sdk_mods/classic_minimap/swfmerge.py': ('test_swfmerge.py', 'test_builder_formats.py',
-                                              CI + 'test_classic_gradients_keep_their_external_images'),
-    'sdk_mods/classic_minimap/hudmovie.py': ('test_hudmovie.py',),
+    'sdk_mods/classic_minimap/swfmerge.py': (BUILDER, CI + 'test_classic_gradients_keep_their_external_images'),
+    'sdk_mods/classic_minimap/hudmovie.py': (BUILDER,),
     'sdk_mods/classic_minimap/swfbuild.py': (CI + 'test_original_art_movie_passes_both_suites',
                                               CI + 'test_original_art_is_glyphs_and_our_own_shapes',
-                                              'test_hudmovie.py', 'test_swfmerge.py', 'test_builder_formats.py',
-                                              'test_profiler.py'),
+                                              BUILDER, 'test_profiler.py'),
     # PLAN_BUILDER_SPLIT: provisional (every suite) until the file's list is probed
-    'sdk_mods/classic_minimap/swfrecords.py': ('test_builder_formats.py', 'test_swfmerge.py', 'test_hudmovie.py',
-                                                'test_profiler.py', PER_CASE_SUITE),
-    'sdk_mods/classic_minimap/hudlayout.py': ('test_builder_formats.py', 'test_swfmerge.py', 'test_hudmovie.py',
-    'test_profiler.py', PER_CASE_SUITE),
-    'sdk_mods/classic_minimap/hudart.py': ('test_builder_formats.py', 'test_swfmerge.py', 'test_hudmovie.py',
-    'test_profiler.py', PER_CASE_SUITE),
-    'sdk_mods/classic_minimap/hudscript.py': ('test_builder_formats.py', 'test_swfmerge.py', 'test_hudmovie.py',
-    'test_profiler.py', PER_CASE_SUITE),
-    'sdk_mods/classic_minimap/as2asm.py': ('test_builder_formats.py', 'test_profiler.py'),
-    'sdk_mods/classic_minimap/swfdeps.py': ('test_builder_formats.py', 'test_profiler.py', 'test_hudmovie.py'),
-    'sdk_mods/classic_minimap/upk.py': ('test_builder_formats.py', 'test_hudmovie.py'),
+    'sdk_mods/classic_minimap/swfrecords.py': (BUILDER, 'test_profiler.py', PER_CASE_SUITE),
+    'sdk_mods/classic_minimap/hudlayout.py': (BUILDER, 'test_profiler.py', PER_CASE_SUITE),
+    'sdk_mods/classic_minimap/hudart.py': (BUILDER, 'test_profiler.py', PER_CASE_SUITE),
+    'sdk_mods/classic_minimap/hudscript.py': (BUILDER, 'test_profiler.py', PER_CASE_SUITE),
+    'sdk_mods/classic_minimap/as2asm.py': (BUILDER, 'test_profiler.py'),
+    'sdk_mods/classic_minimap/swfdeps.py': (BUILDER, 'test_profiler.py'),
+    'sdk_mods/classic_minimap/upk.py': (BUILDER,),
     'sdk_mods/classic_minimap_profiler/__init__.py': ('test_profiler.py',),
     'sdk_mods/classic_minimap_profiler/profiler.py': ('test_profiler.py',),
 }
