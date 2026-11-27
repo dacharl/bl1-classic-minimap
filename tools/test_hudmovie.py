@@ -268,5 +268,99 @@ class ProvideChecks(unittest.TestCase):
             upk.movie(package('FlashMovie.HUD', b'not a movie'))
 
 
+class DiscoveryChecks(unittest.TestCase):
+    """Where Enhanced is looked for: Steam's libraryfolders.vdf files and the Enhanced folder setting."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+
+    def enhanced_at(self, *parts):
+        folder = self.root.joinpath(*parts)
+        (folder / hudmovie.INTERFACE).mkdir(parents=True, exist_ok=True)
+        (folder / hudmovie.INTERFACE / hudmovie.HUD_PACKAGE).write_bytes(b'x')
+        return folder
+
+    def vdf(self, name, *libraries):
+        path = self.root / name
+        entries = ''.join('\t"%d"\n\t{\n\t\t"path"\t\t"%s"\n\t\t"label"\t\t"ignored"\n\t}\n' % (i, str(lib).replace('\\', '\\\\'))
+                          for i, lib in enumerate(libraries))
+        path.write_text('"libraryfolders"\n{\n' + entries + '}\n', encoding='utf-8')
+        return path
+
+    def test_library_paths_read_every_path_entry_and_undo_vdf_escapes(self):
+        text = ('"libraryfolders" { "0" { "path" "C:\\\\Steam" "label" "" } "1" { "path"\t\t"D:\\\\Games\\\\SteamLibrary" } '
+                '"2" { "path" "/mnt/sd" } "3" { "pathology" "nope" } }')
+        self.assertEqual(hudmovie.library_paths(text), [Path('C:\\Steam'), Path('D:\\Games\\SteamLibrary'), Path('/mnt/sd')])
+        # through Proton only the POSIX paths move to Wine's Z: drive
+        self.assertEqual(hudmovie.library_paths(text, proton=True),
+                         [Path('C:\\Steam'), Path('D:\\Games\\SteamLibrary'), Path('Z:/mnt/sd')])
+        self.assertEqual(hudmovie.library_paths('no entries here'), [])
+
+    def test_vdf_list_is_the_games_library_then_steams_own_then_each_proton_home(self):
+        game = Path('D:/SteamLibrary/steamapps/common/Borderlands')
+        homes = self.root / 'home'
+        for user in ('deck', 'alice'):
+            (homes / user).mkdir(parents=True)
+        (homes / 'readme.txt').write_text('a file is not a home folder')
+        steam = [Path(p) for p in hudmovie.STEAM_VDFS]
+        proton = [home / p for home in (homes / 'alice', homes / 'deck', homes / 'readme.txt')
+                  for p in hudmovie.PROTON_VDFS]
+        self.assertEqual(hudmovie.default_vdfs(game, homes),
+                         [Path('D:/SteamLibrary/steamapps/libraryfolders.vdf')] + steam + proton)
+        self.assertEqual(hudmovie.default_vdfs(game, self.root / 'no-such-homes'),
+                         [Path('D:/SteamLibrary/steamapps/libraryfolders.vdf')] + steam)
+
+        class Unreadable:
+            def is_dir(self):
+                return True
+
+            def iterdir(self):
+                raise OSError('denied')
+        self.assertEqual(hudmovie.default_vdfs(game, Unreadable()),
+                         [Path('D:/SteamLibrary/steamapps/libraryfolders.vdf')] + steam)
+
+    def test_setting_then_the_folder_beside_classic_then_libraries_in_order(self):
+        game = self.root / 'steamapps' / 'common' / 'Borderlands'
+        beside = self.enhanced_at('steamapps', 'common', hudmovie.ENHANCED_FOLDER)
+        lib1 = self.enhanced_at('lib1', 'steamapps', 'common', hudmovie.ENHANCED_FOLDER)
+        lib2 = self.enhanced_at('lib2', 'steamapps', 'common', hudmovie.ENHANCED_FOLDER)
+        vdfs = [self.root / 'missing.vdf', self.vdf('a.vdf', self.root / 'lib1', self.root / 'lib2')]
+        self.assertEqual(hudmovie.find_enhanced(game, '', vdfs), (beside, []))
+        setting = self.enhanced_at('chosen')
+        self.assertEqual(hudmovie.find_enhanced(game, str(setting), vdfs), (setting, []))
+        # a setting without the package is reported, then the search goes on
+        wrong = self.root / 'wrong'
+        found, notes = hudmovie.find_enhanced(game, str(wrong), vdfs)
+        self.assertEqual(found, beside)
+        self.assertEqual(notes, ['The Enhanced folder setting (%s) has no %s; looking elsewhere.'
+                                 % (wrong, hudmovie.INTERFACE / hudmovie.HUD_PACKAGE)])
+        # without the sibling, the libraries are tried in the order the vdf lists them, across vdf files
+        (beside / hudmovie.INTERFACE / hudmovie.HUD_PACKAGE).unlink()
+        self.assertEqual(hudmovie.find_enhanced(game, '', vdfs)[0], lib1)
+        self.assertEqual(hudmovie.find_enhanced(game, '', [self.vdf('b.vdf', self.root / 'lib2')])[0], lib2)
+        (lib1 / hudmovie.INTERFACE / hudmovie.HUD_PACKAGE).unlink()
+        (lib2 / hudmovie.INTERFACE / hudmovie.HUD_PACKAGE).unlink()
+        self.assertEqual(hudmovie.find_enhanced(game, '', vdfs), (None, []))
+
+    def test_provide_reports_an_enhanced_package_it_cannot_read(self):
+        game = Game(self.root, enhanced_where=None)
+        folder = self.root / 'enhanced-without-package'
+        original = hudmovie.find_enhanced
+        hudmovie.find_enhanced = lambda *args: (folder, ['found it'])
+        try:
+            result = game.provide()
+        finally:
+            hudmovie.find_enhanced = original
+        package_path = folder / hudmovie.INTERFACE / hudmovie.HUD_PACKAGE
+        self.assertEqual((result.art, result.enhanced), ('original', None))
+        self.assertEqual(result.notes[:2], ['found it', "Enhanced's HUD package at %s can't be read; using the original art."
+                                            % package_path])
+        self.assertEqual(sorted(result.inputs), [hudmovie.HUD_PACKAGE, hudmovie.MENUS_PACKAGE])
+        self.assertFalse(result.recognised)
+        self.assertIn('unrecognised game files', result.notes[2])
+
+
 if __name__ == '__main__':
     unittest.main()

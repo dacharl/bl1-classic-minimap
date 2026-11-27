@@ -77,10 +77,10 @@ def library_paths(text, proton=False):
     return out
 
 
-def default_vdfs(game):
-    """Where Steam lists its libraries: the game's own library, then Steam's usual places (Windows, Proton)."""
+def default_vdfs(game, homes=Path('Z:/home')):
+    """Where Steam lists its libraries: the game's own library, then Steam's usual places (Windows, Proton).
+    `homes` is the folder of user home folders Proton's Wine sees (a parameter so a test can supply one)."""
     out = [Path(game).parents[1] / 'libraryfolders.vdf'] + [Path(p) for p in STEAM_VDFS]
-    homes = Path('Z:/home')
     try:
         if homes.is_dir():
             out += [home / p for home in sorted(homes.iterdir()) for p in PROTON_VDFS]
