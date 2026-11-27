@@ -27,6 +27,7 @@ BUILDER = 'test_builder_suites.py'
 OTHER_SUITES = (BUILDER, 'test_profiler.py')
 SUITE_BUDGET = 25.0            # seconds for all suites together; cosmic-ray.toml timeout is 20
 MUTATED_FILE_ENV = 'MINIMAP_MUTATED_FILE'   # set by run_mutations.py's run_item: the file under mutation
+MEMORY_CAP = 3 << 30           # POSIX: address-space cap per suite process, so a runaway mutant fails alone
 PROBE_ENV = 'MINIMAP_SUITE_PROBE'           # measurement: run every suite and append which failed to this file
 
 # Suites that can kill a mutant, per mutated file, the one that kills most first. A name that is not a key here
@@ -131,6 +132,13 @@ def process_tree(root, table):
     return tree
 
 
+def limit_memory():
+    """preexec_fn for a suite on POSIX: a mutant that allocates without bound then raises MemoryError in its own
+    suite (a kill), where uncapped it starved the CI runner, which GitHub shut down mid-run (exit 143)."""
+    import resource
+    resource.setrlimit(resource.RLIMIT_AS, (MEMORY_CAP, MEMORY_CAP))
+
+
 def kill_tree(proc):
     """Kill a suite and everything it started. On POSIX, proc.kill() alone orphaned a looping grandchild, which
     held the caller's output pipes open: the unit-test runner then stalled until CI cancelled it (PHASE3 3bp)."""
@@ -166,7 +174,8 @@ def main(suites=None, budget=SUITE_BUDGET):
         script, _, case = str(suite).partition('::')
         path = Path(script) if Path(script).is_absolute() else HERE / script
         proc = subprocess.Popen([child_python(), '-B', '-I', str(HERE / 'watchdog_run.py'), str(wall_deadline),
-                                 str(path), *([case] if case else [])], cwd=HERE.parent)
+                                 str(path), *([case] if case else [])], cwd=HERE.parent,
+                                preexec_fn=None if sys.platform == 'win32' else limit_memory)
         if job is not None:
             kernel32, handle = job
             import ctypes

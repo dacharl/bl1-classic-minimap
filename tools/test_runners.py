@@ -220,6 +220,18 @@ class RunnerChecks(unittest.TestCase):
         # the real three, together
         self.assertEqual(test_builder_suites.main(stream=io.StringIO()), 0)
 
+    @unittest.skipIf(sys.platform == 'win32', 'RLIMIT_AS exists on POSIX only')
+    def test_a_suite_cannot_allocate_past_the_memory_cap(self):
+        """A mutant that grows memory without bound must fail its own suite, not take the CI runner down (the
+        runner was shut down twice mid-run, exit 143)."""
+        import test_mutants
+
+        code = 'import sys\ntry:\n    bytearray(sys.argv[1])\nexcept MemoryError:\n    sys.exit(7)\n'
+        cap = test_mutants.MEMORY_CAP
+        for size, expected in ((cap // 8, 0), (cap * 2, 7)):
+            proc = subprocess.run([sys.executable, '-c', code, str(size)], preexec_fn=test_mutants.limit_memory)
+            self.assertEqual(proc.returncode, expected, size)
+
     def test_every_mutated_file_has_a_suite_list_and_unknown_files_run_everything(self):
         """A file's list names real suites, the whole of test_ci only as 'test_ci.py', and a file with no list (or
         no file at all) gets every suite, so only a measured entry can skip one."""
