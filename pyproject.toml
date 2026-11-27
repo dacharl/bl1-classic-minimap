@@ -47,6 +47,10 @@ branch = 76
 line = 97
 branch = 78
 
+[tool.quality.coverage."sdk_mods/classic_minimap/swfrecords.py"]
+line = 97
+branch = 78
+
 [tool.quality.coverage."tools/build_sdkmod.py"]
 line = 94
 branch = 83
@@ -77,6 +81,8 @@ branch = 90
 # PLAN_V13 moved the builder into the mod; these floors are configured but not yet measured
 "sdk_mods/classic_minimap/hudmovie.py" = 70
 "sdk_mods/classic_minimap/swfbuild.py" = 70
+# PLAN_BUILDER_SPLIT: files split out of swfbuild.py; provisional floors until the full run sets them (measured minus 3)
+"sdk_mods/classic_minimap/swfrecords.py" = 70
 "sdk_mods/classic_minimap/as2asm.py" = 70
 "sdk_mods/classic_minimap/swfdeps.py" = 70
 "sdk_mods/classic_minimap/upk.py" = 70

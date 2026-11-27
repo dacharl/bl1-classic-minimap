@@ -1,6 +1,6 @@
 [cosmic-ray]
 module-path = ["sdk_mods/classic_minimap/__init__.py", "tools/build_sdkmod.py",
-               "sdk_mods/classic_minimap/swfmerge.py", "sdk_mods/classic_minimap/hudmovie.py", "sdk_mods/classic_minimap/swfbuild.py",
+               "sdk_mods/classic_minimap/swfmerge.py", "sdk_mods/classic_minimap/hudmovie.py", "sdk_mods/classic_minimap/swfbuild.py", "sdk_mods/classic_minimap/swfrecords.py",
                "sdk_mods/classic_minimap/as2asm.py", "sdk_mods/classic_minimap/swfdeps.py", "sdk_mods/classic_minimap/upk.py",
                "sdk_mods/classic_minimap_profiler/__init__.py", "sdk_mods/classic_minimap_profiler/profiler.py"]
 timeout = 20.0

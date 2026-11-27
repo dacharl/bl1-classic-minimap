@@ -6,11 +6,13 @@ Usage: python -I tools/swfdeps.py movie.gfx <character id> [<character id> ...]
 import sys
 
 try:        # inside the mod package (the in-game build, PLAN_V13)
-    from .swfmerge import (DEFINES, SHAPES, Bits, read_fills, read_lines, read_tags, u16,  # noqa: F401
-                           shape_gradient_count, skip_matrix, skip_rect, walk_shape)
+    from .swfmerge import (DEFINES, SHAPES, Bits, read_fills, read_lines,  # noqa: F401
+                           shape_gradient_count, skip_matrix, walk_shape)
+    from .swfrecords import read_tags, skip_rect, u16  # noqa: F401
 except ImportError:     # a plain module (tools/ wrappers, offline suites)
-    from swfmerge import (DEFINES, SHAPES, Bits, read_fills, read_lines, read_tags, u16,  # noqa: F401
-                          shape_gradient_count, skip_matrix, skip_rect, walk_shape)
+    from swfmerge import (DEFINES, SHAPES, Bits, read_fills, read_lines,  # noqa: F401
+                          shape_gradient_count, skip_matrix, walk_shape)
+    from swfrecords import read_tags, skip_rect, u16  # noqa: F401
 
 NAMES = {2: 'Shape', 22: 'Shape2', 32: 'Shape3', 83: 'Shape4', 39: 'Sprite', 6: 'BitsJPEG', 20: 'BitsLossless',
          21: 'BitsJPEG2', 35: 'BitsJPEG3', 36: 'BitsLossless2', 90: 'BitsJPEG4', 10: 'Font', 48: 'Font2',

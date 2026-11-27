@@ -11,41 +11,19 @@ against it and refuses on any mismatch; it never guesses.
 import json
 import struct
 
+try:        # inside the mod package: the in-game build (PLAN_V13)
+    from .swfrecords import LONG_FORM, header, read_tags, skip_rect, tag, u16, u32, words  # noqa: F401  (re-exported)
+except ImportError:     # a plain module: tools/ wrappers and the offline suites put this folder on sys.path
+    from swfrecords import LONG_FORM, header, read_tags, skip_rect, tag, u16, u32, words  # noqa: F401  (re-exported)
+
 StructError = struct.error      # a plain name: Cosmic Ray's ExceptionReplacer fails on `except (…, struct.error)` (PHASE3 3cf)
 
-LONG_FORM = 0x3F        # a tag header's 6-bit length field: "a 32-bit length follows"
 METADATA = 77
 MAGIC = b"bl1mm-block\0"
 SHAPES = {2: 1, 22: 2, 32: 3, 83: 4}          # DefineShape tag -> version
 DEFINES = {2, 22, 32, 83, 39, 6, 20, 21, 35, 36, 90, 10, 48, 75, 11, 33, 37, 7, 34, 46, 84, 14, 18,
            1001, 1003, 1005, 1008, 1009}
 GRADIENT_IMAGE = 1003                          # GFx DefineExternalGradient: id = gradient fill number
-
-
-def u16(d, p=0):
-    """Unsigned little-endian 16-bit field at offset p."""
-    return struct.unpack_from("<H", d, p)[0]
-
-
-def u32(d, p=0):
-    """Unsigned little-endian 32-bit field at offset p."""
-    return struct.unpack_from("<I", d, p)[0]
-
-
-def words(*values):
-    """The values as consecutive unsigned little-endian 16-bit fields."""
-    return struct.pack("<%dH" % len(values), *values)
-
-
-def header(d, p):
-    """(code, body length, body offset) of the tag whose header starts at p, in the short or the long form."""
-    head = u16(d, p)
-    p += 2
-    code, ln = head >> 6, head & LONG_FORM
-    if ln == LONG_FORM:
-        ln = u32(d, p)
-        p += 4
-    return code, ln, p
 
 
 class MergeRefused(Exception):
@@ -77,21 +55,6 @@ class Bits:
     def align(self):
         self.p = (self.p + 7) & ~7
         return self.p >> 3
-
-
-def read_tags(d, p, end):
-    out = []
-    while p < end:
-        code, ln, p = header(d, p)
-        out.append((code, d[p:p + ln]))
-        p += ln
-        if code == 0:
-            break
-    return out
-
-
-def skip_rect(b, p):
-    return p + (5 + 4 * (b[p] >> 3) + 7) // 8
 
 
 def skip_matrix(br):
@@ -211,12 +174,6 @@ def shape_gradient_count(code, b):
     GFx numbers gradient fills in file order and keys its external gradient images (tag 1003) by that
     number, so inserting gradient-bearing shapes shifts every later gradient (PHASE3 run 14)."""
     return len(walk_shape(code, b)[1]) if code in SHAPES else 0
-
-
-def tag(code, body):
-    if len(body) < 0x3F and code not in (6, 21, 35, 20, 36, 90):
-        return words((code << 6) | len(body)) + body
-    return words((code << 6) | LONG_FORM) + struct.pack("<I", len(body)) + body
 
 
 def split(d):

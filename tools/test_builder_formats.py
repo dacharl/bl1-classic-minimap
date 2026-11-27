@@ -465,16 +465,16 @@ class SwfRecordChecks(unittest.TestCase):
     word, with length 0x3F and a 32-bit length after it for the long form."""
 
     def test_little_endian_fields(self):
-        import swfmerge
-        self.assertEqual(swfmerge.words(1, 0x0102), b'\x01\x00\x02\x01')
-        self.assertEqual(swfmerge.words(), b'')
-        self.assertEqual(swfmerge.u16(b'\xff\x01\x02', 1), 0x0201)
-        self.assertEqual(swfmerge.u16(b'\x34\x12'), 0x1234)
-        self.assertEqual(swfmerge.u32(b'\xff\x01\x02\x03\x04', 1), 0x04030201)
-        self.assertEqual(swfmerge.u32(b'\x01\x00\x00\x80'), 0x80000001)
+        import swfrecords
+        self.assertEqual(swfrecords.words(1, 0x0102), b'\x01\x00\x02\x01')
+        self.assertEqual(swfrecords.words(), b'')
+        self.assertEqual(swfrecords.u16(b'\xff\x01\x02', 1), 0x0201)
+        self.assertEqual(swfrecords.u16(b'\x34\x12'), 0x1234)
+        self.assertEqual(swfrecords.u32(b'\xff\x01\x02\x03\x04', 1), 0x04030201)
+        self.assertEqual(swfrecords.u32(b'\x01\x00\x00\x80'), 0x80000001)
 
     def test_tag_headers_short_and_long(self):
-        import swfmerge
+        import swfrecords
         cases = [
             # (tag code, body, expected bytes): PlaceObject2 = 26 -> 26 << 6 = 0x680
             (26, b'ab', b'\x82\x06ab'),
@@ -486,13 +486,13 @@ class SwfRecordChecks(unittest.TestCase):
         ]
         for code, body, expected in cases:
             with self.subTest(code=code, length=len(body)):
-                self.assertEqual(swfmerge.tag(code, body), expected)
-                self.assertEqual(swfmerge.header(expected, 0), (code, len(body), len(expected) - len(body)))
-        self.assertEqual(swfmerge.header(b'..\xbf\x06\x64\x00\x00\x00', 2), (26, 100, 8))
-        self.assertEqual(swfmerge.header(b'.\x82\x06', 1), (26, 2, 3))
+                self.assertEqual(swfrecords.tag(code, body), expected)
+                self.assertEqual(swfrecords.header(expected, 0), (code, len(body), len(expected) - len(body)))
+        self.assertEqual(swfrecords.header(b'..\xbf\x06\x64\x00\x00\x00', 2), (26, 100, 8))
+        self.assertEqual(swfrecords.header(b'.\x82\x06', 1), (26, 2, 3))
 
     def test_place_object_fields_and_flags(self):
-        import swfbuild
+        import swfrecords
         cases = [
             # PlaceObject2 flags: 0x02 character, 0x04 matrix, 0x20 name, 0x40 clip depth; fields in file order
             (dict(depth=3, character=0x0102), b'\x85\x06\x02\x03\x00\x02\x01'),
@@ -505,32 +505,32 @@ class SwfRecordChecks(unittest.TestCase):
         ]
         for args, expected in cases:
             with self.subTest(**args):
-                self.assertEqual(swfbuild.place(**args), expected)
+                self.assertEqual(swfrecords.place(**args), expected)
 
     def test_sprites_end_with_end_tag_and_one_frame_ones_show_the_frame(self):
-        import swfbuild
-        self.assertEqual(swfbuild.sprite(9, 2, b'X'), b'\xc7\x09\x09\x00\x02\x00X\x00\x00')
-        self.assertEqual(swfbuild.sprite(9, 3), b'\xc6\x09\x09\x00\x03\x00\x00\x00')
-        self.assertEqual(swfbuild.one_frame_sprite(9), b'\xc8\x09\x09\x00\x01\x00\x40\x00\x00\x00')
-        self.assertEqual(swfbuild.one_frame_sprite(9, b'X'), b'\xc9\x09\x09\x00\x01\x00X\x40\x00\x00\x00')
-        self.assertEqual((swfbuild.SHOW_FRAME, swfbuild.END), (b'\x40\x00', b'\x00\x00'))
+        import swfrecords
+        self.assertEqual(swfrecords.sprite(9, 2, b'X'), b'\xc7\x09\x09\x00\x02\x00X\x00\x00')
+        self.assertEqual(swfrecords.sprite(9, 3), b'\xc6\x09\x09\x00\x03\x00\x00\x00')
+        self.assertEqual(swfrecords.one_frame_sprite(9), b'\xc8\x09\x09\x00\x01\x00\x40\x00\x00\x00')
+        self.assertEqual(swfrecords.one_frame_sprite(9, b'X'), b'\xc9\x09\x09\x00\x01\x00X\x40\x00\x00\x00')
+        self.assertEqual((swfrecords.SHOW_FRAME, swfrecords.END), (b'\x40\x00', b'\x00\x00'))
 
     def test_twips_round_to_the_nearest_twentieth(self):
-        import swfbuild
+        import swfrecords
         for pixels, expected in ((0, 0), (1.5, 30), (-2.5, -50), (0.026, 1), (0.024, 0), (-0.026, -1), (207.95, 4159)):
             with self.subTest(pixels=pixels):
-                self.assertEqual(swfbuild.twips(pixels), expected)
+                self.assertEqual(swfrecords.twips(pixels), expected)
 
     def test_raw_definition_id_reads_the_short_and_the_long_header(self):
-        import swfbuild
-        self.assertEqual(swfbuild.raw_id(swfbuild.tag(39, b'\x34\x12\x01\x00')), 0x1234)
-        self.assertEqual(swfbuild.raw_id(swfbuild.tag(6, b'\x78\x56')), 0x5678)
+        import swfrecords
+        self.assertEqual(swfrecords.raw_id(swfrecords.tag(39, b'\x34\x12\x01\x00')), 0x1234)
+        self.assertEqual(swfrecords.raw_id(swfrecords.tag(6, b'\x78\x56')), 0x5678)
 
     def test_shape_records_pack_bits_msb_first(self):
-        import swfbuild
+        import swfrecords
 
         def bits(write):
-            w = swfbuild.BitWriter()
+            w = swfrecords.BitWriter()
             write(w)
             return w.data()
 
@@ -552,15 +552,61 @@ class SwfRecordChecks(unittest.TestCase):
         self.assertEqual(bits(lambda w: w.end()), b'\x00')
 
     def test_closed_path_returns_to_the_first_point(self):
-        import swfbuild
+        import swfrecords
         seen = []
 
-        class Recording(swfbuild.BitWriter):
+        class Recording(swfrecords.BitWriter):
             def line_to(self, dx, dy):
                 seen.append((dx, dy))
 
         Recording().closed_path([(0, 0), (10, 0), (10, 4), (0, 4)])
         self.assertEqual(seen, [(10, 0), (0, 4), (-10, 0), (0, -4)])
+
+    def test_matrix_with_only_a_translation(self):
+        """MATRIX: HasScale 0, HasRotate 0, NTranslateBits (5 bits), then X and Y as signed fields of that width,
+        padded to a byte. The width is the longest of the four magnitudes' bit lengths plus a sign bit."""
+        import swfrecords
+        cases = [
+            # (pixels x, y, expected): twips are 20 per pixel
+            (0, 0, b'\x02\x00'),                    # 00 00001 0 0
+            (1, 0, b'\x0c\xa0\x00'),                # 00 00110 010100 000000   (20 twips needs 6 bits)
+            (-1, 0, b'\x0d\x60\x00'),               # 00 00110 101100 000000   (-20 as 6 bits is 101100)
+            (0, -0.5, b'\x0a\x0b\x00'),             # 00 00101 00000 10110     (-10 as 5 bits is 10110)
+            (-103.95, -86.8, b'\x1b\x7e\x1c\x9c\x00'),   # the window's top-left: 13 bits each
+        ]
+        for x, y, expected in cases:
+            with self.subTest(x=x, y=y):
+                self.assertEqual(swfrecords.translate_matrix(x, y), expected)
+
+    def test_twos_complement_fields_and_their_widths(self):
+        import swfrecords
+        for value, bits, expected in ((-1, 4, 15), (5, 4, 5), (-8, 4, 8), (0, 1, 0), (-1, 1, 1), (-20, 6, 44)):
+            with self.subTest(value=value, bits=bits):
+                self.assertEqual(swfrecords.sb(value, bits), expected)
+        # the width holds each value and its negation, so a field never overflows when the sign flips
+        for values, expected in (((), 1), ((0,), 1), ((1,), 2), ((-1,), 2), ((7,), 4), ((-8,), 5), ((3, -2), 3),
+                                 ((2047,), 12)):
+            with self.subTest(values=values):
+                self.assertEqual(swfrecords.signed_bits(*values), expected)
+
+    def test_rect_is_a_five_bit_width_then_four_signed_fields(self):
+        import swfrecords
+        self.assertEqual(swfrecords.rect_bytes(0, 0, 0, 0), b'\x08\x00')               # 00001 0 0 0 0
+        # -1, 1, -2, 2 px = -20, 20, -40, 40 twips: 7 bits each: 00111 1101100 0010100 1011000 0101000
+        self.assertEqual(swfrecords.rect_bytes(-1, 1, -2, 2), b'\x3e\xc2\x96\x14\x00')
+
+    def test_root_timeline_lists_every_tag_up_to_end_with_its_raw_bytes(self):
+        import swfrecords
+        tags = [swfrecords.tag(12, b'\x01\x02'), swfrecords.tag(6, bytes(3)), swfrecords.SHOW_FRAME,
+                swfrecords.END]
+        # signature, version, length, an empty RECT, frame rate, frame count; bytes after End are not tags
+        head = b'FWS\x08' + bytes(4) + swfrecords.rect_bytes(0, 0, 0, 0) + b'\x00\x0c\x01\x00'
+        movie_bytes = head + b''.join(tags) + b'trailing'
+        found = swfrecords.top_level(movie_bytes)
+        self.assertEqual(found, [(12, b'\x01\x02', tags[0]), (6, bytes(3), tags[1]), (1, b'', tags[2]),
+                                 (0, b'', tags[3])])
+        self.assertEqual(len(tags[1]), 6 + 3, 'the long-form header is part of the raw bytes')
+        self.assertEqual(swfrecords.top_level(head), [], 'a movie with no tags')
 
 
 if __name__ == '__main__':

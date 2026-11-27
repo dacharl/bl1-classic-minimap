@@ -36,21 +36,20 @@ import sys
 
 try:        # inside the mod package: the in-game build (PLAN_V13)
     from . import as2asm, swfmerge
-    from .swfdeps import DEFINES, SHAPES as SHAPE_CODES, Movie, read_tags, shape_bitmaps, skip_rect
+    from .swfdeps import DEFINES, SHAPES as SHAPE_CODES, Movie, shape_bitmaps
+    from .swfrecords import (DEFINE_EDIT_TEXT, DEFINE_FONT3, DEFINE_SHAPE3, DEFINE_SPRITE, DO_ACTION, END, END_CODE,  # noqa: F401
+                             EXPORT_ASSETS, FRAME_LABEL, REMOVE_OBJECT2, SHOW_FRAME, BitWriter, header,
+                             one_frame_sprite, place, raw_id, read_tags, rect_bytes, rgba, signed_bits, skip_rect,
+                             sprite, tag, top_level, translate_matrix, twips, u16, words)
 except ImportError:     # a plain module: tools/ wrappers and the offline suites put this folder on sys.path
     import as2asm
     import swfmerge
-    from swfdeps import DEFINES, SHAPES as SHAPE_CODES, Movie, read_tags, shape_bitmaps, skip_rect
-Fn, function, tag = as2asm.Fn, as2asm.function, swfmerge.tag
-u16, u32, header, words = swfmerge.u16, swfmerge.u32, swfmerge.header, swfmerge.words
-
-# SWF tag codes used here, and the PlaceObject2 flag bits (SWF file format specification)
-DO_ACTION, SHOW_FRAME_CODE, END_CODE = 12, 1, 0
-PLACE_OBJECT2, REMOVE_OBJECT2, FRAME_LABEL = 26, 28, 43
-DEFINE_SHAPE3, DEFINE_EDIT_TEXT, DEFINE_SPRITE, DEFINE_FONT3, EXPORT_ASSETS = 32, 37, 39, 75, 56
-HAS_CHARACTER, HAS_MATRIX, HAS_NAME, HAS_CLIP_DEPTH = 0x02, 0x04, 0x20, 0x40
-TWIPS = 20                        # twips per pixel
-SHOW_FRAME, END = tag(SHOW_FRAME_CODE, b''), tag(END_CODE, b'')
+    from swfdeps import DEFINES, SHAPES as SHAPE_CODES, Movie, shape_bitmaps
+    from swfrecords import (DEFINE_EDIT_TEXT, DEFINE_FONT3, DEFINE_SHAPE3, DEFINE_SPRITE, DO_ACTION, END, END_CODE,  # noqa: F401
+                            EXPORT_ASSETS, FRAME_LABEL, REMOVE_OBJECT2, SHOW_FRAME, BitWriter, header,
+                            one_frame_sprite, place, raw_id, read_tags, rect_bytes, rgba, signed_bits, skip_rect,
+                            sprite, tag, top_level, translate_matrix, twips, u16, words)
+Fn, function = as2asm.Fn, as2asm.function
 
 SOURCE_ROOTS = (1132,)            # maps (zone art, landmark/player icon clips, dlcmap frame) in status_menu.gfx
 MAPS_SPRITE = 1132
@@ -121,46 +120,9 @@ SAVE_ARCH = {'outer': ((-153.0, 181.0), (0.0, -117.0), 36.0),
 THREAT_DEPTH = 1000
 
 
-def top_level(d):
-    """[(code, body, raw_bytes)] for the root timeline."""
-    p = skip_rect(d, 8) + 4
-    out = []
-    while p < len(d):
-        start = p
-        code, ln, p = header(d, p)
-        out.append((code, d[p:p + ln], d[start:p + ln])); p += ln
-        if code == END_CODE:
-            break
-    return out
-
-
 def root_actions(d):
     """Decoded IR of every root-level DoAction in a movie."""
     return [as2asm.decode(b) for c, b, _ in top_level(d) if c == DO_ACTION]
-
-
-def twips(pixels):
-    return int(round(pixels * TWIPS))
-
-
-def place(depth, character, matrix=None, name=None, clip_depth=None):
-    """PlaceObject2 of `character` at `depth`; the optional matrix (bytes), instance name and clip depth follow
-    in the file's field order, each with its flag bit."""
-    flags = (HAS_CHARACTER | (HAS_MATRIX if matrix else 0) | (HAS_NAME if name else 0)
-             | (HAS_CLIP_DEPTH if clip_depth is not None else 0))
-    body = bytes([flags]) + words(depth, character) + (matrix or b'')
-    body += name.encode() + b'\0' if name else b''
-    body += words(clip_depth) if clip_depth is not None else b''
-    return tag(PLACE_OBJECT2, body)
-
-
-def sprite(sid, frames, *tags):
-    """DefineSprite: id, frame count, the control tags, End."""
-    return tag(DEFINE_SPRITE, words(sid, frames) + b''.join(tags) + END)
-
-
-def one_frame_sprite(sid, *tags):
-    return sprite(sid, 1, *tags, SHOW_FRAME)
 
 
 def copied_functions(status_menu):
@@ -738,27 +700,9 @@ def map_sprite():
                             place(MAPS_DEPTH, MAPS_SPRITE, name='maps'))
 
 
-def translate_matrix(tx, ty):
-    """SWF MATRIX with only a translation (pixels)."""
-    a, b = twips(tx), twips(ty)
-    n = max(a.bit_length(), b.bit_length(), (-a).bit_length(), (-b).bit_length()) + 1
-    bits = '0' + '0' + format(n, '05b') + format(sb(a, n), '0%db' % n) + format(sb(b, n), '0%db' % n)
-    bits += '0' * (-len(bits) % 8)
-    return int(bits, 2).to_bytes(len(bits) // 8, 'big')
-
-
-def sb(v, nbits):
-    return v & ((1 << nbits) - 1)
-
-
 def place_fallback():
     """PlaceObject2: MAP_ID as FALLBACK_NAME at FALLBACK_DEPTH, translated off-screen."""
     return place(FALLBACK_DEPTH, MAP_ID, translate_matrix(FALLBACK_OFFSCREEN, FALLBACK_OFFSCREEN), FALLBACK_NAME)
-
-
-def raw_id(raw):
-    """Character id of a raw definition tag (header short or long form)."""
-    return u16(raw, header(raw, 0)[2])
 
 
 def wrapper_sprite(sid, child):
@@ -796,71 +740,6 @@ def art_wrappers():
     # the window shape is centred; its wrapper shifts it so the sprite's origin is the window's top-left
     out.append(one_frame_sprite(WINDOW_ART, place(1, ENH_SHAPES[82], translate_matrix(-WINDOW_LEFT, -WINDOW_TOP))))
     return out
-
-
-class BitWriter:
-    """MSB-first bit packing for SWF records (RECT, shape records)."""
-
-    def __init__(self):
-        self.bits = []
-
-    def u(self, v, n):
-        self.bits += [(v >> (n - 1 - i)) & 1 for i in range(n)]
-
-    def s(self, v, n):
-        self.u(v & ((1 << n) - 1), n)
-
-    def data(self):
-        bits = self.bits + [0] * (-len(self.bits) % 8)
-        return bytes(int(''.join(map(str, bits[i:i + 8])), 2) for i in range(0, len(bits), 8))
-
-    def style_change(self, move, fill0=None, fill1=None, line=None):
-        """StyleChangeRecord (no new styles) that moves to `move` (twips) and selects the given style indices
-        (None leaves a style alone). Style indices are 1 bit wide here: NumFillBits and NumLineBits are at most 1."""
-        self.u(0, 1)                                    # not an edge record
-        self.u(0, 1)                                    # StateNewStyles
-        for index in (line, fill1, fill0):              # StateLineStyle, StateFillStyle1, StateFillStyle0
-            self.u(int(index is not None), 1)
-        self.u(1, 1)                                    # StateMoveTo
-        n = signed_bits(*move)
-        self.u(n, 5); self.s(move[0], n); self.s(move[1], n)
-        for index in (fill0, fill1, line):              # in the order the specification stores them
-            if index is not None:
-                self.u(index, 1)
-
-    def line_to(self, dx, dy):
-        """StraightEdgeRecord, general line, with the fewest bits (at least 2) that hold both deltas."""
-        n = max(2, signed_bits(dx, dy))
-        self.u(1, 1); self.u(1, 1); self.u(n - 2, 4)    # edge record, straight, NumBits - 2
-        self.u(1, 1); self.s(dx, n); self.s(dy, n)      # general line
-
-    def closed_path(self, points):
-        """Straight edges through the points (twips) and back to the first."""
-        for (ax, ay), (bx, by) in zip(points, points[1:] + points[:1]):
-            self.line_to(bx - ax, by - ay)
-
-    def end(self):
-        """EndShapeRecord."""
-        self.u(0, 6)
-
-
-def signed_bits(*values):
-    return max([1] + [int(v).bit_length() + 1 for v in values] + [int(-v).bit_length() + 1 for v in values])
-
-
-def rect_bytes(x0, x1, y0, y1):
-    """SWF RECT from pixel bounds."""
-    v = [twips(c) for c in (x0, x1, y0, y1)]
-    n = signed_bits(*v)
-    w = BitWriter()
-    w.u(n, 5)
-    for c in v:
-        w.s(c, n)
-    return w.data()
-
-
-def rgba(colour, alpha=0xFF):
-    return struct.pack('>I', colour)[1:] + bytes([alpha])
 
 
 def polygon_shape(sid, points, fill, line=None):
