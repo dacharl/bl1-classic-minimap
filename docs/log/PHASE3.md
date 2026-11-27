@@ -3079,3 +3079,15 @@ The user installed the pre-release `classic_minimap.sdkmod` on the Deck and sent
 **The layout name is not the resolution.** "16:9 HUD layout" is the game's HUD sprite layout, found from `p1.echo`'s `_x` (`LAYOUTS`; the game has only 16:9 and 4:3 sprites). The Deck's native 1280x800 (16:10) uses the 16:9 sprite, so the log neither shows nor contradicts a 16:10 resolution.
 
 **Unverified.** The 16:10 save icon (needs a screenshot during a save; the log shows only that the native icon was hidden), Enhanced art on the Deck, 4:3, and a hash check of the downloaded `.sdkmod` against the local build. Nothing was changed in the mod.
+
+## 3ck. The first CI mutation runs: runner shutdowns and the memory cap (2026-11-27)
+
+**What happened.** The first `mutation.yml` run on `32668a8` (4 workers on the 4-core hosted runner) ended at 38 minutes, at 9,400 of 13,062 mutants, with "The runner has received a shutdown signal" and exit 143. A rerun (attempt 2) ended the same way after 2 m 36 s, at 600 mutants. Neither run had a failing test, an error or a reached threshold step, and the 180-minute limit was not involved.
+
+**Cause (a working theory, not proven).** Nothing in `run_mutations.py` or `test_mutants.py` signals a process outside its own tree. A mutant that allocates without bound, on a runner with no spare memory, is the likeliest way to get the runner agent dropped.
+
+**Fix.** On POSIX each suite process now runs with a 3 GiB address-space cap (`MEMORY_CAP`, `limit_memory` in `tools/test_mutants.py`), so such a mutant raises `MemoryError` in its own suite and counts as a kill. Windows is unchanged. `test_a_suite_cannot_allocate_past_the_memory_cap` checks it; it skips on Windows.
+
+**Result.** The run on `1659aa7` (production code identical to `3a7b9b9`) passed all steps, including the thresholds, in about 71 minutes (22:24 to 23:35 UTC). Its scores match the local run within a point: mod 77.1, `swfmerge` 85.1, `hudmovie` 94.5, `swfbuild` 87.5, `swfrecords` 92.3, `hudlayout` 100, `hudart` 88.7, `hudscript` 79.1, `as2asm` 91.5, `swfdeps` 83.5, `upk` 90.7, `build_sdkmod` 84.6, profiler init 91.2, profiler 84.0; all at or above their floors.
+
+**Unverified.** One passing run does not prove the cap was the cause; another exit 143 would reopen it (next steps: 2 workers, and log memory and process counts). The cap value was not measured against the largest legitimate suite on Linux beyond CI passing.
