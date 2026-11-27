@@ -22,24 +22,28 @@ The hosted jobs need no game installation or credentials. Reports are retained f
 
 | File | Minimum line coverage | Minimum branch coverage | Minimum mutation score |
 |---|---:|---:|---:|
-| `sdk_mods/classic_minimap/__init__.py` | 89% | 81% | 70% |
-| `sdk_mods/classic_minimap/swfmerge.py` | 90% | 80% | 70% (measured 83.1%) |
-| `sdk_mods/classic_minimap/hudmovie.py` | 90% | 85% | 70% (measured 87.5%) |
-| `sdk_mods/classic_minimap/swfbuild.py` | 97% | 78% | 70% (measured 76.8%) |
-| `sdk_mods/classic_minimap/as2asm.py` | 81% | 76% | 70% (measured 91.3%) |
-| `sdk_mods/classic_minimap/upk.py` | 88% | 70% | 70% (measured 90.7%) |
-| `sdk_mods/classic_minimap/swfdeps.py` | 60% | 45% | 70% (measured 79.6%) |
-| `tools/build_sdkmod.py` | 94% | 83% | 80% |
+| `sdk_mods/classic_minimap/__init__.py` | 89% | 84% | 74% (measured 77.1%) |
+| `sdk_mods/classic_minimap/swfmerge.py` | 97% | 95% | 82% (measured 85.1%) |
+| `sdk_mods/classic_minimap/hudmovie.py` | 95% | 97% | 90% (measured 93.6%) |
+| `sdk_mods/classic_minimap/swfbuild.py` | 97% | 89% | 84% (measured 87.5%) |
+| `sdk_mods/classic_minimap/swfrecords.py` | 97% | 97% | 89% (measured 92.3%) |
+| `sdk_mods/classic_minimap/hudlayout.py` | 97% | none (constants only) | 97% (measured 100.0%) |
+| `sdk_mods/classic_minimap/hudart.py` | 95% | 87% | 85% (measured 88.7%) |
+| `sdk_mods/classic_minimap/hudscript.py` | 96% | 90% | 76% (measured 79.1%) |
+| `sdk_mods/classic_minimap/as2asm.py` | 90% | 93% | 88% (measured 91.5%) |
+| `sdk_mods/classic_minimap/upk.py` | 96% | 94% | 87% (measured 90.7%) |
+| `sdk_mods/classic_minimap/swfdeps.py` | 95% | 93% | 80% (measured 83.5%) |
+| `tools/build_sdkmod.py` | 94% | 83% | 81% (measured 84.6%) |
 | `tools/land_branch.py` | 92% | 85% | Not gated |
 | `tools/release_notes.py` | 95% | 90% | Not gated |
-| `sdk_mods/classic_minimap_profiler/__init__.py` | 95% | 95% | 85% |
-| `sdk_mods/classic_minimap_profiler/profiler.py` | 95% | 88% | 78% |
+| `sdk_mods/classic_minimap_profiler/__init__.py` | 95% | 97% | 88% (measured 91.2%) |
+| `sdk_mods/classic_minimap_profiler/profiler.py` | 95% | 89% | 80% (measured 83.7%) |
 
-The builder moved into the mod in v0.13 (PLAN_V13 decision 16), so its files are shipped mod files and need both floors; the `tools/` files of the same names are wrappers and aren't gated. The floors are configured in `pyproject.toml` and applied separately to each file. Missing reports or missing files fail. Coverage counts Python execution of the builder and assembler; it does not measure AS2 instruction coverage or actual game engine behavior.
+The builder moved into the mod in v0.13 (PLAN_V13 decision 16), so its files are shipped mod files and need both floors; the `tools/` files of the same names are wrappers and aren't gated. The builder is split by responsibility (PHASE3 3ch): `swfrecords.py` (SWF records), `hudart.py`, `hudscript.py`, `hudlayout.py` (constants only, so no branch floor) and `swfbuild.py` (assembly); each is gated like the others. Every floor is the measured value minus 3 (rounded down, never lowered, mutation never below 70), from the full run of 2026-11-27 and a fresh coverage run. The floors are configured in `pyproject.toml` and applied separately to each file. Missing reports or missing files fail. Coverage counts Python execution of the builder and assembler; it does not measure AS2 instruction coverage or actual game engine behavior.
 
 Mutation gates cover the shipped Python mod and SDK packager, configured in `cosmic-ray.toml` and `pyproject.toml`. The runner executes every default Cosmic Ray mutant in these files, including uncovered code. A passing original suite is required first. Each worker mutates an isolated source copy. Every mutant remains in the denominator: only a normal worker with a failing test earns a kill; timeouts count as undetected, and tool errors or incomplete results fail the gate. Survivor diffs are uploaded for investigation. This is mutation detection, not an assertion that all surviving mutations are bugs; equivalent mutants can survive.
 
-Initial Windows/Python 3.11 baseline: the mod killed 2,059 of 2,767 mutants (74.41%); the packager killed 32 of 39 (82.05%). There were no mutant timeouts or worker errors. Packager survivors include untested CLI argument handling and destination-parent creation. These remain in the denominator; strengthen those tests before raising the floor. 2026-11-26 run (PHASE3 §3cf, 13,923 mutants over the mod, the builder files, the packager and the profiler): the mod 75.93%, `swfmerge` 82.96%, `hudmovie` 87.47%, `swfbuild` 76.76%, `as2asm` 56.81%, `swfdeps` 25.82%, `upk` 60.66% (the same day, after `test_builder_formats.py` and a plain `StructError` name: 91.3%, 79.6%, 90.7%), packager 82.05%, profiler 91.18% and 81.58%. The first run had those three below their floors and three Cosmic Ray `ExceptionReplacer` errors (`except (…, struct.error)`); both are fixed, but a final full run is still needed. The mutation command also runs `test_swfmerge`, `test_hudmovie` and each `test_ci` case in its own process (the whole file in one process failed its baseline), and `run_mutations.py` takes `--resume`, `--max-results` and `--stall-timeout`. After PHASE3 §3cg the builder helpers cut the mutant count from 13,923 to 13,062 and `swfmerge.py` scored 84.22% (1,484 of 1,762).
+Initial Windows/Python 3.11 baseline: the mod killed 2,059 of 2,767 mutants (74.41%); the packager killed 32 of 39 (82.05%). There were no mutant timeouts or worker errors. Packager survivors include untested CLI argument handling and destination-parent creation. These remain in the denominator; strengthen those tests before raising the floor. 2026-11-26 run (PHASE3 §3cf, 13,923 mutants over the mod, the builder files, the packager and the profiler): the mod 75.93%, `swfmerge` 82.96%, `hudmovie` 87.47%, `swfbuild` 76.76%, `as2asm` 56.81%, `swfdeps` 25.82%, `upk` 60.66% (the same day, after `test_builder_formats.py` and a plain `StructError` name: 91.3%, 79.6%, 90.7%), packager 82.05%, profiler 91.18% and 81.58%. The first run had those three below their floors and three Cosmic Ray `ExceptionReplacer` errors (`except (…, struct.error)`); both are fixed, but a final full run is still needed. The mutation command also runs `test_swfmerge`, `test_hudmovie` and each `test_ci` case in its own process (the whole file in one process failed its baseline), and `run_mutations.py` takes `--resume`, `--max-results` and `--stall-timeout`. After PHASE3 §3cg the builder helpers cut the mutant count from 13,923 to 13,062 and `swfmerge.py` scored 84.22% (1,484 of 1,762). The 2026-11-27 full run (PHASE3 3ch) took 61 min with every file above its floor, 0 errors and 52 timeouts: 84.21% overall (10,999 of 13,062 killed); the three builder suites now share one process (`tools/test_builder_suites.py`), and a probe (`MINIMAP_SUITE_PROBE`) always runs every suite, whatever the per-file lists say.
 
 Ruff `F`/`E9` checks run over both mods and all Python tools. Additional checks validate workflow syntax with actionlint, Python syntax, matching version fields, dependency consistency, SDK archive structure/content/cache exclusion, the absence of tracked game/build binaries, the ban on unsafe `.Invoke` calls, and coverage and mutation thresholds being configured for every shipped mod Python file. These run in the lint steps of the Ubuntu job; the mutation scores themselves are checked only by on-demand mutation runs.
 
