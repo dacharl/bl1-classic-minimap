@@ -150,7 +150,7 @@ The release is the whole install: players build the HUD movie from their own gam
 
 ## License
 
-[MIT](LICENSE). The mod contains no game files.
+[MIT](LICENSE), covering the source code and original artwork in this repository. Borderlands is a trademark of Gearbox. The mod contains no game files; it builds its HUD movie on your machine from your own copy of the game.
 
 ## Continuous integration
 
