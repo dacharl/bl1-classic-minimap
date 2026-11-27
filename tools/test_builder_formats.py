@@ -369,6 +369,18 @@ class SwfdepsChecks(unittest.TestCase):
                                  tag(26, b'\x00' + H(6) + H(98))))
         self.assertEqual(m.refs(10), {20, 30, 40})
 
+    def test_place_object3_with_a_class_name_reads_the_character_after_it(self):
+        """PlaceObject3: flags (2 bytes), depth, then a class name (a zero-terminated string) when the second flag
+        byte has PlaceFlagHasClassName (0x08), or PlaceFlagHasImage (0x10) together with HasCharacter, then the
+        character id. A fixed offset read the first two bytes of the name as the id."""
+        named = tag(70, b'\x02\x08' + H(1) + b'Cls\x00' + H(31))
+        image = tag(70, b'\x02\x10' + H(2) + b'img\x00' + H(32))
+        both = tag(70, b'\x02\x18' + H(3) + b'a\x00' + H(33))
+        plain = tag(70, b'\x02\x00' + H(4) + H(34))
+        no_character = tag(70, b'\x00\x08' + H(5) + b'Cls\x00' + H(99))        # a class name but no character id
+        m = self.movie(sprite_of(10, named, image, both, plain, no_character))
+        self.assertEqual(m.refs(10), {31, 32, 33, 34})
+
     def test_shape_bitmaps(self):
         code, body, _, bitmaps = rich_shape(3)
         m = self.movie(tag(code, body))

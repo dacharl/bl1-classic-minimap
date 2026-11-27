@@ -25,6 +25,15 @@ def shape_bitmaps(code, b):
     return walk_shape(code, b)[0]
 
 
+def placed_character_offset(body):
+    """Where a PlaceObject3's character id sits: after two flag bytes and the depth, and after the class name (a
+    zero-terminated string) when the second flag byte has PlaceFlagHasClassName (0x08), or PlaceFlagHasImage (0x10)."""
+    offset = 4
+    if body[1] & 0x18:
+        offset = body.index(b'\0', offset) + 1
+    return offset
+
+
 class Movie:
     def __init__(self, path=None, data=None):
         if data is None:
@@ -59,7 +68,7 @@ class Movie:
         if code == 39:
             for c, tb in read_tags(b, 4, len(b)):
                 if c in (26, 70) and tb[0] & 0x02:
-                    out.add(u16(tb, 3 if c == 26 else 4 + (0 if not tb[1] & 0x08 else 0)))
+                    out.add(u16(tb, 3 if c == 26 else placed_character_offset(tb)))
                 elif c == 4:
                     out.add(u16(tb, 0))
         elif code in SHAPES:
