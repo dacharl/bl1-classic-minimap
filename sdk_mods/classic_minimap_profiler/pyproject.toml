@@ -1,6 +1,6 @@
 [project]
 name = "Classic Minimap Profiler"
-version = "0.1.28"
+version = "0.1.29"
 description = "Optional, removable performance captures for Classic Minimap. For investigation only; not needed for play."
 authors = [{ name = "dacharl" }]
 
