@@ -3067,3 +3067,15 @@ Implements PLAN_BUILDER_SPLIT (steps 1 to 5) and PLAN_MUTATION_NEXT section A, o
 **License badge.** GitHub showed "license: not identifiable". Cause: `LICENSE` was MIT plus a trailing paragraph (scope and the Gearbox trademark), so GitHub's licensee matcher reported `NOASSERTION`. Fix: `LICENSE` is the unmodified MIT text; the paragraph moved to the README's License section. Check after pushing: `gh repo view --json licenseInfo` should say MIT.
 
 **Unverified:** the Deck run on the v0.16.6 pre-release (16:10 save icon, original art), and the downloaded `.sdkmod`'s hash against the local build.
+
+## 3cj. The Steam Deck on the v0.16.6 pre-release (2026-11-27)
+
+The user installed the pre-release `classic_minimap.sdkmod` on the Deck and sent its `unrealsdk.log` (`S:\steamapps\common\Borderlands\…` under Proton; the first Deck run since v0.14.7, §3aw).
+
+**Worked.** Original art (Enhanced isn't installed on the Deck): the HUD movie built from the game's own packages in 0.65 s (0.69 s after the first level load). Extended UI merge 2.06 s (read 1.13, merge 0.29, write 0.64; 842,693 bytes). The map docked ("16:9 HUD layout", tilted), attached with no retries, showed `dlcmap1` with 3 to 20 markers, hid and showed around loading screens, "HUD off" and "no live pawn", and the native save icon was hidden (scale 0.5 to 0). The ECHO panel was re-shifted 14 times after the game put it back (the v0.14.2 behaviour). No `ERR` or warning from the mod; the log's errors are other mods' invalid `.sdkmod` files (BonkUtilities, DedicatedDropsSDK, DLCFastTravelSDK, extended_options). The startup note pointed out an old `GfxHUD_Minimap.upk` still on the Deck.
+
+**Rebuild bursts, by design.** "tracked mission or visible area changed; rebuilding map objects in place" appeared 12 times about every 1.04 s (21:51:30 to 21:51:43) and at longer intervals earlier. The user was changing the tracked mission with the Mission Selector mod, which is what `objective_key` watches. I first suspected sublevel streaming; that was wrong.
+
+**The layout name is not the resolution.** "16:9 HUD layout" is the game's HUD sprite layout, found from `p1.echo`'s `_x` (`LAYOUTS`; the game has only 16:9 and 4:3 sprites). The Deck's native 1280x800 (16:10) uses the 16:9 sprite, so the log neither shows nor contradicts a 16:10 resolution.
+
+**Unverified.** The 16:10 save icon (needs a screenshot during a save; the log shows only that the native icon was hidden), Enhanced art on the Deck, 4:3, and a hash check of the downloaded `.sdkmod` against the local build. Nothing was changed in the mod.
