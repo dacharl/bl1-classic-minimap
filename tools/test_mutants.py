@@ -148,8 +148,14 @@ def kill_tree(proc):
     proc.wait()
 
 
+def run_suites(environ):
+    """The suites for this run: the mutated file's list, or every suite when probing (a probe measures what each
+    suite kills, so it must not be limited by the lists it is measuring) or when no file is named."""
+    return suites_for(None if environ.get(PROBE_ENV) else environ.get(MUTATED_FILE_ENV))
+
+
 def main(suites=None, budget=SUITE_BUDGET):
-    suites = suites_for(os.environ.get(MUTATED_FILE_ENV)) if suites is None else suites
+    suites = run_suites(os.environ) if suites is None else suites
     probe = os.environ.get(PROBE_ENV)
     failed = []
     deadline = time.monotonic() + budget

@@ -185,6 +185,17 @@ class RunnerChecks(unittest.TestCase):
         # the three builder suites import no SDK stubs, so they share one process (a process costs about 0.7 s)
         self.assertEqual(set(test_mutants.OTHER_SUITES), {'test_builder_suites.py', 'test_profiler.py'})
 
+    def test_probe_mode_ignores_the_per_file_lists_and_a_normal_run_follows_them(self):
+        import test_mutants
+
+        everything = test_mutants.OTHER_SUITES + test_mutants.case_suites()
+        listed = 'sdk_mods/classic_minimap/hudmovie.py'
+        self.assertEqual(test_mutants.run_suites({}), everything)
+        self.assertEqual(test_mutants.run_suites({'MINIMAP_MUTATED_FILE': listed}), test_mutants.suites_for(listed))
+        self.assertNotEqual(test_mutants.suites_for(listed), everything)
+        self.assertEqual(test_mutants.run_suites({'MINIMAP_MUTATED_FILE': listed, 'MINIMAP_SUITE_PROBE': 'x.jsonl'}),
+                         everything, 'a probe measures every suite, whatever the file lists')
+
     def test_builder_suites_run_together_in_one_process_and_stop_at_the_first_failure(self):
         import tempfile
         import test_builder_suites
