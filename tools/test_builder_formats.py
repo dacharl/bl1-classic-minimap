@@ -809,6 +809,83 @@ class AssemblyChecks(unittest.TestCase):
                 self.assertIn('usage: swfbuild.py', str(caught.exception))
 
 
+class HudLayoutChecks(unittest.TestCase):
+    """hudlayout's constants are recorded measurements and decisions (PLAN_V08, V09, V13, V15 and the in-game runs they
+    cite) plus the structure that ties them together. The values below are the recorded ones: changing one changes
+    how the map looks or whether the movie builds, so it should be a deliberate edit of this test too."""
+
+    def test_the_window_is_enhanceds_rectangle_centred_on_the_clip_origin(self):
+        import hudlayout as L
+        # Enhanced's E shape 82 is 207.95 x 173.65 px; sprite 187 centres it on the clip origin (PLAN_V09)
+        self.assertEqual((L.WINDOW_W, L.WINDOW_H), (207.95, 173.65))
+        self.assertEqual((L.WINDOW_LEFT, L.WINDOW_TOP), (-103.95, -86.8))
+        self.assertAlmostEqual(L.WINDOW_LEFT, -L.WINDOW_W / 2, delta=0.05)     # centred to within a twip (0.05 px)
+        self.assertAlmostEqual(L.WINDOW_TOP, -L.WINDOW_H / 2, delta=0.05)
+        # the edge indicators sit on Enhanced's +-110 x +-92 rectangle, just outside the window (E sprites 182/186)
+        self.assertAlmostEqual(L.EDGE_OUT_X, 110.0 - 103.975, places=6)
+        self.assertAlmostEqual(L.EDGE_OUT_Y, 92.0 - 86.825, places=6)
+        self.assertGreater(L.EDGE_OUT_X, 0)
+        self.assertGreater(L.EDGE_OUT_Y, 0)
+
+    def test_objective_icon_size_is_the_diamonds_base_shape_at_its_landmark_scale(self):
+        import hudlayout as L
+        self.assertEqual(L.OBJECTIVE_SCALE, 0.55)
+        self.assertAlmostEqual(L.OBJECTIVE_HALF, 45.1 * 0.55 / 2, places=9)      # shape 1047 is 45.1 units (run 14)
+
+    def test_original_art_ids_are_the_outline_and_colour_texts_and_the_font(self):
+        import hudlayout as L
+        texts = {tid + offset for _glyph, _colour, tid in L.GLYPHS.values() for offset in (0, 1)}
+        self.assertEqual(L.ORIGINAL_IDS, texts | {L.GLYPH_FONT})
+        self.assertEqual(L.ORIGINAL_IDS, {1312, 1313, 1314, 1315, 1316, 1317, 1318})
+        self.assertEqual(set(L.GLYPHS), {L.ENH_SHAPES[108], L.ENH_SHAPES[110], L.ENH_SHAPES[179]})   # E turnin, newmission, N
+        self.assertEqual({g for g, _c, _t in L.GLYPHS.values()}, {'?', '!', 'N'})
+
+    def test_new_character_ids_are_distinct_and_clear_of_the_stock_movies(self):
+        import hudlayout as L
+        groups = {'map': {L.MAP_ID}, 'enhanced': set(L.ENH_SHAPES.values()),
+                  'wrappers': {L.TURNIN_ART, L.NEWMISSION_ART, L.NORTH_ART, L.WINDOW_ART, L.ENEMY_ART},
+                  'original': L.ORIGINAL_IDS, 'save': L.SAVE_IDS}
+        seen = set()
+        for name, ids in groups.items():
+            self.assertFalse(seen & ids, name)
+            seen |= ids
+        self.assertEqual(len(seen), 1 + 6 + 5 + 7 + 2)
+        self.assertGreater(min(seen), 1131, 'above the status menu ids it copies (1132 and below)')
+        self.assertEqual((L.MAP_ID, L.ENH_SHAPES, L.WINDOW_ART, L.ENEMY_ART),
+                         (1200, {108: 1301, 110: 1303, 179: 1305, 81: 1307, 82: 1308, 127: 1310}, 1309, 1311))
+        self.assertEqual((L.TURNIN_ART, L.NEWMISSION_ART, L.NORTH_ART), (1302, 1304, 1306))
+        self.assertEqual((L.SAVE_LOGO, L.SAVE_ART, L.GLYPH_FONT), (1330, 1334, 1318))
+
+    def test_depths_keep_the_documented_order(self):
+        import hudlayout as L
+        self.assertLess(L.BOX_DEPTH, L.MASK_DEPTH)
+        self.assertLess(L.MASK_DEPTH, L.MAPS_DEPTH)
+        self.assertEqual((L.BOX_DEPTH, L.MASK_DEPTH, L.MAPS_DEPTH), (3, 4, 6))         # E sprite 187's layers
+        self.assertEqual(L.FALLBACK_DEPTH, 600)                 # unused by the stock root (1, 635..1295), never removed
+        self.assertLess(L.FALLBACK_DEPTH, 635)
+        self.assertEqual(L.FALLBACK_OFFSCREEN, -20000)
+        self.assertEqual((L.EDGE_DEPTH, L.THREAT_DEPTH, L.ATTACH_DEPTH, L.SAVE_DEPTH), (100, 1000, 9000, 9002))
+        self.assertGreater(L.SAVE_DEPTH, L.ATTACH_DEPTH)        # the save indicator draws above the map
+
+    def test_original_art_style_is_the_recorded_choice(self):
+        import hudlayout as L
+        self.assertEqual((L.BOX_MARGIN, L.BOX_LINE_WIDTH), (5.0, 2.0))                  # run 21
+        self.assertEqual((L.BOX_FILL, L.BOX_LINE), ((0x0B1624, 0xE6), (0x6A9AC8, 0xF0)))
+        self.assertEqual((L.THREAT_ART_HALF, L.THREAT_LINE_WIDTH), (7.2, 1.5))          # E shape 127 is 14.45 px across
+        self.assertEqual((L.GLYPH_SIZE, L.GLYPH_BOX, L.GLYPH_OUTLINE), (28.0, 32.0, 1.0))
+        self.assertEqual({c for _g, c, _t in L.GLYPHS.values()}, {0x66FF00, 0xFFCC00, 0xFFFFFF})
+
+    def test_save_logo_measurements(self):
+        import hudlayout as L
+        self.assertEqual((L.SAVE_ART_SIZE, L.SAVE_RING_RADII, L.SAVE_REF_RADIUS), (128, (60.0, 52.0), 270.0))
+        self.assertEqual((L.SAVE_RING_STEPS, L.SAVE_ARC_STEPS, L.SAVE_FILLET_STEPS), (64, 12, 8))
+        self.assertEqual(L.SAVE_FILLETS, {'outer': 16.0, 'inner': 18.0})
+        self.assertEqual(L.SAVE_ARCH, {'outer': ((-153.0, 181.0), (0.0, -117.0), 36.0),
+                                       'inner': ((-92.0, 218.0), (0.0, -102.0), 8.0)})     # runs 37, 39, 40
+        self.assertLess(L.SAVE_RING_RADII[1], L.SAVE_RING_RADII[0])
+        self.assertEqual(L.SAVE_EXPORT, 'bl1mm_save')
+
+
 class HudScriptChecks(unittest.TestCase):
     """hudscript builds the root functions in a fixed order with the parameters the mod and the native helper call."""
 
