@@ -1,5 +1,10 @@
 # Classic Minimap
 
+[![Latest release](https://img.shields.io/github/v/release/dacharl/bl1-classic-minimap?include_prereleases&label=release)](https://github.com/dacharl/bl1-classic-minimap/releases)
+[![CI](https://github.com/dacharl/bl1-classic-minimap/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/dacharl/bl1-classic-minimap/actions/workflows/ci.yml)
+[![License](https://img.shields.io/github/license/dacharl/bl1-classic-minimap)](LICENSE)
+[![Last commit](https://img.shields.io/github/last-commit/dacharl/bl1-classic-minimap)](https://github.com/dacharl/bl1-classic-minimap/commits/main)
+
 A minimap for **Borderlands Game of the Year (classic)**, modelled on the one in Borderlands GOTY Enhanced. It sits in the top-right corner of your HUD, tilted like the rest of the HUD, and shows:
 
 - the current zone's map art, scrolling and centered on you (optionally rotating with you);
@@ -11,7 +16,7 @@ A minimap for **Borderlands Game of the Year (classic)**, modelled on the one in
 
 The ECHO panel (including the Angel videos), the mission title and the objective checklist move left to make room while the minimap is shown, as they do in Enhanced. The minimap hides itself during the travel tunnel, in menus, in cutscenes and when you're down.
 
-> **Status:** v0.16.5 is a public test build: one-file install, with the HUD movie built from your own game files. It has been played on the PC (with and without Enhanced's art, and with Extended UI) and, up to v0.14.7, on the Steam Deck. The first stable release will be 1.0.0.
+> **Status:** This is a public test build (see the release badge above for the current version): one-file install, with the HUD movie built from your own game files. It has been played on the PC (with and without Enhanced's art, and with Extended UI) and, up to v0.14.7, on the Steam Deck. The first stable release will be 1.0.0.
 
 ## Requirements
 
@@ -28,7 +33,7 @@ The ECHO panel (including the Angel videos), the mission title and the objective
 3. Start the game, open **MODS** and make sure **Classic Minimap** is enabled. The first time, the mod builds its HUD movie from your game files, which takes a few seconds; later sessions reuse it.
 4. Load a character. If you enabled the mod after a save was already loaded, change area or reload once for the minimap to appear.
 
-That's the whole install. **Upgrading from v0.12 or earlier:** delete `GfxHUD_Minimap.upk` from `…\Borderlands\WillowGame\CookedPC\Packages\Interface\`. It is no longer used.
+That's the whole install.
 
 ## What the mod reads from your game
 

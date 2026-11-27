@@ -20,8 +20,7 @@ INSTALL_TEXT = (
     'Copy `classic_minimap.sdkmod` into your Borderlands `sdk_mods` folder. That is the whole install.\n\n'
     'Requires the willow1 PythonSDK and Borderlands GOTY (classic); GOTY Enhanced is optional. '
     'On first enable the mod builds its HUD movie from your own game files (a few seconds, once); '
-    'no game files are included in this release. If you used an older version, delete '
-    '`GfxHUD_Minimap.upk` from `WillowGame/CookedPC/Packages/Interface`. See `README.md` at the release tag.\n')
+    'no game files are included in this release. See `README.md` at the release tag.\n')
 
 SECTIONS = (('feat', 'Features'), ('fix', 'Fixes'), ('perf', 'Performance'), ('refactor', 'Refactoring'),
             ('docs', 'Documentation'), ('test', 'Tests'), ('build', 'Build and CI'), ('ci', 'Build and CI'),
