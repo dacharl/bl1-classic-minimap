@@ -78,7 +78,7 @@ Python 3.13, 8 workers, 13,062 mutants, 65 min each, identical outcomes; the sec
 ### C. Structure (a separate decision: per-file denominators change)
 
 **Decided 2026-11-26:** item 8 (the builder split) is accepted for before 1.0.0, planned in
-[PLAN_BUILDER_SPLIT](PLAN_BUILDER_SPLIT.md); item 9 (the mod's geometry) is out of scope. Floors for every file are
+[PLAN_BUILDER_SPLIT](PLAN_BUILDER_SPLIT.md); item 9 (the mod's geometry) is deferred to after 1.0.0: a small gain that A3 mostly delivers in place, plus an in-game check (reasoning in PLAN_BUILDER_SPLIT decision 4). Floors for every file are
 set at measured minus 3 (section D).
 
 8. **Split `swfbuild.py`** into `swfrecords.py` (tag, place, sprite, BitWriter, rect, matrix; `swfmerge` and

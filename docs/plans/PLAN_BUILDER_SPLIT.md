@@ -10,9 +10,19 @@ Status: accepted (2026-11-26), not started. Follows [PLAN_MUTATION_NEXT](PLAN_MU
 2. **Scope:** split options a and b: the SWF record code into its own file, then the art and the AS2 code into
    theirs. The mod's own `__init__.py` is not split.
 3. **Timing:** before 1.0.0.
-4. **Out of scope:** moving the mod's pure geometry (`anchor_transform`, `coord_scale`, `fit_zoom`, `to_map`,
-   `threat_points`) into a `geometry.py` (option c). It would change code that runs every frame in game and would
-   need an in-game run; it can be planned after 1.0.0.
+4. **Deferred to after 1.0.0:** moving the mod's geometry into a `geometry.py` (option c). Not because the risk is
+   high, but because the gain before 1.0.0 is small and mostly available without the move:
+   - **Pure (constants and `math` only):** `anchor_transform`, `coord_scale`, `fit_zoom`. Moving these is low risk.
+   - **Not pure:** `to_map` and `save_spot` read the state `S`; `threat_points` also reads options, logs and calls
+     the radar and pawn helpers. Moving them means passing state in, a change to per-frame code rather than a move.
+   - **Reward:** the three pure functions cost about 1,460 s of the timed run's 30,903 s of worker time (about 3 of
+     64 min); in-process tests might save 1 to 2 min a run. Their survivors (`anchor_transform` 57, `coord_scale`
+     33, `fit_zoom` 22) can be killed in place by worked-value tests (PLAN_MUTATION_NEXT A3), since the offline
+     mod suite already imports the real mod with stubs.
+   - **Cost:** it changes shipped mod code, for which AGENTS expects in-game evidence: one play-through before a
+     release.
+   - **Revisit after 1.0.0** if the mod is still a large share of the run once A3's tests are in; start with the
+     three pure functions only.
 
 ## Evidence (PHASE3 §3cg, timed full run)
 
