@@ -19,6 +19,7 @@ ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_OUT = ROOT / 'tools' / 'fixtures' / 'perf_reports'
 MS = 1_000_000
 SECOND = 1_000_000_000
+MAX_TICKS = 10_000
 
 
 def load_profiler():
@@ -160,11 +161,15 @@ def valid_reports():
     prof.start(120)
     core.costs = {'tick': 55_000, 'cmd.tick': 35_000, 'cmd.threats': 120_000, 'threat_string': 200_000}
     startup(core)
-    while prof.state == 'collecting':
+    for _ in range(MAX_TICKS):          # 120 s of 50 ms ticks is 2,400; a profiler that never stops must fail, not spin
+        if prof.state != 'collecting':
+            break
         clock.t += 50 * MS
         core.tick('pc')
         core.cmd('movie', 'threats', '')
         core.threat_string('pc')
+    else:
+        raise RuntimeError('the 120 s capture did not finish after %d ticks' % MAX_TICKS)
     reports['valid-120s'] = prof.report
     sys.modules.pop('classic_minimap', None)
     return reports

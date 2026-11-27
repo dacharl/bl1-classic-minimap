@@ -509,6 +509,24 @@ class FixtureChecks(unittest.TestCase):
         if saved is not None:
             sys.modules['classic_minimap'] = saved
 
+    def test_a_capture_that_never_ends_fails_the_fixture_run_instead_of_hanging_it(self):
+        """valid_reports() drives a 120 s capture in 50 ms ticks until the profiler stops itself. If stop() stops
+        doing its job the loop must fail, not spin: mutants of `state != "collecting"` made the whole run wait for
+        the 20 s mutation timeout (PHASE3 3cg)."""
+        import make_perf_fixtures
+        saved = sys.modules.get('classic_minimap')
+        original = make_perf_fixtures.P.Profiler.stop
+        try:
+            make_perf_fixtures.P.Profiler.stop = lambda self, reason: None
+            with self.assertRaisesRegex(RuntimeError, 'did not finish'):
+                make_perf_fixtures.valid_reports()
+        finally:
+            make_perf_fixtures.P.Profiler.stop = original
+            if saved is not None:
+                sys.modules['classic_minimap'] = saved
+            else:
+                sys.modules.pop('classic_minimap', None)
+
     def test_fixture_set_covers_the_handoff(self):
         names = {p.stem for p in self.FIXTURES.iterdir()}
         self.assertEqual({n for n in names if n.startswith('valid-')},

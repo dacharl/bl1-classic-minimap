@@ -237,6 +237,74 @@ class ManifestTests(unittest.TestCase):
         self.assertEqual(swfmerge.function_names(struct.pack('<BH', 0x9B, len(rec)) + rec + b'\x00'), [])
 
 
+class FunctionNameWalkTests(unittest.TestCase):
+    """function_names walks action records spelled out from the ActionScript 2 bytecode format: an action below 0x80
+    is one byte; one from 0x80 has a 16-bit length and a payload. DefineFunction (0x9B): name, parameter count,
+    the names, a 16-bit code size, then that many bytes of code after the record. DefineFunction2 (0x8E): name,
+    count, register count, 16-bit flags, then (register, name) per parameter, the code size, the code."""
+
+    @staticmethod
+    def define_function(name, params, code):
+        rec = name.encode() + b'\0' + struct.pack('<H', len(params)) + b''.join(p.encode() + b'\0' for p in params)
+        rec += struct.pack('<H', len(code))
+        return struct.pack('<BH', 0x9B, len(rec)) + rec + code
+
+    @staticmethod
+    def define_function2(name, params, code):
+        rec = name.encode() + b'\0' + struct.pack('<H', len(params)) + b'\x05' + struct.pack('<H', 0x0041)
+        rec += b''.join(bytes([i + 1]) + p.encode() + b'\0' for i, p in enumerate(params))
+        rec += struct.pack('<H', len(code))
+        return struct.pack('<BH', 0x8E, len(rec)) + rec + code
+
+    def test_functions_are_found_after_other_actions_parameters_and_code(self):
+        push = struct.pack('<BH', 0x96, 3) + b'\x00ab'          # an action with a payload (push a string)
+        body = (b'\x04' + push                                    # NextFrame (one byte), then the push
+                + self.define_function('first', ('a', 'bb', 'ccc'), b'\x04\x05\x06')
+                + b'\x07' + push
+                + self.define_function2('second', ('x', 'yy'), b'\x04' * 9)
+                + self.define_function('', (), b'\x04')           # anonymous: no name
+                + self.define_function('third', (), b'')
+                + b'\x00'                                         # End: nothing after it counts
+                + self.define_function('hidden', (), b''))
+        self.assertEqual(swfmerge.function_names(body), ['first', 'second', 'third'])
+        self.assertEqual(swfmerge.function_names(b''), [])
+        self.assertEqual(swfmerge.function_names(b'\x04\x04'), [])
+
+    def test_a_function_whose_code_has_zero_bytes_does_not_end_the_walk(self):
+        # the code of a function is skipped by its size, so a 0x00 inside it is not an End action
+        body = self.define_function('a', (), b'\x00\x00\x00') + self.define_function('b', (), b'')
+        self.assertEqual(swfmerge.function_names(body), ['a', 'b'])
+
+
+class SplitTests(unittest.TestCase):
+    """split(): the header up to the frame count, every tag through End with its raw bytes, and what follows."""
+
+    def test_header_tags_and_trailing_bytes(self):
+        tags = [tag(12, b'\x01\x02'), tag(6, bytes(3)), tag(1, b''), tag(0, b'')]
+        data = movie(tags[:2])                                   # movie() adds ShowFrame and End itself
+        head, root, trailing = swfmerge.split(data + b'tail')
+        self.assertEqual(head, data[:swfmerge.skip_rect(data, 8) + 4])
+        self.assertEqual([(c, b) for c, b, _ in root], [(12, b'\x01\x02'), (6, bytes(3)), (1, b''), (0, b'')])
+        self.assertEqual(b''.join(raw for _, _, raw in root), b''.join(tags))
+        self.assertEqual(trailing, b'tail')
+        self.assertEqual(head + b''.join(r for _, _, r in root) + trailing, data + b'tail')
+
+    def test_gfx_signature_is_accepted_and_compressed_or_unknown_ones_are_refused(self):
+        data = movie([tag(12, b'\x01')])
+        self.assertEqual(len(swfmerge.split(b'GFX' + data[3:])[1]), 3)
+        for signature in (b'CWS', b'ZWS', b'XYZ'):
+            with self.assertRaisesRegex(MergeRefused, 'unsupported movie signature'):
+                swfmerge.split(signature + data[3:])
+
+    def test_a_tag_longer_than_the_file_and_a_cut_header_are_refused(self):
+        data = movie([tag(12, bytes(10))])
+        cut = data[:len(data) - 12]      # drops ShowFrame, End (4 bytes) and the last 8 bytes of the DoAction body
+        with self.assertRaisesRegex(MergeRefused, 'truncated tag 12'):
+            swfmerge.split(cut)
+        with self.assertRaisesRegex(MergeRefused, 'unreadable movie'):
+            swfmerge.split(b'FWS\x08\x00\x00\x00\x00')            # nothing after the signature and length
+
+
 class MergeTests(unittest.TestCase):
     def setUp(self):
         self.ours = assemble(STOCK_PREFIX, BLOCK)
