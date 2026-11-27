@@ -257,6 +257,9 @@ class RunnerChecks(unittest.TestCase):
         self.assertEqual(time_record(item, result, 4.25),
                          {'job': 'j1', 'file': 'sdk_mods/m/x.py', 'operator': 'core/NumberReplacer',
                           'occurrence': 7, 'seconds': 4.25, 'outcome': 'survived'})
+        # Cosmic Ray records a timeout as a kill with output 'timeout'; the gate counts it undetected, so must the log
+        hung = SimpleNamespace(test_outcome=SimpleNamespace(value='killed'), output='timeout')
+        self.assertEqual(time_record(item, hung, 20.1)['outcome'], 'timeout')
 
         rows = [dict(job='a', file='x.py', operator='op1', occurrence=1, seconds=1.0, outcome='killed'),
                 dict(job='b', file='x.py', operator='op2', occurrence=2, seconds=9.0, outcome='survived'),

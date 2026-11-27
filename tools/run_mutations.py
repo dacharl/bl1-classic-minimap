@@ -69,9 +69,11 @@ def run_item(item, command, timeout):
 def time_record(item, result, seconds):
     """One line of dist/ci/mutation-times.jsonl: which mutant, how long it took, how it ended."""
     mutation = item.mutations[0]
+    outcome = getattr(getattr(result, 'test_outcome', None), 'value', None)
+    if getattr(result, 'output', None) == 'timeout':      # a kill to Cosmic Ray, undetected to the gate (report())
+        outcome = 'timeout'
     return dict(job=item.job_id, file=mutation.module_path.as_posix(), operator=mutation.operator_name,
-                occurrence=mutation.occurrence, seconds=round(seconds, 3),
-                outcome=getattr(getattr(result, 'test_outcome', None), 'value', None))
+                occurrence=mutation.occurrence, seconds=round(seconds, 3), outcome=outcome)
 
 
 def parse_args(argv=None):
