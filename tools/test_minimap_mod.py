@@ -522,6 +522,45 @@ def main(gfx_path, on_import=None):
     def close(a, b, tol=1e-4):
         assert abs(a - b) < tol, (a, b)
 
+    # 0'. the anchor maths against the helper's own record of the Arid anchor (classic_minimap_anchors.jsonl, PHASE3
+    #     step B: the Python matrix agrees with the native within 6.5e-8 relative): the world -> texture matrix, the
+    #     aspect correction, the world -> map projection and the zoom fit, each with worked numbers
+    arid = dict(TextureSize=(1024.0, 512.0), DrawScale3D=(58.2003059387207, 233.1310272216797, 160.99807739257812),
+                DrawScale=1.0, Rotation=(0, 32, 0), Location=(-28388.716796875, -10011.951171875, 15184.9990234375))
+    recorded = (1.6779256839072332e-05, -2.5702727057819175e-08, 0.0, 0.0, 5.14782776406264e-08, 8.37775951367803e-06,
+                0.0, 0.0, 0.0, -0.0, 1.0, 0.0, 0.4768569767475128, 0.0831480547785759, -15184.9990234375, 1.0)
+    arid_xf = mod.anchor_transform(arid)
+    assert len(arid_xf) == 16
+    for got, want in zip(arid_xf, recorded):
+        assert abs(got - want) <= 2e-7 * abs(want) + 1e-12, (got, want)
+    close(mod.coord_scale((1024.0, 512.0), 779.5, 352.20001220703125)[1], 1.1066155433654785, 1e-6)
+    assert mod.coord_scale((1024.0, 512.0), 779.5, 352.20001220703125)[0] == 1.0
+    assert mod.coord_scale((100.0, 100.0), 50.0, 100.0) == (2.0, 1.0)      # a wider anchor than the art: stretch x
+    assert mod.coord_scale((100.0, 100.0), 100.0, 50.0) == (1.0, 2.0)      # a taller one: stretch y
+    assert mod.coord_scale((100.0, 100.0), 50.0, 50.0) == (1.0, 1.0)       # the same shape: no correction
+    saved_projection = (mod.S.xf, mod.S.cs)
+    mod.S.xf, mod.S.cs = arid_xf, (1.0, 1.1066155433654785)
+    centre = mod.to_map(*arid['Location'])                                 # the anchor's own origin is the map centre
+    close(centre[0], 0.5, 1e-6)
+    close(centre[1], 0.5 * 1.1066155433654785, 1e-6)
+    east = mod.to_map(arid['Location'][0] + 100.0, arid['Location'][1], arid['Location'][2])
+    close(east[0], 0.5 + 100.0 * recorded[1], 1e-6)                        # +x moves the point along v (map x)
+    close(east[1], (0.5 - 100.0 * recorded[0]) * 1.1066155433654785, 1e-6)  # ... and up the map (u down)
+    north = mod.to_map(arid['Location'][0], arid['Location'][1] + 100.0, arid['Location'][2])
+    close(north[0], 0.5 + 100.0 * recorded[5], 1e-6)
+    close(north[1], (0.5 - 100.0 * recorded[4]) * 1.1066155433654785, 1e-6)
+    mod.S.xf, mod.S.cs = saved_projection
+    zoom_cs, art_w, art_h = (1.0, 1.1066155433654785), 779.5, 352.20001220703125
+    raw, fitted = mod.fit_zoom([(0.0, 0.0, 0.0), (0.0, 10000.0, 0.0)], arid_xf, zoom_cs, art_w, art_h)
+    du = 10000.0 * recorded[5] * zoom_cs[0] * art_w / 100                   # span along y, through the Arid matrix
+    close(raw, 0.5 * mod.MASK_W / du, 1e-4)
+    close(fitted, raw + 8.0, 1e-4)                                         # between 100 and 400: raw plus the +8 step
+    assert mod.fit_zoom([(0.0, 0.0, 0.0)], arid_xf, zoom_cs, art_w, art_h) == (None, mod.ENH_ZOOM)    # fewer than two points
+    assert mod.fit_zoom([(1.0, 1.0, 1.0)] * 2, arid_xf, zoom_cs, art_w, art_h) == (math.inf, 400.0)   # no span: capped
+    wide_raw, wide = mod.fit_zoom([(0.0, 0.0, 0.0), (0.0, 1e9, 0.0)], arid_xf, zoom_cs, art_w, art_h)
+    assert 0 < wide_raw < 100 and wide == 108.0                           # a huge span floors at 100, plus 8
+    assert mod.fit_zoom([(0.0, 0.0, 0.0), (0.0, 1.0, 0.0)], arid_xf, zoom_cs, art_w, art_h)[1] == 400.0   # a tiny one caps
+
     # 0a. a HUD spawned from the stock movie (before the redirect): idle, one warning, nothing created
     step(); step()
     assert mod.S.phase == 'stockhud' and CONSTRUCTED == [] and stock_movie.invokes == []
@@ -1124,6 +1163,28 @@ def main(gfx_path, on_import=None):
     WORLD.zone_frame = 'arid'
     step(mod.ANCHOR_RETRY + 0.1); step()
     assert mod.S.phase == 'running' and len(helpers) == n + 2
+
+    # 10b'''. the two optional checks inside tick fail (objective key, visibility): the map keeps running, each says so
+    #         once, the last good objective key is kept, and the visibility falls back to "show"
+    def boom(*_args, **_kwargs):
+        raise RuntimeError('boom')
+    real_objective_key, real_hidden_reason, key_before = mod.objective_key, mod.hidden_reason, mod.S.objective_key
+    printed = io.StringIO()
+    try:
+        mod.objective_key = boom
+        with contextlib.redirect_stdout(printed):
+            step(mod.OBJECTIVE_CHECK_INTERVAL + 0.1); step(mod.OBJECTIVE_CHECK_INTERVAL + 0.1)
+        assert mod.S.phase == 'running' and mod.S.objective_key == key_before
+        mod.hidden_reason = boom
+        with contextlib.redirect_stdout(printed):
+            step(); step()
+        assert mod.S.phase == 'running'
+    finally:
+        mod.objective_key, mod.hidden_reason = real_objective_key, real_hidden_reason
+    assert printed.getvalue().count('objective check unavailable (RuntimeError: boom)') == 1, printed.getvalue()
+    assert printed.getvalue().count('visibility check unavailable (RuntimeError: boom)') == 1, printed.getvalue()
+    step(mod.OBJECTIVE_CHECK_INTERVAL + 0.1)
+    assert mod.S.phase == 'running' and mod.S.shown is True       # the checks work again and the map shows
 
     # 10b''. a degenerate anchor (zero texture size) can't be inverted: no map, no crash, retried
     try:
