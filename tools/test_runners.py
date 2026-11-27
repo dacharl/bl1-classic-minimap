@@ -226,7 +226,7 @@ class RunnerChecks(unittest.TestCase):
         runner was shut down twice mid-run, exit 143)."""
         import test_mutants
 
-        code = 'import sys\ntry:\n    bytearray(sys.argv[1])\nexcept MemoryError:\n    sys.exit(7)\n'
+        code = 'import sys\ntry:\n    bytearray(int(sys.argv[1]))\nexcept MemoryError:\n    sys.exit(7)\n'
         cap = test_mutants.MEMORY_CAP
         for size, expected in ((cap // 8, 0), (cap * 2, 7)):
             proc = subprocess.run([sys.executable, '-c', code, str(size)], preexec_fn=test_mutants.limit_memory)
