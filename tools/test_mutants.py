@@ -48,6 +48,12 @@ SUITES_BY_FILE = {
     # PLAN_BUILDER_SPLIT: provisional (every suite) until the file's list is probed
     'sdk_mods/classic_minimap/swfrecords.py': ('test_builder_formats.py', 'test_swfmerge.py', 'test_hudmovie.py',
                                                 'test_profiler.py', PER_CASE_SUITE),
+    'sdk_mods/classic_minimap/hudlayout.py': ('test_builder_formats.py', 'test_swfmerge.py', 'test_hudmovie.py',
+    'test_profiler.py', PER_CASE_SUITE),
+    'sdk_mods/classic_minimap/hudart.py': ('test_builder_formats.py', 'test_swfmerge.py', 'test_hudmovie.py',
+    'test_profiler.py', PER_CASE_SUITE),
+    'sdk_mods/classic_minimap/hudscript.py': ('test_builder_formats.py', 'test_swfmerge.py', 'test_hudmovie.py',
+    'test_profiler.py', PER_CASE_SUITE),
     'sdk_mods/classic_minimap/as2asm.py': ('test_builder_formats.py', 'test_profiler.py'),
     'sdk_mods/classic_minimap/swfdeps.py': ('test_builder_formats.py', 'test_profiler.py', 'test_hudmovie.py'),
     'sdk_mods/classic_minimap/upk.py': ('test_builder_formats.py', 'test_hudmovie.py'),

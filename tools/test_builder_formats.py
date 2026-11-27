@@ -609,5 +609,223 @@ class SwfRecordChecks(unittest.TestCase):
         self.assertEqual(swfrecords.top_level(head), [], 'a movie with no tags')
 
 
+def pack_bits(*fields):
+    """MSB-first bit fields given as strings of 0 and 1, padded with zeros to a byte (the SWF bit packing)."""
+    text = ''.join(fields)
+    text += '0' * (-len(text) % 8)
+    return int(text, 2).to_bytes(len(text) // 8, 'big') if text else b''
+
+
+def signed(value, width):
+    return format(value & ((1 << width) - 1), '0%db' % width)
+
+
+def edge(dx, dy, width):
+    """StraightEdgeRecord, general line: 1 1 NumBits-2 (4 bits) 1 dx dy."""
+    return '11' + format(width - 2, '04b') + '1' + signed(dx, width) + signed(dy, width)
+
+
+class HudArtChecks(unittest.TestCase):
+    """hudart's shapes and text, against records spelled out field by field from the SWF specification (bit strings
+    built here with their own packer, not the builder's BitWriter)."""
+
+    def test_glyph_text_is_a_read_only_centred_edit_text_in_the_glyph_font(self):
+        import hudart
+        # id, bounds -16..16 x -12.6..22.4 px (-320, 320, -252, 448 twips, 10 bits each), flags HasText ReadOnly
+        # HasTextColor HasFont and HasLayout NoSelect, font 1318, height 28 px = 560 twips, colour, align 2 (centre)
+        # and four zero 16-bit margins, an empty variable name, the text
+        rect = pack_bits('01010', signed(-320, 10), signed(320, 10), signed(-252, 10), signed(448, 10))
+        self.assertEqual(rect, b'\x55\x80\xa0\x60\x8e\x00')
+        body = (b'\x20\x05' + rect + b'\x8d\x30' + b'\x26\x05\x30\x02' + b'\x11\x22\x33\xff' + b'\x02' + bytes(8)
+                + b'\x00' + b'N\x00')
+        self.assertEqual(hudart.glyph_text(1312, 'N', 0x112233), swfrecords_tag(37, body))
+
+    def test_polygon_shape_is_a_closed_straight_edged_fill_and_an_optional_outline(self):
+        import hudart
+        points = [(0, 0), (1, 0), (1, 1), (0, 1)]                 # px; 20 twips a side
+        fill = b'\x01\x02\x03\xff'
+        edges = edge(20, 0, 6) + edge(0, 20, 6) + edge(-20, 0, 6) + edge(0, -20, 6)
+        # no outline: bounds 0..1 (6-bit fields), one solid fill, no line styles, NumFillBits 1, NumLineBits 0,
+        # style change (not an edge, no new styles, flags line 0 fill1 1 fill0 0 moveTo 1), moveTo (1-bit fields),
+        # FillStyle1 = 1, the four edges, EndShapeRecord
+        rect = pack_bits('00110', signed(0, 6), signed(20, 6), signed(0, 6), signed(20, 6))
+        shape = pack_bits('0001', '0000', '00', '010', '1', '00001', '0', '0', '1', edges, '000000')
+        self.assertEqual(hudart.polygon_shape(7, points, fill), swfrecords_tag(32, b'\x07\x00' + rect + b'\x01\x00' + fill
+                                                                               + b'\x00' + shape))
+        # with a 2 px outline: bounds grow by 1 px (7-bit fields), a line style of 40 twips and a colour, NumLineBits 1,
+        # the style change also selects line style 1 (after FillStyle1)
+        rect = pack_bits('00111', signed(-20, 7), signed(40, 7), signed(-20, 7), signed(40, 7))
+        line = b'\x01' + b'\x28\x00' + b'\xaa\xbb\xcc\xdd'
+        shape = pack_bits('0001', '0001', '00', '110', '1', '00001', '0', '0', '1', '1', edges, '000000')
+        self.assertEqual(hudart.polygon_shape(7, points, fill, (2, b'\xaa\xbb\xcc\xdd')),
+                         swfrecords_tag(32, b'\x07\x00' + rect + b'\x01\x00' + fill + line + shape))
+
+    def test_paths_shape_selects_both_fill_sides_per_path(self):
+        import hudart
+        path = [(0, 0), (1, 0), (0, 1)]
+        edges = edge(20, 0, 6) + edge(-20, 20, 6) + edge(0, -20, 6)
+        rect = pack_bits('00101', signed(-10, 5), signed(10, 5), signed(-10, 5), signed(10, 5))     # radius 0.5 px
+        # one path filling the side with index 1 on its left (fill0 = 1, fill1 = 0): flags fill1 1, fill0 1, moveTo
+        shape = pack_bits('0001', '0000', '00', '011', '1', '00001', '0', '0', '1', '0', edges, '000000')
+        self.assertEqual(hudart.paths_shape(9, [(path, 1, 0)], b'\xff\xff\xff\xff', 0.5),
+                         swfrecords_tag(32, b'\x09\x00' + rect + b'\x01\x00' + b'\xff\xff\xff\xff' + b'\x00' + shape))
+
+    def test_save_logo_geometry(self):
+        import hudart
+        import hudlayout
+        ring, around, opening = hudart.logo_paths()
+        self.assertEqual([(fill0, fill1) for _, fill0, fill1 in (ring, around, opening)], [(0, 1), (1, 0), (1, 0)])
+        r_out = hudlayout.SAVE_RING_RADII[0]
+        ring_points = ring[0]
+        self.assertEqual(len(ring_points), hudlayout.SAVE_RING_STEPS)
+        self.assertAlmostEqual(ring_points[0][0], r_out)
+        self.assertAlmostEqual(ring_points[0][1], 0.0)
+        for x, y in ring_points:
+            self.assertAlmostEqual((x * x + y * y) ** 0.5, r_out, places=6)
+        for points, _, _ in (around, opening):
+            self.assertGreater(len(points), 20)
+            self.assertLess(max((x * x + y * y) ** 0.5 for x, y in points), r_out)    # both cut holes inside the ring
+            # the logo is symmetric about the vertical axis
+            self.assertEqual({(round(x, 6), round(y, 6)) for x, y in points},
+                             {(round(-x, 6), round(y, 6)) for x, y in points})
+
+    def test_save_art_is_the_logo_shape_and_a_sprite_placing_it(self):
+        import hudart
+        import hudlayout
+        import swfrecords
+        shape, sprite_tag = hudart.save_art()
+        code, _, start = swfrecords.header(shape, 0)
+        self.assertEqual((code, swfrecords.u16(shape, start)), (32, hudlayout.SAVE_LOGO))
+        self.assertEqual(sprite_tag, swfrecords.one_frame_sprite(hudlayout.SAVE_ART,
+                                                                 swfrecords.place(1, hudlayout.SAVE_LOGO)))
+
+    def test_landmark_sprite_gains_the_turnin_and_newmission_frames(self):
+        import hudart
+        import hudlayout
+        import swfrecords
+        original = swfrecords.sprite(1066, 3, swfrecords.place(1, 5), swfrecords.SHOW_FRAME)
+        extra = [swfrecords.tag(43, b'turnin\0'), swfrecords.tag(28, b'\x02\x00'),
+                 swfrecords.place(1, hudlayout.TURNIN_ART), swfrecords.SHOW_FRAME,
+                 swfrecords.tag(43, b'newmission\0'), swfrecords.tag(28, b'\x01\x00'),
+                 swfrecords.place(1, hudlayout.NEWMISSION_ART), swfrecords.SHOW_FRAME]
+        self.assertEqual(hudart.landmark_frames(original),
+                         swfrecords.sprite(1066, 5, swfrecords.place(1, 5), swfrecords.SHOW_FRAME, *extra))
+
+    def test_missing_inputs_stop_the_build_with_a_reason(self):
+        import hudart
+        with self.assertRaises(SystemExit) as caught:
+            hudart.font_record(movie([]))
+        self.assertIn('no WillowBody font', str(caught.exception))
+        with self.assertRaises(SystemExit) as caught:
+            hudart.enhanced_art(movie([]))
+        self.assertIn('lacks shapes', str(caught.exception))
+
+
+def swfrecords_tag(code, body):
+    import swfrecords
+    return swfrecords.tag(code, body)
+
+
+class AssemblyChecks(unittest.TestCase):
+    """swfbuild refuses inputs it cannot build from, with a reason, and its command line writes the movie."""
+
+    def refused(self, hud, status, enhanced=None):
+        import swfbuild
+        with self.assertRaises(SystemExit) as caught:
+            swfbuild.build(hud, status, enhanced)
+        return str(caught.exception)
+
+    def test_character_id_clashes_and_undefined_ids_are_refused(self):
+        from ci_fixture import fixture_inputs, sprite
+        hud, status, enhanced = fixture_inputs()
+        # the HUD already defines a character the status menu's map art brings (1050 is in 1132's closure)
+        self.assertIn('character id clash: [1050]', self.refused(movie([sprite(1050)]), status))
+        # ... or the id of our own map clip
+        self.assertIn('character id clash: [1200]', self.refused(movie([sprite(1200)]), status))
+        # ... or one of the ids the art is copied under (1301 is Enhanced's turn-in shape here)
+        self.assertIn('character id clash for the art: [1301]', self.refused(movie([sprite(1301)]), status, enhanced))
+        # the status menu's closure names a character it never defines
+        broken = movie([sprite(1132, [(1, 7)])])
+        self.assertIn('undefined ids: [7]', self.refused(hud, broken))
+
+    def test_inserted_block_cannot_carry_gradient_image_records(self):
+        import swfbuild
+        with self.assertRaises(SystemExit) as caught:
+            swfbuild.shift_gradient_images([], 0, swfbuild.tag(1003, b'\x00\x00'))
+        self.assertIn('external gradient records', str(caught.exception))
+
+    def test_command_line_writes_the_movie_and_reports_it(self):
+        import swfbuild
+        from ci_fixture import fixture_inputs
+        hud, status, enhanced = fixture_inputs()
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = {name: os.path.join(tmp, name) for name in ('hud', 'status', 'enhanced', 'out')}
+            for name, data in (('hud', hud), ('status', status), ('enhanced', enhanced)):
+                with open(paths[name], 'wb') as f:
+                    f.write(data)
+            saved = sys.argv
+            stdout = io.StringIO()
+            try:
+                sys.argv = ['swfbuild.py', paths['hud'], paths['status'], paths['out'], paths['enhanced']]
+                with contextlib.redirect_stdout(stdout):
+                    swfbuild.main()
+            finally:
+                sys.argv = saved
+            with open(paths['out'], 'rb') as f:
+                written = f.read()
+            expected, info = swfbuild.build(hud, status, enhanced)
+            self.assertEqual(written, expected)
+            self.assertIn('wrote %s (%d bytes); added %d characters' % (paths['out'], len(expected), info['characters']),
+                          stdout.getvalue())
+            self.assertIn('root functions: AddLandmark, UpdateLandmark', stdout.getvalue())
+            # without the fourth argument the original art is used
+            try:
+                sys.argv = ['swfbuild.py', paths['hud'], paths['status'], paths['out']]
+                with contextlib.redirect_stdout(io.StringIO()):
+                    swfbuild.main()
+            finally:
+                sys.argv = saved
+            with open(paths['out'], 'rb') as f:
+                self.assertEqual(f.read(), swfbuild.build(hud, status, None)[0])
+            for argv in (['swfbuild.py'], ['swfbuild.py', 'a', 'b', 'c', 'd', 'e']):
+                sys.argv = argv
+                try:
+                    with self.assertRaises(SystemExit) as caught:
+                        swfbuild.main()
+                finally:
+                    sys.argv = saved
+                self.assertIn('usage: swfbuild.py', str(caught.exception))
+
+
+class HudScriptChecks(unittest.TestCase):
+    """hudscript builds the root functions in a fixed order with the parameters the mod and the native helper call."""
+
+    EXPECTED = [
+        ('MinimapCreate', ['x', 'y', 'scale']), ('MinimapDestroy', []), ('MinimapCmd', ['s']),
+        ('MinimapTint', ['clip', 'rgb']), ('MinimapPlayer', ['u', 'v', 'deg']),
+        ('MinimapDock', ['a', 'b', 'c', 'd', 'tx', 'ty']),
+        ('MinimapHudShift', ['mode', 'ex', 'ey', 'qx', 'qy', 'cx', 'cy', 'cdy', 'csx', 'csy']),
+        ('MinimapHudKeep', []), ('MinimapSave', ['show', 'x', 'y', 'size', 'alpha']), ('MinimapEdges', []),
+        ('MinimapPing', ['v']), ('MinimapClear', []), ('MinimapRecenter', ['rotate']), ('UpdateThreats', ['s']),
+    ]
+
+    def test_root_functions_in_order_with_their_parameters(self):
+        import hudscript
+        built = hudscript.new_functions()
+        self.assertEqual([(f['func']['name'], f['func']['params']) for f in built], self.EXPECTED)
+        for f in built:
+            self.assertEqual((f['op'], f['func']['v2']), (0x9B, False))
+            self.assertTrue(f['func']['body'], f['func']['name'])
+        self.assertEqual(len(hudscript.ROOT_BUILDERS), len(self.EXPECTED))
+        self.assertEqual([b()['func']['name'] for b in hudscript.ROOT_BUILDERS], [n for n, _ in self.EXPECTED])
+
+    def test_a_status_menu_without_the_native_helper_functions_is_refused(self):
+        import hudscript
+        with self.assertRaises(SystemExit) as caught:
+            hudscript.copied_functions(movie([]))
+        self.assertIn('missing root functions', str(caught.exception))
+        self.assertEqual(hudscript.root_actions(movie([])), [])
+
+
 if __name__ == '__main__':
     unittest.main()

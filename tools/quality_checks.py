@@ -24,6 +24,8 @@ def coverage_errors(report, floors):
         ):
             score = 100 * covered / total if total else 0
             print(f'{name}: {kind} coverage {score:.2f}% (minimum {floor[kind]}%)')
+            if kind == 'branch' and not total and summary['num_statements']:
+                continue        # statements but no branches (a constants-only file): nothing to cover
             if not total or score < floor[kind]:
                 errors.append(f'{name}: {kind} coverage below {floor[kind]}%')
     return errors

@@ -53,6 +53,19 @@ class GateChecks(unittest.TestCase):
         self.assertTrue(coverage_errors(report, floors))
         self.assertTrue(coverage_errors({'files': {}}, floors))
 
+    def test_a_file_with_no_branches_has_no_branch_floor_but_still_needs_its_lines(self):
+        """A constants-only file (hudlayout.py) has zero branches: that is not a coverage failure, while a file with
+        no statements at all, or a missing line floor, still fails."""
+        constants = {'files': {'consts.py': {'summary': {
+            'num_statements': 40, 'covered_statements': 40, 'covered_lines': 40,
+            'num_branches': 0, 'covered_branches': 0}}}}
+        self.assertEqual(coverage_errors(constants, {'consts.py': {'line': 90, 'branch': 0}}), [])
+        self.assertTrue(coverage_errors(constants, {'consts.py': {'line': 101, 'branch': 0}}))
+        empty = {'files': {'consts.py': {'summary': {
+            'num_statements': 0, 'covered_statements': 0, 'covered_lines': 0,
+            'num_branches': 0, 'covered_branches': 0}}}}
+        self.assertTrue(coverage_errors(empty, {'consts.py': {'line': 0, 'branch': 0}}))
+
     def test_mutations_fail_closed_and_count_timeouts_as_undetected(self):
         report = {'mod.py': {'total': 10, 'killed': 8, 'survived': 1,
                              'timeout': 1, 'error': 0, 'pending': 0}}

@@ -51,6 +51,18 @@ branch = 78
 line = 97
 branch = 78
 
+[tool.quality.coverage."sdk_mods/classic_minimap/hudlayout.py"]
+line = 90
+branch = 0        # constants only: no branches, which the gate reports as 0%
+
+[tool.quality.coverage."sdk_mods/classic_minimap/hudart.py"]
+line = 90
+branch = 70
+
+[tool.quality.coverage."sdk_mods/classic_minimap/hudscript.py"]
+line = 90
+branch = 70
+
 [tool.quality.coverage."tools/build_sdkmod.py"]
 line = 94
 branch = 83
@@ -83,6 +95,9 @@ branch = 90
 "sdk_mods/classic_minimap/swfbuild.py" = 70
 # PLAN_BUILDER_SPLIT: files split out of swfbuild.py; provisional floors until the full run sets them (measured minus 3)
 "sdk_mods/classic_minimap/swfrecords.py" = 70
+"sdk_mods/classic_minimap/hudlayout.py" = 70
+"sdk_mods/classic_minimap/hudart.py" = 70
+"sdk_mods/classic_minimap/hudscript.py" = 70
 "sdk_mods/classic_minimap/as2asm.py" = 70
 "sdk_mods/classic_minimap/swfdeps.py" = 70
 "sdk_mods/classic_minimap/upk.py" = 70
