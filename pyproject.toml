@@ -25,59 +25,59 @@ output = "dist/ci/coverage.xml"
 # Per-file floors prevent well-covered files from hiding regressions elsewhere.
 [tool.quality.coverage."sdk_mods/classic_minimap/__init__.py"]
 line = 89
-branch = 81
+branch = 84
 
 [tool.quality.coverage."sdk_mods/classic_minimap/swfmerge.py"]
-line = 90
-branch = 80
+line = 97
+branch = 95
 
 [tool.quality.coverage."sdk_mods/classic_minimap_profiler/__init__.py"]
 line = 95
-branch = 95
+branch = 97
 
 [tool.quality.coverage."sdk_mods/classic_minimap_profiler/profiler.py"]
 line = 95
-branch = 88
+branch = 89
 
 [tool.quality.coverage."sdk_mods/classic_minimap/as2asm.py"]
-line = 81
-branch = 76
+line = 90
+branch = 93
 
 [tool.quality.coverage."sdk_mods/classic_minimap/swfbuild.py"]
 line = 97
-branch = 78
+branch = 89
 
 [tool.quality.coverage."sdk_mods/classic_minimap/swfrecords.py"]
 line = 97
-branch = 78
+branch = 97
 
 [tool.quality.coverage."sdk_mods/classic_minimap/hudlayout.py"]
-line = 90
+line = 97
 branch = 0        # constants only: no branches, which the gate reports as 0%
 
 [tool.quality.coverage."sdk_mods/classic_minimap/hudart.py"]
-line = 90
-branch = 70
+line = 95
+branch = 87
 
 [tool.quality.coverage."sdk_mods/classic_minimap/hudscript.py"]
-line = 90
-branch = 70
+line = 96
+branch = 90
 
 [tool.quality.coverage."tools/build_sdkmod.py"]
 line = 94
 branch = 83
 
 [tool.quality.coverage."sdk_mods/classic_minimap/hudmovie.py"]
-line = 90
-branch = 85
+line = 95
+branch = 97
 
 [tool.quality.coverage."sdk_mods/classic_minimap/upk.py"]
-line = 88
-branch = 70
+line = 96
+branch = 94
 
 [tool.quality.coverage."sdk_mods/classic_minimap/swfdeps.py"]
-line = 60
-branch = 45
+line = 95
+branch = 93
 
 [tool.quality.coverage."tools/land_branch.py"]
 line = 92
@@ -88,21 +88,21 @@ line = 95
 branch = 90
 
 [tool.quality.mutation]
-"sdk_mods/classic_minimap/__init__.py" = 70
-"sdk_mods/classic_minimap/swfmerge.py" = 70
-# PLAN_V13 moved the builder into the mod; these floors are configured but not yet measured
-"sdk_mods/classic_minimap/hudmovie.py" = 70
-"sdk_mods/classic_minimap/swfbuild.py" = 70
-# PLAN_BUILDER_SPLIT: files split out of swfbuild.py; provisional floors until the full run sets them (measured minus 3)
-"sdk_mods/classic_minimap/swfrecords.py" = 70
-"sdk_mods/classic_minimap/hudlayout.py" = 70
-"sdk_mods/classic_minimap/hudart.py" = 70
-"sdk_mods/classic_minimap/hudscript.py" = 70
-"sdk_mods/classic_minimap/as2asm.py" = 70
-"sdk_mods/classic_minimap/swfdeps.py" = 70
-"sdk_mods/classic_minimap/upk.py" = 70
-"tools/build_sdkmod.py" = 80
+"sdk_mods/classic_minimap/__init__.py" = 74
+"sdk_mods/classic_minimap/swfmerge.py" = 82
+# Floors are the measured score minus 3 (PHASE3 3ch, full run 2026-11-27); a floor is never lowered
+"sdk_mods/classic_minimap/hudmovie.py" = 90
+"sdk_mods/classic_minimap/swfbuild.py" = 84
+# PLAN_BUILDER_SPLIT: the files split out of swfbuild.py
+"sdk_mods/classic_minimap/swfrecords.py" = 89
+"sdk_mods/classic_minimap/hudlayout.py" = 97
+"sdk_mods/classic_minimap/hudart.py" = 85
+"sdk_mods/classic_minimap/hudscript.py" = 76
+"sdk_mods/classic_minimap/as2asm.py" = 88
+"sdk_mods/classic_minimap/swfdeps.py" = 80
+"sdk_mods/classic_minimap/upk.py" = 87
+"tools/build_sdkmod.py" = 81
 # From the 2026-10-24 run (3,850/3,866 complete): __init__ 31/34 (91.2%); profiler 759/926 (82.0%; 80.6%
 # if its 16 unfinished mutants count as undetected)
-"sdk_mods/classic_minimap_profiler/__init__.py" = 85
-"sdk_mods/classic_minimap_profiler/profiler.py" = 78
+"sdk_mods/classic_minimap_profiler/__init__.py" = 88
+"sdk_mods/classic_minimap_profiler/profiler.py" = 80
